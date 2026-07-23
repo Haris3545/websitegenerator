@@ -11,7 +11,7 @@ export function KpiCard({
 }) {
   return (
     <div
-      className="p-4 shadow-lg shadow-black/30 backdrop-blur-md transition hover:brightness-110"
+      className="p-4 shadow-lg shadow-black/30 backdrop-blur-md transition-all duration-150 ease-out hover:-translate-y-0.5 hover:brightness-110 hover:shadow-[0_0_28px_var(--accent)]"
       style={{
         borderRadius: "var(--card-radius, 12px)",
         backgroundColor: "rgba(0,0,0,var(--card-bg-opacity, 0.4))",

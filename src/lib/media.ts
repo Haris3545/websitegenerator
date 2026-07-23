@@ -87,8 +87,25 @@ export async function refreshMediaIfStale(artistId: string, artistName: string) 
   }
 }
 
+const HTML_ENTITIES: Record<string, string> = {
+  "&nbsp;": " ",
+  "&amp;": "&",
+  "&lt;": "<",
+  "&gt;": ">",
+  "&quot;": '"',
+  "&#39;": "'",
+  "&apos;": "'",
+};
+
+// Google News descriptions are a full HTML snippet (a linked thumbnail,
+// title, and source, glued together with &nbsp; spacers) — stripping tags
+// alone leaves those entities behind as literal "&nbsp;&nbsp;" text.
 function stripHtml(input: string) {
-  return input.replace(/<[^>]*>/g, "").trim();
+  return input
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&#?\w+;/g, (entity) => HTML_ENTITIES[entity] ?? " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function parseDateSafe(value: string | undefined): string | null {

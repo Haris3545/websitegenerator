@@ -41,7 +41,7 @@ export function NewsTicker({ articles }: { articles: MediaArticle[] }) {
 
   if (!articles.length) {
     return (
-      <div className="relative overflow-hidden border-y border-white/10 bg-black/30 py-2">
+      <div className="relative mt-3 overflow-hidden border-y border-white/10 bg-black/30 py-2">
         <p className="px-6 text-sm text-white/40 sm:px-10">
           No coverage cached yet — this fills in automatically once articles are found.
         </p>
@@ -54,7 +54,13 @@ export function NewsTicker({ articles }: { articles: MediaArticle[] }) {
 
   return (
     <div
-      className="relative overflow-hidden border-y border-white/10 bg-black/30 py-2"
+      className="relative mt-3 overflow-hidden border-y border-white/10 bg-black/30 py-2"
+      style={{
+        maskImage:
+          "linear-gradient(to right, transparent, black 48px, black calc(100% - 48px), transparent)",
+        WebkitMaskImage:
+          "linear-gradient(to right, transparent, black 48px, black calc(100% - 48px), transparent)",
+      }}
       onMouseEnter={() => (targetRef.current = 0)}
       onMouseLeave={() => (targetRef.current = BASE_SPEED_PX_PER_SEC)}
     >

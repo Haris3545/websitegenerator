@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useTransition } from "react";
 import { refreshEverything } from "@/app/s/[slug]/actions";
 
@@ -25,13 +26,11 @@ function downloadCsv(rows: Record<string, unknown>[], filename: string) {
 
 export function SiteFooter({
   slug,
-  brandName,
   tagline,
   csvRows,
   csvFilename,
 }: {
   slug: string;
-  brandName: string;
   tagline: string;
   csvRows?: Record<string, unknown>[];
   csvFilename?: string;
@@ -40,43 +39,51 @@ export function SiteFooter({
 
   return (
     <footer className="mt-16 border-t-4 border-[var(--accent)] px-6 py-8 sm:px-10">
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          disabled={!csvRows?.length}
-          onClick={() => csvRows && downloadCsv(csvRows, csvFilename ?? "export.csv")}
-          className="rounded border border-white/30 px-3 py-1.5 text-xs font-medium text-white/80 hover:border-white/60 disabled:opacity-30"
-        >
-          Download as CSV
-        </button>
-        <button
-          type="button"
-          disabled
-          title="Coming soon"
-          className="rounded border border-white/20 px-3 py-1.5 text-xs font-medium text-white/40"
-        >
-          Download as DOCX
-        </button>
-        <button
-          type="button"
-          disabled
-          title="Coming soon"
-          className="rounded border border-white/20 px-3 py-1.5 text-xs font-medium text-white/40"
-        >
-          Download as XLSX
-        </button>
-        <button
-          type="button"
-          disabled={isPending}
-          onClick={() => startTransition(() => refreshEverything(slug))}
-          className="rounded bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-50"
-        >
-          {isPending ? "Refreshing..." : "Refresh Everything"}
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            disabled={!csvRows?.length}
+            onClick={() => csvRows && downloadCsv(csvRows, csvFilename ?? "export.csv")}
+            className="rounded border border-white/30 px-3 py-1.5 text-xs font-medium text-white/80 hover:border-white/60 disabled:opacity-30"
+          >
+            Download as CSV
+          </button>
+          <button
+            type="button"
+            disabled
+            title="Coming soon"
+            className="rounded border border-white/20 px-3 py-1.5 text-xs font-medium text-white/40"
+          >
+            Download as DOCX
+          </button>
+          <button
+            type="button"
+            disabled
+            title="Coming soon"
+            className="rounded border border-white/20 px-3 py-1.5 text-xs font-medium text-white/40"
+          >
+            Download as XLSX
+          </button>
+          <button
+            type="button"
+            disabled={isPending}
+            onClick={() => startTransition(() => refreshEverything(slug))}
+            className="rounded bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-50"
+          >
+            {isPending ? "Refreshing..." : "Refresh Everything"}
+          </button>
+        </div>
+        <p className="text-xs text-white/40">{tagline}</p>
       </div>
-      <div className="mt-6 text-xs text-white/40">
-        <p className="font-semibold text-white/60">{brandName}</p>
-        <p>{tagline}</p>
+
+      <div className="mt-8 flex justify-center">
+        <Link
+          href={`/s/${slug}`}
+          className="rounded-full border border-white/20 px-4 py-1.5 text-xs font-medium text-white/70 hover:border-white/40 hover:text-white"
+        >
+          Back to dashboard
+        </Link>
       </div>
     </footer>
   );

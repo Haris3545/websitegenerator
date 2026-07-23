@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { ArticleCard } from "@/components/site/ArticleCard";
+import { MediaList } from "@/components/site/MediaList";
 import { SiteFooter } from "@/components/site/SiteFooter";
 
 export default async function MediaPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -28,20 +28,16 @@ export default async function MediaPage({ params }: { params: Promise<{ slug: st
         {articles?.length ?? 0} results · sourced from Google News
       </p>
 
-      <div className="mt-4 flex flex-col gap-3">
-        {!articles?.length && (
-          <p className="rounded-lg border border-dashed border-white/20 p-8 text-center text-white/50">
-            No coverage cached yet — hit &quot;Refresh Everything&quot; below.
-          </p>
-        )}
-        {articles?.map((article) => (
-          <ArticleCard key={article.id} article={article} />
-        ))}
-      </div>
+      {!articles?.length ? (
+        <p className="mt-4 rounded-lg border border-dashed border-white/20 p-8 text-center text-white/50">
+          No coverage cached yet — hit &quot;Refresh Everything&quot; below.
+        </p>
+      ) : (
+        <MediaList articles={articles} />
+      )}
 
       <SiteFooter
         slug={slug}
-        brandName={artist.name}
         tagline={artist.tagline}
         csvRows={articles ?? []}
         csvFilename={`${slug}-media.csv`}

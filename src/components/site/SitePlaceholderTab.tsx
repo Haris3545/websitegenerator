@@ -25,7 +25,7 @@ export async function SitePlaceholderTab({
       <div className="mt-6">
         <PlaceholderSection title={`${tab.label} — coming in a later phase`} note={note} />
       </div>
-      <SiteFooter slug={slug} brandName={artist.name} tagline={artist.tagline} />
+      <SiteFooter slug={slug} tagline={artist.tagline} />
     </div>
   );
 }

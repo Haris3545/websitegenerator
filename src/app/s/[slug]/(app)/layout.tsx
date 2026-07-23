@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { after } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { refreshMediaIfStale } from "@/lib/media";
 import { googleFontsCssUrl } from "@/lib/fonts";
@@ -23,7 +24,10 @@ export default async function ArtistSiteLayout({
   const { data: artist } = await supabase.from("artists").select("*").eq("slug", slug).single();
   if (!artist) notFound();
 
-  await refreshMediaIfStale(artist.id, artist.name);
+  // Don't block the page on a live Google News fetch — the cron job (see
+  // vercel.json) keeps this warm on a schedule; here we just kick a refresh
+  // in the background if it's stale, after the response has already gone out.
+  after(() => refreshMediaIfStale(artist.id, artist.name));
 
   const { data: tickerArticles } = await supabase
     .from("media_articles")

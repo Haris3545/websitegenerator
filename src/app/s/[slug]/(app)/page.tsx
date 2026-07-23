@@ -80,7 +80,6 @@ export default async function DashboardPage({
 
       <SiteFooter
         slug={slug}
-        brandName={artist.name}
         tagline={artist.tagline}
         csvRows={latestArticles ?? []}
         csvFilename={`${slug}-dashboard.csv`}

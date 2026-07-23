@@ -32,7 +32,7 @@ export async function SiteBoardTab({
       <div className="mt-6">
         <EmptyBoardState noun={noun} />
       </div>
-      <SiteFooter slug={slug} brandName={artist.name} tagline={artist.tagline} />
+      <SiteFooter slug={slug} tagline={artist.tagline} />
     </div>
   );
 }
