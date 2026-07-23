@@ -11,6 +11,16 @@ export type AestheticParams = {
   vignette?: number; // 0..1
 };
 
+export type SentimentFilter = { label: string; keywords: string[] };
+
+export type SentimentSummary = {
+  positive_pct?: number;
+  negative_pct?: number;
+  neutral_pct?: number;
+  filters?: SentimentFilter[];
+  computed_at?: string;
+};
+
 export type TabKey =
   | "dashboard"
   | "media"
@@ -50,6 +60,7 @@ export interface Database {
           tagline: string;
           project_title: string;
           theme_overrides: ThemeOverrides;
+          sentiment_summary: SentimentSummary;
           enabled_tabs: TabKey[];
           created_at: string;
           updated_at: string;
@@ -69,6 +80,7 @@ export interface Database {
           tagline?: string;
           project_title?: string;
           theme_overrides?: ThemeOverrides;
+          sentiment_summary?: SentimentSummary;
           enabled_tabs?: TabKey[];
           created_at?: string;
           updated_at?: string;

@@ -5,7 +5,9 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { refreshMediaForArtist } from "@/lib/media";
+import { refreshSentimentNow } from "@/lib/sentiment";
 import { computeArtistPassword, artistAccessCookieName } from "@/lib/artistAccess";
+import type { SentimentFilter } from "@/lib/database.types";
 
 export async function refreshEverything(slug: string) {
   const supabase = createServiceRoleClient();
@@ -18,7 +20,30 @@ export async function refreshEverything(slug: string) {
   if (!artist) return;
 
   await refreshMediaForArtist(artist.id, artist.name);
+  await refreshSentimentNow(artist.id, artist.name);
   revalidatePath(`/s/${slug}`, "layout");
+}
+
+/** Saves manually-edited filter definitions from the Dashboard tab's filter
+ * editor. These survive future sentiment recomputes (see
+ * refreshSentimentNow) since a human redefining what a filter means should
+ * stick until they change it again, not get silently overwritten. */
+export async function updateSentimentFilters(artistId: string, filters: SentimentFilter[]) {
+  const supabase = createServiceRoleClient();
+  const { data: artist } = await supabase
+    .from("artists")
+    .select("sentiment_summary")
+    .eq("id", artistId)
+    .maybeSingle();
+
+  await supabase
+    .from("artists")
+    .update({
+      sentiment_summary: { ...artist?.sentiment_summary, filters },
+    })
+    .eq("id", artistId);
+
+  revalidatePath(`/s/[slug]`, "layout");
 }
 
 /** Checks the password entered on /s/[slug]/gate against the artist's

@@ -1,7 +1,10 @@
 import { notFound } from "next/navigation";
+import { after } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { refreshSentimentIfStale } from "@/lib/sentiment";
 import { KpiCard } from "@/components/site/KpiCard";
 import { ArticleCard } from "@/components/site/ArticleCard";
+import { DashboardOverview } from "@/components/site/DashboardOverview";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { TABS, LIVE_TABS } from "@/lib/tabs";
 
@@ -16,6 +19,8 @@ export default async function DashboardPage({
   const { data: artist } = await supabase.from("artists").select("*").eq("slug", slug).single();
   if (!artist) notFound();
 
+  after(() => refreshSentimentIfStale(artist.id, artist.name));
+
   const { count: mediaCount } = await supabase
     .from("media_articles")
     .select("id", { count: "exact", head: true })
@@ -27,6 +32,15 @@ export default async function DashboardPage({
     .eq("artist_id", artist.id)
     .order("published_at", { ascending: false })
     .limit(5);
+
+  // A broader pool for the filter pills to search over, separate from the
+  // 5-item "Most relevant coverage" list below.
+  const { data: filterableArticles } = await supabase
+    .from("media_articles")
+    .select("*")
+    .eq("artist_id", artist.id)
+    .order("published_at", { ascending: false })
+    .limit(40);
 
   const otherTabs = TABS.filter(
     (tab) => tab.key !== "dashboard" && artist.enabled_tabs.includes(tab.key)
@@ -40,7 +54,15 @@ export default async function DashboardPage({
         <span className="text-sm text-white/40">Summary of current activity</span>
       </div>
 
-      <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+      <div className="mt-6">
+        <DashboardOverview
+          artistId={artist.id}
+          summary={artist.sentiment_summary ?? {}}
+          articles={filterableArticles ?? []}
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         {otherTabs.map((tab) =>
           tab.key === "media" ? (
             <KpiCard
