@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, unstable_rethrow } from "next/navigation";
 import { ColorField } from "@/components/builder/ColorField";
 import { FontPicker } from "@/components/builder/FontPicker";
 import { MediaUploadField } from "@/components/builder/MediaUploadField";
@@ -67,6 +67,7 @@ export function ArtistForm({
   const [slugTouched, setSlugTouched] = useState(!!artist);
   const [secrets, setSecrets] = useState<Record<string, string>>({});
   const [secretsSaved, setSecretsSaved] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   function update<K extends keyof ArtistFormInput>(key: K, value: ArtistFormInput[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -79,8 +80,18 @@ export function ArtistForm({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    startTransition(() => {
-      upsertArtist(form);
+    setFormError(null);
+    startTransition(async () => {
+      try {
+        await upsertArtist(form);
+      } catch (err) {
+        // upsertArtist redirects on success, which Next.js implements by
+        // throwing a special internal error that must keep propagating —
+        // unstable_rethrow lets that through untouched and only stops here
+        // for a genuine failure (e.g. a Supabase/RLS error).
+        unstable_rethrow(err);
+        setFormError(err instanceof Error ? err.message : "Something went wrong saving this artist.");
+      }
     });
   }
 
@@ -207,6 +218,12 @@ export function ArtistForm({
         value={form.enabled_tabs}
         onChange={(tabs) => update("enabled_tabs", tabs)}
       />
+
+      {formError && (
+        <p className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {formError}
+        </p>
+      )}
 
       <button
         type="submit"
