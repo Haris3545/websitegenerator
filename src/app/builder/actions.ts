@@ -53,10 +53,10 @@ export async function upsertArtist(input: ArtistFormInput) {
 
   if (input.id) {
     const { error } = await supabase.from("artists").update(row).eq("id", input.id);
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(`Failed to update artist in Supabase: ${error.message}`);
   } else {
     const { error } = await supabase.from("artists").insert(row);
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(`Failed to create artist in Supabase: ${error.message}`);
   }
 
   revalidatePath("/builder/artists");
