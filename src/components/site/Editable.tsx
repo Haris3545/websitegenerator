@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { updateContentOverride } from "@/app/s/[slug]/actions";
 
 type Tag = "span" | "p" | "h1" | "h2" | "h3" | "div";
@@ -35,13 +35,23 @@ export function Editable({
     el.style.height = `${el.scrollHeight}px`;
   }
 
+  // Runs once when entering edit mode, not on every keystroke — an inline
+  // ref callback would re-fire focus()/select() on every re-render (i.e.
+  // every character typed), which re-selects all the text each time and
+  // makes typing effectively impossible.
+  useEffect(() => {
+    if (!editing) return;
+    const el = textareaRef.current;
+    if (!el) return;
+    el.focus();
+    el.select();
+    resize(el);
+  }, [editing]);
+
   function startEditing(e: React.MouseEvent) {
     e.preventDefault();
     setDraft(current);
     setEditing(true);
-    // Autofocus + resize happen once the textarea mounts, via the ref
-    // callback below rather than an effect, since this only needs to run
-    // on the transition into edit mode.
   }
 
   function save() {
@@ -54,14 +64,7 @@ export function Editable({
   if (editing) {
     return (
       <textarea
-        ref={(el) => {
-          textareaRef.current = el;
-          if (el) {
-            el.focus();
-            el.select();
-            resize(el);
-          }
-        }}
+        ref={textareaRef}
         value={draft}
         onChange={(e) => {
           setDraft(e.target.value);
