@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useTransition } from "react";
-import { refreshEverything } from "@/app/s/[slug]/actions";
+import { refreshEverything, logOutOfArtistSite } from "@/app/s/[slug]/actions";
 import { useEditMode } from "@/components/site/EditModeContext";
 
 function toCsv(rows: Record<string, unknown>[]): string {
@@ -96,6 +96,13 @@ export function SiteFooter({
           }`}
         >
           {editMode ? "Done editing" : "Edit page"}
+        </button>
+        <button
+          type="button"
+          onClick={() => startTransition(() => logOutOfArtistSite(slug))}
+          className="rounded-full border border-white/20 px-4 py-1.5 text-xs font-medium text-white/70 hover:border-white/40 hover:text-white"
+        >
+          Log out
         </button>
       </div>
     </footer>

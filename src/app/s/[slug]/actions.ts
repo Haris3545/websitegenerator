@@ -104,3 +104,12 @@ export async function verifyArtistAccess(
 
   redirect(`/s/${slug}`);
 }
+
+/** Clears the artist-name password cookie and sends the visitor back to
+ * the gate page — the only way back to it once you're past it, since the
+ * cookie otherwise lasts 180 days. */
+export async function logOutOfArtistSite(slug: string) {
+  const cookieStore = await cookies();
+  cookieStore.delete(artistAccessCookieName(slug));
+  redirect(`/s/${slug}/gate`);
+}
