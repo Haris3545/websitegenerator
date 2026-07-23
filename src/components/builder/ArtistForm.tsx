@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { ColorField } from "@/components/builder/ColorField";
 import { FontPicker } from "@/components/builder/FontPicker";
 import { MediaUploadField } from "@/components/builder/MediaUploadField";
@@ -23,7 +24,14 @@ const SECRET_FIELDS = [
   { key: "lastfm_api_key", label: "Last.fm API key" },
 ] as const;
 
-export function ArtistForm({ artist }: { artist?: Artist }) {
+export function ArtistForm({
+  artist,
+  savedSecretKeys = [],
+}: {
+  artist?: Artist;
+  savedSecretKeys?: string[];
+}) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [form, setForm] = useState<ArtistFormInput>({
     id: artist?.id,
@@ -186,25 +194,36 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
             Stored encrypted. Leave a field blank to keep its current value unchanged.
           </p>
           <div className="flex flex-col gap-3">
-            {SECRET_FIELDS.map((field) => (
-              <label key={field.key} className="flex flex-col gap-1 text-sm">
-                {field.label}
-                <input
-                  type="password"
-                  value={secrets[field.key] ?? ""}
-                  onChange={(e) =>
-                    setSecrets((s) => ({ ...s, [field.key]: e.target.value }))
-                  }
-                  className="rounded border border-neutral-300 px-3 py-2 font-mono text-xs"
-                />
-              </label>
-            ))}
+            {SECRET_FIELDS.map((field) => {
+              const isSet = savedSecretKeys.includes(field.key);
+              return (
+                <label key={field.key} className="flex flex-col gap-1 text-sm">
+                  <span>
+                    {field.label}{" "}
+                    <span className={isSet ? "text-green-700" : "text-neutral-500"}>
+                      ({isSet ? "currently set" : "not set"})
+                    </span>
+                  </span>
+                  <input
+                    type="password"
+                    placeholder={isSet ? "Leave blank to keep the saved value" : "Not set"}
+                    value={secrets[field.key] ?? ""}
+                    onChange={(e) =>
+                      setSecrets((s) => ({ ...s, [field.key]: e.target.value }))
+                    }
+                    className="rounded border border-neutral-300 px-3 py-2 font-mono text-xs"
+                  />
+                </label>
+              );
+            })}
             <button
               type="button"
               onClick={() =>
                 startTransition(async () => {
                   await saveArtistSecrets(artist.id, secrets);
+                  setSecrets({});
                   setSecretsSaved(true);
+                  router.refresh();
                 })
               }
               className="self-start rounded border border-neutral-300 px-3 py-2 text-sm font-medium"

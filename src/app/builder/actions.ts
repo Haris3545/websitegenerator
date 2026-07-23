@@ -70,13 +70,22 @@ export async function deleteArtist(id: string) {
   revalidatePath("/builder/artists");
 }
 
-/** API keys are encrypted before storage; never round-tripped back to the client. */
+/** API keys are encrypted before storage; never round-tripped back to the client.
+ * Merges with whatever's already saved — a blank field means "leave this key
+ * alone," not "clear it." */
 export async function saveArtistSecrets(
   artistId: string,
   secrets: Record<string, string>
 ) {
   const supabase = await createClient();
-  const encrypted: Record<string, string> = {};
+
+  const { data: existing } = await supabase
+    .from("artist_secrets")
+    .select("encrypted")
+    .eq("artist_id", artistId)
+    .maybeSingle();
+
+  const encrypted: Record<string, string> = { ...(existing?.encrypted ?? {}) };
   for (const [key, value] of Object.entries(secrets)) {
     if (value) encrypted[key] = encryptSecret(value);
   }
@@ -86,4 +95,16 @@ export async function saveArtistSecrets(
     .upsert({ artist_id: artistId, encrypted, updated_at: new Date().toISOString() });
   if (error) throw new Error(error.message);
   revalidatePath(`/builder/artists/${artistId}`);
+}
+
+/** Which secret keys already have a value saved, without ever exposing the
+ * decrypted value itself — used to show "already set" in the form. */
+export async function getSavedSecretKeys(artistId: string): Promise<string[]> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("artist_secrets")
+    .select("encrypted")
+    .eq("artist_id", artistId)
+    .maybeSingle();
+  return Object.keys(data?.encrypted ?? {});
 }

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getSavedSecretKeys } from "@/app/builder/actions";
 import { ArtistForm } from "@/components/builder/ArtistForm";
 
 export default async function EditArtistPage({
@@ -13,10 +14,12 @@ export default async function EditArtistPage({
 
   if (!artist) notFound();
 
+  const savedSecretKeys = await getSavedSecretKeys(id);
+
   return (
     <div>
       <h1 className="mb-6 text-xl font-semibold">Edit {artist.name}</h1>
-      <ArtistForm artist={artist} />
+      <ArtistForm artist={artist} savedSecretKeys={savedSecretKeys} />
     </div>
   );
 }
