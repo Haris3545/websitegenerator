@@ -46,6 +46,7 @@ export interface Database {
           aesthetic_prompt: string;
           aesthetic_params: AestheticParams;
           tagline: string;
+          project_title: string;
           enabled_tabs: TabKey[];
           created_at: string;
           updated_at: string;
@@ -63,6 +64,7 @@ export interface Database {
           aesthetic_prompt?: string;
           aesthetic_params?: AestheticParams;
           tagline?: string;
+          project_title?: string;
           enabled_tabs?: TabKey[];
           created_at?: string;
           updated_at?: string;

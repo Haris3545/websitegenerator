@@ -26,6 +26,7 @@ export type ArtistFormInput = {
   landing_video_url: string | null;
   aesthetic_prompt: string;
   tagline: string;
+  project_title: string;
   enabled_tabs: TabKey[];
 };
 
@@ -47,6 +48,7 @@ export async function upsertArtist(input: ArtistFormInput) {
     aesthetic_prompt: input.aesthetic_prompt,
     aesthetic_params,
     tagline: input.tagline,
+    project_title: input.project_title,
     enabled_tabs,
     updated_at: new Date().toISOString(),
   };

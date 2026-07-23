@@ -39,7 +39,15 @@ export function NewsTicker({ articles }: { articles: MediaArticle[] }) {
     return () => cancelAnimationFrame(raf);
   }, [articles.length]);
 
-  if (!articles.length) return null;
+  if (!articles.length) {
+    return (
+      <div className="relative overflow-hidden border-y border-white/10 bg-black/30 py-2">
+        <p className="px-6 text-sm text-white/40 sm:px-10">
+          No coverage cached yet — this fills in automatically once articles are found.
+        </p>
+      </div>
+    );
+  }
 
   // Duplicate the list so the translateX loop has no visible seam.
   const loopItems = [...articles, ...articles];

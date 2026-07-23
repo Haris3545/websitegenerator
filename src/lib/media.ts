@@ -24,7 +24,11 @@ export async function refreshMediaForArtist(artistId: string, artistName: string
 
   const parser = new XMLParser({ ignoreAttributes: false });
   const parsed = parser.parse(xml);
-  const items: RssItem[] = parsed?.rss?.channel?.item ?? [];
+  // fast-xml-parser returns a single <item> as an object rather than a
+  // one-element array, so a feed with exactly one result would otherwise
+  // throw on the .slice() below and get swallowed by the caller's try/catch.
+  const rawItems = parsed?.rss?.channel?.item ?? [];
+  const items: RssItem[] = Array.isArray(rawItems) ? rawItems : [rawItems];
 
   const supabase = createServiceRoleClient();
   const rows = items.slice(0, 40).map((item) => {
@@ -43,7 +47,7 @@ export async function refreshMediaForArtist(artistId: string, artistName: string
       url,
       source: host,
       excerpt: stripHtml(item.description ?? "").slice(0, 400),
-      published_at: item.pubDate ? new Date(item.pubDate).toISOString() : null,
+      published_at: parseDateSafe(item.pubDate),
       fetched_at: new Date().toISOString(),
     };
   });
@@ -74,12 +78,21 @@ export async function refreshMediaIfStale(artistId: string, artistName: string) 
   if (isStale) {
     try {
       await refreshMediaForArtist(artistId, artistName);
-    } catch {
-      // stale cache is fine to serve if the live refresh fails (feed hiccup, rate limit)
+    } catch (err) {
+      // Stale cache is fine to serve if the live refresh fails (feed hiccup,
+      // rate limit) — but log so a persistently-empty ticker is diagnosable
+      // from Vercel function logs instead of failing completely silently.
+      console.error(`refreshMediaIfStale failed for artist ${artistId}:`, err);
     }
   }
 }
 
 function stripHtml(input: string) {
   return input.replace(/<[^>]*>/g, "").trim();
+}
+
+function parseDateSafe(value: string | undefined): string | null {
+  if (!value) return null;
+  const ms = Date.parse(value);
+  return Number.isNaN(ms) ? null : new Date(ms).toISOString();
 }

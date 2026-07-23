@@ -45,6 +45,7 @@ export function ArtistForm({
     landing_video_url: artist?.landing_video_url ?? null,
     aesthetic_prompt: artist?.aesthetic_prompt ?? "",
     tagline: artist?.tagline ?? "VCCP Cultural Intelligence",
+    project_title: artist?.project_title ?? "The Recording Studio",
     enabled_tabs: artist?.enabled_tabs ?? [
       "dashboard",
       "media",
@@ -103,6 +104,19 @@ export function ArtistForm({
           }}
           className="rounded border border-neutral-300 px-3 py-2 font-mono"
         />
+      </label>
+
+      <label className="flex flex-col gap-1 text-sm">
+        Project title
+        <input
+          value={form.project_title}
+          onChange={(e) => update("project_title", e.target.value)}
+          className="rounded border border-neutral-300 px-3 py-2"
+        />
+        <span className="text-xs text-neutral-900">
+          The big title shown top-left on the site (e.g. &quot;The Recording Studio&quot;). The
+          artist&apos;s name is shown separately, top-right.
+        </span>
       </label>
 
       <label className="flex flex-col gap-1 text-sm">

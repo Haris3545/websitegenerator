@@ -57,8 +57,7 @@ export default async function ArtistSiteLayout({
             playsInline
             className="h-full w-full object-cover"
             style={{
-              filter: `blur(${blur * 12}px)`,
-              opacity: 0.55,
+              filter: `blur(${blur * 12}px) contrast(1.15) saturate(1.1)`,
             }}
           />
         ) : (
@@ -69,21 +68,26 @@ export default async function ArtistSiteLayout({
               alt=""
               className="h-full w-full object-cover"
               style={{
-                filter: `blur(${blur * 12}px)`,
-                opacity: 0.55,
+                filter: `blur(${blur * 12}px) contrast(1.15) saturate(1.1)`,
               }}
             />
           )
         )}
-        <div
-          className="absolute inset-0"
-          style={{ backgroundColor: artist.primary_color, opacity: tint_opacity * 0.5 }}
-        />
+        {/* Fixed dark scrim: always on, independent of the aesthetic tint, so
+            text stays readable and the photo reads as punchy rather than washed out. */}
+        <div className="absolute inset-0 bg-black/45" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/20 to-black/70" />
+        {tint_opacity > 0 && (
+          <div
+            className="absolute inset-0"
+            style={{ backgroundColor: artist.primary_color, opacity: tint_opacity * 0.65 }}
+          />
+        )}
         {vignette > 0 && (
           <div
             className="absolute inset-0"
             style={{
-              boxShadow: `inset 0 0 ${vignette * 220}px rgba(0,0,0,${vignette})`,
+              boxShadow: `inset 0 0 ${vignette * 260}px rgba(0,0,0,${Math.min(1, vignette * 1.3)})`,
             }}
           />
         )}
@@ -99,7 +103,11 @@ export default async function ArtistSiteLayout({
         )}
       </div>
 
-      <SiteHeader name={artist.name} tagline={artist.tagline} />
+      <SiteHeader
+        projectTitle={artist.project_title}
+        tagline={artist.tagline}
+        artistName={artist.name}
+      />
       <NewsTicker articles={tickerArticles ?? []} />
       <NavPills slug={slug} enabledTabs={artist.enabled_tabs} />
 
