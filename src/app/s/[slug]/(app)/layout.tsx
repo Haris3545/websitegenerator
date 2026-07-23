@@ -1,6 +1,6 @@
-import { notFound } from "next/navigation";
 import { after } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { getSiteArtist } from "@/lib/getSiteArtist";
 import { refreshMediaIfStale } from "@/lib/media";
 import { googleFontsCssUrl } from "@/lib/fonts";
 import { withThemeDefaults, themeToCssVars } from "@/lib/theme";
@@ -21,8 +21,9 @@ export default async function ArtistSiteLayout({
 
   // Authorization already happened in middleware.ts (password cookie or a
   // Supabase session) — this is a plain lookup, not an RLS-scoped one.
-  const { data: artist } = await supabase.from("artists").select("*").eq("slug", slug).single();
-  if (!artist) notFound();
+  // Cached per-request so the page rendering alongside this layout reuses
+  // the same fetch instead of querying the artist row a second time.
+  const artist = await getSiteArtist(slug);
 
   // Don't block the page on a live Google News fetch — the cron job (see
   // vercel.json) keeps this warm on a schedule; here we just kick a refresh
