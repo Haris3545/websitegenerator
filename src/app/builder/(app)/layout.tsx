@@ -9,7 +9,7 @@ export default function BuilderLayout({ children }: { children: React.ReactNode 
           Dashboard Builder
         </Link>
         <form action={signOut}>
-          <button type="submit" className="text-sm text-neutral-500 hover:text-neutral-900">
+          <button type="submit" className="text-sm text-neutral-900 hover:underline">
             Sign out
           </button>
         </form>

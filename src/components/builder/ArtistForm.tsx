@@ -144,7 +144,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
           />
         </>
       ) : (
-        <p className="text-sm text-neutral-400">Enter a name/slug to enable media uploads.</p>
+        <p className="text-sm text-neutral-900">Enter a name/slug to enable media uploads.</p>
       )}
 
       <label className="flex flex-col gap-1 text-sm">
@@ -156,7 +156,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
           onChange={(e) => update("aesthetic_prompt", e.target.value)}
           className="rounded border border-neutral-300 px-3 py-2"
         />
-        <span className="text-xs text-neutral-400">
+        <span className="text-xs text-neutral-900">
           Describe grain, tint, blur, or vignette adjustments in your own words — parsed into CSS
           on save.
         </span>
@@ -178,7 +178,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
       {artist && (
         <div className="rounded border border-neutral-200 p-4">
           <h2 className="mb-1 text-sm font-semibold">Data source API keys</h2>
-          <p className="mb-3 text-xs text-neutral-400">
+          <p className="mb-3 text-xs text-neutral-900">
             Stored encrypted. Leave a field blank to keep its current value unchanged.
           </p>
           <div className="flex flex-col gap-3">

@@ -21,7 +21,7 @@ export default async function ArtistsPage() {
       </div>
 
       {!artists?.length ? (
-        <p className="text-sm text-neutral-500">
+        <p className="text-sm text-neutral-900">
           No artist dashboards yet. Create the first one to get started.
         </p>
       ) : (
@@ -30,10 +30,10 @@ export default async function ArtistsPage() {
             <li key={artist.id} className="flex items-center justify-between px-4 py-3">
               <div>
                 <p className="font-medium">{artist.name}</p>
-                <p className="text-sm text-neutral-500">/s/{artist.slug}</p>
+                <p className="text-sm text-neutral-900">/s/{artist.slug}</p>
               </div>
               <div className="flex gap-3 text-sm">
-                <Link href={`/s/${artist.slug}`} className="text-neutral-500 hover:underline">
+                <Link href={`/s/${artist.slug}`} className="text-neutral-900 hover:underline">
                   View site
                 </Link>
                 <Link

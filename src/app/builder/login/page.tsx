@@ -44,7 +44,7 @@ function LoginForm() {
   return (
     <div className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-4">
       <h1 className="mb-1 text-2xl font-semibold">Builder login</h1>
-      <p className="mb-6 text-sm text-neutral-500">
+      <p className="mb-6 text-sm text-neutral-900">
         Internal admin access for the dashboard generator.
       </p>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">

@@ -86,9 +86,9 @@ export function MediaUploadField({
           if (file) handleFile(file);
         }}
       />
-      {uploading && <p className="text-neutral-500">Compressing and uploading...</p>}
+      {uploading && <p className="text-neutral-900">Compressing and uploading...</p>}
       {error && <p className="text-red-600">{error}</p>}
-      <p className="text-xs text-neutral-400">
+      <p className="text-xs text-neutral-900">
         {kind === "image"
           ? `Images are auto-compressed to fit ${IMAGE_MAX_DIMENSION}px / ~2MB — no need to resize beforehand.`
           : `Videos are capped at ${VIDEO_MAX_MB}MB (client-side transcoding isn't wired up yet — compress heavy files before uploading).`}
