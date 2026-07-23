@@ -1,16 +1,18 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { z } from "zod";
+import { GoogleGenAI, Type } from "@google/genai";
 import type { AestheticParams } from "@/lib/database.types";
 
-const AestheticParamsSchema = z.object({
-  grain_intensity: z.number().min(0).max(1),
-  tint_opacity: z.number().min(0).max(1),
-  blur: z.number().min(0).max(1),
-  vignette: z.number().min(0).max(1),
-});
+const RESPONSE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    grain_intensity: { type: Type.NUMBER },
+    tint_opacity: { type: Type.NUMBER },
+    blur: { type: Type.NUMBER },
+    vignette: { type: Type.NUMBER },
+  },
+  required: ["grain_intensity", "tint_opacity", "blur", "vignette"],
+};
 
-const client = new Anthropic();
+const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 /**
  * Turns free text like "film grain overlay, 30%, slight vignette" into the
@@ -21,26 +23,33 @@ export async function parseAestheticPrompt(prompt: string): Promise<AestheticPar
     return { grain_intensity: 0, tint_opacity: 0, blur: 0, vignette: 0 };
   }
 
-  const response = await client.messages.parse({
-    model: "claude-opus-4-8",
-    max_tokens: 256,
-    messages: [
-      {
-        role: "user",
-        content:
-          "Translate this art-direction note for a dashboard's background photo into " +
-          "0..1 intensity values. grain_intensity = film grain / noise texture strength. " +
-          "tint_opacity = how strongly a color overlay tints the photo. blur = background " +
-          "blur strength. vignette = darkened-edges strength. Default any unmentioned " +
-          "effect to 0. A bare percentage with no named effect applies to grain_intensity.\n\n" +
-          `Note: "${prompt}"`,
-      },
-    ],
-    output_config: {
-      effort: "low",
-      format: zodOutputFormat(AestheticParamsSchema),
+  const response = await client.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents:
+      "Translate this art-direction note for a dashboard's background photo into " +
+      "0..1 intensity values. grain_intensity = film grain / noise texture strength. " +
+      "tint_opacity = how strongly a color overlay tints the photo. blur = background " +
+      "blur strength. vignette = darkened-edges strength. Default any unmentioned " +
+      "effect to 0. A bare percentage with no named effect applies to grain_intensity.\n\n" +
+      `Note: "${prompt}"`,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: RESPONSE_SCHEMA,
     },
   });
 
-  return response.parsed_output as AestheticParams;
+  const parsed = JSON.parse(response.text ?? "{}");
+  return {
+    grain_intensity: clamp01(parsed.grain_intensity),
+    tint_opacity: clamp01(parsed.tint_opacity),
+    blur: clamp01(parsed.blur),
+    vignette: clamp01(parsed.vignette),
+  };
+}
+
+// Gemini's JSON schema mode constrains type/shape but not numeric range, so
+// clamp at this external-API boundary rather than trusting it outright.
+function clamp01(value: unknown): number {
+  const n = typeof value === "number" ? value : 0;
+  return Math.min(1, Math.max(0, n));
 }

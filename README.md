@@ -13,7 +13,7 @@ built out in later phases.
    and landing videos upload here).
 4. Copy `.env.example` to `.env.local` and fill in:
    - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` — from your Supabase project's API settings
-   - `ANTHROPIC_API_KEY` — used to parse the aesthetic-tailoring textbox into CSS params
+   - `GEMINI_API_KEY` — used to parse the aesthetic-tailoring textbox into CSS params (free key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey), no billing required)
    - `ARTIST_SECRETS_ENCRYPTION_KEY` — generate with `openssl rand -hex 32`
    - `GOOGLE_FONTS_API_KEY` — optional, unlocks the full Google Fonts catalog instead of the bundled curated list
 5. Create your own account (Supabase Auth → Users → Add user, or sign up
