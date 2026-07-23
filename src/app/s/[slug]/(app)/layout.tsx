@@ -9,6 +9,7 @@ import { SiteHeader } from "@/components/site/SiteHeader";
 import { NewsTicker } from "@/components/site/NewsTicker";
 import { NavPills } from "@/components/site/NavPills";
 import { PageTransition } from "@/components/site/PageTransition";
+import { EditModeProvider } from "@/components/site/EditModeContext";
 
 export default async function ArtistSiteLayout({
   children,
@@ -43,6 +44,7 @@ export default async function ArtistSiteLayout({
   const theme = withThemeDefaults(artist.theme_overrides);
 
   return (
+    <EditModeProvider>
     <div
       className="relative min-h-screen text-white"
       style={
@@ -138,5 +140,6 @@ export default async function ArtistSiteLayout({
         <PageTransition>{children}</PageTransition>
       </main>
     </div>
+    </EditModeProvider>
   );
 }

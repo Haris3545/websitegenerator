@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useTransition } from "react";
 import { refreshEverything } from "@/app/s/[slug]/actions";
+import { useEditMode } from "@/components/site/EditModeContext";
 
 function toCsv(rows: Record<string, unknown>[]): string {
   if (!rows.length) return "";
@@ -36,6 +37,7 @@ export function SiteFooter({
   csvFilename?: string;
 }) {
   const [isPending, startTransition] = useTransition();
+  const { editMode, toggle } = useEditMode();
 
   return (
     <footer className="mt-16 border-t-4 border-[var(--accent)] px-6 py-8 sm:px-10">
@@ -77,13 +79,24 @@ export function SiteFooter({
         <p className="text-xs text-white/40">{tagline}</p>
       </div>
 
-      <div className="mt-8 flex justify-center">
+      <div className="mt-8 flex justify-center gap-3">
         <Link
           href={`/s/${slug}`}
           className="rounded-full border border-white/20 px-4 py-1.5 text-xs font-medium text-white/70 hover:border-white/40 hover:text-white"
         >
           Back to dashboard
         </Link>
+        <button
+          type="button"
+          onClick={toggle}
+          className={`rounded-full border px-4 py-1.5 text-xs font-medium transition ${
+            editMode
+              ? "border-[var(--accent)] bg-[var(--accent)] text-black"
+              : "border-white/20 text-white/70 hover:border-white/40 hover:text-white"
+          }`}
+        >
+          {editMode ? "Done editing" : "Edit page"}
+        </button>
       </div>
     </footer>
   );

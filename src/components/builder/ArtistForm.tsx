@@ -190,15 +190,15 @@ export function ArtistForm({
       {form.slug ? (
         <>
           <MediaUploadField
-            label="Background image"
-            kind="image"
+            label="Background"
+            slotName="background"
             artistSlug={form.slug}
             value={form.background_image_url}
             onChange={(v) => update("background_image_url", v)}
           />
           <MediaUploadField
-            label="Landing video"
-            kind="video"
+            label="Landing page media"
+            slotName="landing"
             artistSlug={form.slug}
             value={form.landing_video_url}
             onChange={(v) => update("landing_video_url", v)}
