@@ -14,7 +14,15 @@ export function SiteHeader({
           <p className="text-xs font-semibold uppercase tracking-widest text-[var(--accent)]">
             {tagline}
           </p>
-          <h1 className="text-4xl font-bold text-white sm:text-5xl">{projectTitle}</h1>
+          <h1
+            className="text-4xl text-white sm:text-5xl"
+            style={{
+              fontWeight: "var(--header-font-weight, 700)",
+              fontStyle: "var(--header-font-style, normal)",
+            }}
+          >
+            {projectTitle}
+          </h1>
         </div>
         <p className="text-lg font-semibold text-white/80 sm:text-xl">{artistName}</p>
       </div>

@@ -1,6 +1,13 @@
 export function EmptyBoardState({ noun }: { noun: string }) {
   return (
-    <div className="rounded-xl border border-dashed border-white/25 bg-black/30 p-12 text-center shadow-lg shadow-black/30 backdrop-blur-md">
+    <div
+      className="border-dashed p-12 text-center shadow-lg shadow-black/30 backdrop-blur-md"
+      style={{
+        borderRadius: "var(--card-radius, 12px)",
+        backgroundColor: "rgba(0,0,0,var(--card-bg-opacity, 0.3))",
+        border: "1px dashed rgba(255,255,255,calc(var(--card-border-opacity, 0.15) + 0.1))",
+      }}
+    >
       <p className="text-white/60">No {noun} yet</p>
       <button
         type="button"

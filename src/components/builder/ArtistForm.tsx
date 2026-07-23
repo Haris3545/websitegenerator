@@ -6,8 +6,10 @@ import { ColorField } from "@/components/builder/ColorField";
 import { FontPicker } from "@/components/builder/FontPicker";
 import { MediaUploadField } from "@/components/builder/MediaUploadField";
 import { TabsChecklist } from "@/components/builder/TabsChecklist";
+import { ThemeEditor } from "@/components/builder/ThemeEditor";
 import { upsertArtist, saveArtistSecrets, type ArtistFormInput } from "@/app/builder/actions";
 import type { Artist } from "@/lib/database.types";
+import { DEFAULT_THEME_OVERRIDES } from "@/lib/theme";
 
 function slugify(name: string) {
   return name
@@ -46,6 +48,7 @@ export function ArtistForm({
     aesthetic_prompt: artist?.aesthetic_prompt ?? "",
     tagline: artist?.tagline ?? "VCCP Cultural Intelligence",
     project_title: artist?.project_title ?? "The Recording Studio",
+    theme_overrides: artist?.theme_overrides ?? DEFAULT_THEME_OVERRIDES,
     enabled_tabs: artist?.enabled_tabs ?? [
       "dashboard",
       "media",
@@ -187,6 +190,18 @@ export function ArtistForm({
           on save.
         </span>
       </label>
+
+      <ThemeEditor
+        value={form.theme_overrides}
+        onChange={(theme_overrides) => update("theme_overrides", theme_overrides)}
+        primaryColor={form.primary_color}
+        accentColor={form.accent_color}
+        fontFamily={form.font_family}
+        backgroundImageUrl={form.background_image_url}
+        projectTitle={form.project_title}
+        tagline={form.tagline}
+        artistName={form.name}
+      />
 
       <TabsChecklist
         value={form.enabled_tabs}

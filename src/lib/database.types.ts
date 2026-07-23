@@ -2,6 +2,8 @@
 // CLI, prefer regenerating this with:
 //   supabase gen types typescript --project-id <ref> > src/lib/database.types.ts
 
+import type { ThemeOverrides } from "@/lib/theme";
+
 export type AestheticParams = {
   grain_intensity?: number; // 0..1
   tint_opacity?: number; // 0..1
@@ -47,6 +49,7 @@ export interface Database {
           aesthetic_params: AestheticParams;
           tagline: string;
           project_title: string;
+          theme_overrides: ThemeOverrides;
           enabled_tabs: TabKey[];
           created_at: string;
           updated_at: string;
@@ -65,6 +68,7 @@ export interface Database {
           aesthetic_params?: AestheticParams;
           tagline?: string;
           project_title?: string;
+          theme_overrides?: ThemeOverrides;
           enabled_tabs?: TabKey[];
           created_at?: string;
           updated_at?: string;

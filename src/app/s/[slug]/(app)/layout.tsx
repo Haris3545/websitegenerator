@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { refreshMediaIfStale } from "@/lib/media";
 import { googleFontsCssUrl } from "@/lib/fonts";
+import { withThemeDefaults, themeToCssVars } from "@/lib/theme";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { NewsTicker } from "@/components/site/NewsTicker";
 import { NavPills } from "@/components/site/NavPills";
@@ -32,6 +33,7 @@ export default async function ArtistSiteLayout({
 
   const { grain_intensity = 0, tint_opacity = 0, blur = 0, vignette = 0 } =
     artist.aesthetic_params ?? {};
+  const theme = withThemeDefaults(artist.theme_overrides);
 
   return (
     <div
@@ -42,6 +44,7 @@ export default async function ArtistSiteLayout({
           "--secondary": artist.secondary_color,
           "--accent": artist.accent_color,
           fontFamily: `"${artist.font_family}", sans-serif`,
+          ...themeToCssVars(artist.theme_overrides),
         } as React.CSSProperties
       }
     >
@@ -57,7 +60,7 @@ export default async function ArtistSiteLayout({
             playsInline
             className="h-full w-full object-cover"
             style={{
-              filter: `blur(${blur * 12}px) contrast(1.15) saturate(1.1)`,
+              filter: `blur(${blur * 12}px) contrast(${theme.bg_contrast}) saturate(${theme.bg_saturate})`,
             }}
           />
         ) : (
@@ -68,14 +71,15 @@ export default async function ArtistSiteLayout({
               alt=""
               className="h-full w-full object-cover"
               style={{
-                filter: `blur(${blur * 12}px) contrast(1.15) saturate(1.1)`,
+                filter: `blur(${blur * 12}px) contrast(${theme.bg_contrast}) saturate(${theme.bg_saturate})`,
               }}
             />
           )
         )}
-        {/* Fixed dark scrim: always on, independent of the aesthetic tint, so
-            text stays readable and the photo reads as punchy rather than washed out. */}
-        <div className="absolute inset-0 bg-black/45" />
+        {/* Fixed dark scrim: always on (strength set via the builder's visual
+            editor), independent of the aesthetic tint, so text stays readable
+            and the photo reads as punchy rather than washed out. */}
+        <div className="absolute inset-0" style={{ backgroundColor: `rgba(0,0,0,${theme.bg_scrim_opacity})` }} />
         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/20 to-black/70" />
         {tint_opacity > 0 && (
           <div

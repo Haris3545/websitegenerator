@@ -10,7 +10,14 @@ export function KpiCard({
   color?: string;
 }) {
   return (
-    <div className="rounded-xl border border-white/15 bg-black/40 p-4 shadow-lg shadow-black/30 backdrop-blur-md transition-colors hover:border-white/25">
+    <div
+      className="p-4 shadow-lg shadow-black/30 backdrop-blur-md transition hover:brightness-110"
+      style={{
+        borderRadius: "var(--card-radius, 12px)",
+        backgroundColor: "rgba(0,0,0,var(--card-bg-opacity, 0.4))",
+        border: "1px solid rgba(255,255,255,var(--card-border-opacity, 0.15))",
+      }}
+    >
       <p className="text-xs uppercase tracking-wide text-white/50">{label}</p>
       <p className="mt-1 text-3xl font-bold" style={{ color }}>
         {value}

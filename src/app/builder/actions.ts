@@ -7,6 +7,7 @@ import { parseAestheticPrompt } from "@/lib/aesthetic";
 import { encryptSecret } from "@/lib/crypto";
 import { ALL_TAB_KEYS } from "@/lib/tabs";
 import type { TabKey } from "@/lib/database.types";
+import type { ThemeOverrides } from "@/lib/theme";
 
 export async function signOut() {
   const supabase = await createClient();
@@ -27,6 +28,7 @@ export type ArtistFormInput = {
   aesthetic_prompt: string;
   tagline: string;
   project_title: string;
+  theme_overrides: ThemeOverrides;
   enabled_tabs: TabKey[];
 };
 
@@ -49,6 +51,7 @@ export async function upsertArtist(input: ArtistFormInput) {
     aesthetic_params,
     tagline: input.tagline,
     project_title: input.project_title,
+    theme_overrides: input.theme_overrides,
     enabled_tabs,
     updated_at: new Date().toISOString(),
   };

@@ -6,7 +6,12 @@ export function ArticleCard({ article }: { article: MediaArticle }) {
       href={article.url}
       target="_blank"
       rel="noreferrer"
-      className="block rounded-xl border border-white/15 bg-black/40 p-4 shadow-lg shadow-black/30 backdrop-blur-md transition-colors hover:border-white/30 hover:bg-black/50"
+      className="block p-4 shadow-lg shadow-black/30 backdrop-blur-md transition hover:brightness-110"
+      style={{
+        borderRadius: "var(--card-radius, 12px)",
+        backgroundColor: "rgba(0,0,0,var(--card-bg-opacity, 0.4))",
+        border: "1px solid rgba(255,255,255,var(--card-border-opacity, 0.15))",
+      }}
     >
       <div className="mb-1 flex items-start justify-between gap-3">
         <h3 className="font-semibold text-white">{article.title}</h3>
