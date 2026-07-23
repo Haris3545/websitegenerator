@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
 export default function Home() {
-  redirect("/builder");
+  const pinnedSlug = process.env.PINNED_ARTIST_SLUG;
+  redirect(pinnedSlug ? `/s/${pinnedSlug}` : "/builder");
 }

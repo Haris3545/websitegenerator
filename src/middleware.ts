@@ -4,6 +4,18 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
+  // A standalone per-artist deployment (see src/lib/publish.ts) sets this so
+  // the builder — the internal admin tool — isn't reachable on a
+  // client-facing site. Doesn't apply to the main multi-tenant deployment,
+  // where this env var is unset.
+  const pinnedSlug = process.env.PINNED_ARTIST_SLUG;
+  if (pinnedSlug && path.startsWith("/builder")) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = `/s/${pinnedSlug}`;
+    redirectUrl.search = "";
+    return NextResponse.redirect(redirectUrl);
+  }
+
   // Fast path: a password-gated site visit with a valid access cookie needs
   // no Supabase Auth round-trip at all — that network call was previously
   // firing on every single tab navigation, which was the biggest single

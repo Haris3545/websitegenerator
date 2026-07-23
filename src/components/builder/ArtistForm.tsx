@@ -7,7 +7,12 @@ import { FontPicker } from "@/components/builder/FontPicker";
 import { MediaUploadField } from "@/components/builder/MediaUploadField";
 import { TabsChecklist } from "@/components/builder/TabsChecklist";
 import { ThemeEditor } from "@/components/builder/ThemeEditor";
-import { upsertArtist, saveArtistSecrets, type ArtistFormInput } from "@/app/builder/actions";
+import {
+  upsertArtist,
+  saveArtistSecrets,
+  publishArtist,
+  type ArtistFormInput,
+} from "@/app/builder/actions";
 import type { Artist } from "@/lib/database.types";
 import { DEFAULT_THEME_OVERRIDES } from "@/lib/theme";
 
@@ -68,6 +73,13 @@ export function ArtistForm({
   const [secrets, setSecrets] = useState<Record<string, string>>({});
   const [secretsSaved, setSecretsSaved] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [published, setPublished] = useState<{ repoUrl: string; siteUrl: string } | null>(
+    artist?.published_repo_url && artist?.published_site_url
+      ? { repoUrl: artist.published_repo_url, siteUrl: artist.published_site_url }
+      : null
+  );
 
   function update<K extends keyof ArtistFormInput>(key: K, value: ArtistFormInput[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -76,6 +88,19 @@ export function ArtistForm({
   function handleNameChange(name: string) {
     update("name", name);
     if (!slugTouched) update("slug", slugify(name));
+  }
+
+  async function handlePublish() {
+    if (!artist) return;
+    setIsPublishing(true);
+    setPublishError(null);
+    const result = await publishArtist(artist.id);
+    setIsPublishing(false);
+    if (result.ok) {
+      setPublished({ repoUrl: result.repoUrl, siteUrl: result.siteUrl });
+    } else {
+      setPublishError(result.error);
+    }
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -278,6 +303,57 @@ export function ArtistForm({
             </button>
             {secretsSaved && <p className="text-xs text-green-600">Saved.</p>}
           </div>
+        </div>
+      )}
+
+      {artist && (
+        <div className="rounded border border-neutral-200 p-4">
+          <h2 className="mb-1 text-sm font-semibold">Publish standalone site</h2>
+          <p className="mb-3 text-xs text-neutral-900">
+            Creates a real, independent GitHub repo and Vercel deployment just for this artist —
+            it stays live on its own, still reading from the same data. This can only be done
+            once per artist.
+          </p>
+
+          {published ? (
+            <div className="flex flex-col gap-1 text-sm">
+              <p className="text-green-700">Published.</p>
+              <a
+                href={published.repoUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-neutral-900 underline"
+              >
+                {published.repoUrl}
+              </a>
+              <a
+                href={published.siteUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-neutral-900 underline"
+              >
+                {published.siteUrl}
+              </a>
+              <p className="mt-1 text-xs text-neutral-900">
+                The Vercel deployment can take a minute or two to finish building the first time.
+              </p>
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={isPublishing}
+              onClick={handlePublish}
+              className="self-start rounded border border-neutral-300 px-3 py-2 text-sm font-medium disabled:opacity-50"
+            >
+              {isPublishing ? "Publishing..." : "Publish to GitHub + Vercel"}
+            </button>
+          )}
+
+          {publishError && (
+            <p className="mt-2 rounded border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700">
+              {publishError}
+            </p>
+          )}
         </div>
       )}
     </form>
