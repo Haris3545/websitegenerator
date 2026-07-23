@@ -52,10 +52,12 @@ export function ThemeEditor({
   }
 
   function handleBgPointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    if (!backgroundImageUrl) {
-      setSelected("background");
-      return;
-    }
+    if (!backgroundImageUrl) return;
+    // Don't select or capture yet — a plain click on this element (rather
+    // than on the header/card children, which stopPropagation their own
+    // clicks) still needs to fall through to a native "click" below so
+    // simple taps keep working. Capture is only claimed once we confirm an
+    // actual drag in handleBgPointerMove.
     dragState.current = {
       startX: e.clientX,
       startY: e.clientY,
@@ -63,8 +65,6 @@ export function ThemeEditor({
       startPosY: t.bg_position_y,
       moved: false,
     };
-    e.currentTarget.setPointerCapture(e.pointerId);
-    setDragging(true);
   }
 
   function handleBgPointerMove(e: React.PointerEvent<HTMLDivElement>) {
@@ -72,7 +72,11 @@ export function ThemeEditor({
     if (!ds) return;
     const dx = e.clientX - ds.startX;
     const dy = e.clientY - ds.startY;
-    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) ds.moved = true;
+    if (!ds.moved && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) {
+      ds.moved = true;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      setDragging(true);
+    }
     if (!ds.moved) return;
 
     const rect = e.currentTarget.getBoundingClientRect();

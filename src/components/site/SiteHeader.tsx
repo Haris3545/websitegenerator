@@ -10,12 +10,12 @@ export function SiteHeader({
   return (
     <div className="px-6 pt-6 sm:px-10">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
+        <div className="font-[inherit]">
           <p className="text-xs font-semibold uppercase tracking-widest text-[var(--accent)]">
             {tagline}
           </p>
           <h1
-            className="text-4xl text-white sm:text-5xl"
+            className="mt-1 text-4xl text-white sm:text-5xl"
             style={{
               fontWeight: "var(--header-font-weight, 700)",
               fontStyle: "var(--header-font-style, normal)",

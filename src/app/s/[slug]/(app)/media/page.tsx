@@ -1,11 +1,11 @@
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/server";
 import { ArticleCard } from "@/components/site/ArticleCard";
 import { SiteFooter } from "@/components/site/SiteFooter";
 
 export default async function MediaPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const supabase = await createClient();
+  const supabase = createServiceRoleClient();
 
   const { data: artist } = await supabase.from("artists").select("*").eq("slug", slug).single();
   if (!artist) notFound();

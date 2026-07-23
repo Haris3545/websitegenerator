@@ -1,11 +1,12 @@
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/server";
 import { refreshMediaIfStale } from "@/lib/media";
 import { googleFontsCssUrl } from "@/lib/fonts";
 import { withThemeDefaults, themeToCssVars } from "@/lib/theme";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { NewsTicker } from "@/components/site/NewsTicker";
 import { NavPills } from "@/components/site/NavPills";
+import { PageTransition } from "@/components/site/PageTransition";
 
 export default async function ArtistSiteLayout({
   children,
@@ -15,10 +16,10 @@ export default async function ArtistSiteLayout({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const supabase = await createClient();
+  const supabase = createServiceRoleClient();
 
-  // RLS scopes this to builder admins and members of this specific artist —
-  // a non-member authenticated user gets no row back, hence notFound().
+  // Authorization already happened in middleware.ts (password cookie or a
+  // Supabase session) — this is a plain lookup, not an RLS-scoped one.
   const { data: artist } = await supabase.from("artists").select("*").eq("slug", slug).single();
   if (!artist) notFound();
 
@@ -119,7 +120,9 @@ export default async function ArtistSiteLayout({
       <NewsTicker articles={tickerArticles ?? []} />
       <NavPills slug={slug} enabledTabs={artist.enabled_tabs} />
 
-      <main className="px-6 pb-16 sm:px-10">{children}</main>
+      <main className="px-6 pb-16 sm:px-10">
+        <PageTransition>{children}</PageTransition>
+      </main>
     </div>
   );
 }

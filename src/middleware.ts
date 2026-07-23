@@ -47,18 +47,30 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  // Generated artist sites: /s/<slug>/... — RLS on the `artists` table (see
-  // migrations/001_init.sql) does the actual per-artist authorization once
-  // logged in; this just gates "must be signed in as *someone*".
+  // Generated artist sites: /s/<slug>/... — the primary gate is the shared
+  // "artist name + 2026" password (see /s/[slug]/gate and artistAccess.ts),
+  // which sets a cookie once entered correctly. A real Supabase-authenticated
+  // user (the old per-account /login flow) is still accepted as an
+  // alternative, but data fetching for the site no longer depends on RLS —
+  // see the service-role client used in layout.tsx/page.tsx/media/page.tsx.
   const siteMatch = path.match(/^\/s\/([^/]+)(\/.*)?$/);
   if (siteMatch) {
     const [, slug, rest] = siteMatch;
     const isSiteLogin = rest === "/login";
+    const isSiteGate = rest === "/gate";
+    const hasArtistAccess = request.cookies.get(`artist_access_${slug}`)?.value === "granted";
 
-    if (!isSiteLogin && !user) {
+    if (!isSiteLogin && !isSiteGate && !user && !hasArtistAccess) {
       const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = `/s/${slug}/login`;
+      redirectUrl.pathname = `/s/${slug}/gate`;
       redirectUrl.searchParams.set("next", path);
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    if (isSiteGate && (user || hasArtistAccess)) {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = `/s/${slug}`;
+      redirectUrl.search = "";
       return NextResponse.redirect(redirectUrl);
     }
 
