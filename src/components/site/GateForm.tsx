@@ -13,7 +13,12 @@ export function GateForm({ slug }: { slug: string }) {
     setError(null);
     startTransition(async () => {
       const result = await verifyArtistAccess(slug, password);
-      if (!result.ok) setError("That password isn't right — check with whoever shared this dashboard with you.");
+      if (!result.ok) {
+        setError(
+          result.error ??
+            "That password isn't right — check with whoever shared this dashboard with you."
+        );
+      }
     });
   }
 

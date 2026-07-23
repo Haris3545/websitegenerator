@@ -30,15 +30,18 @@ export async function refreshEverything(slug: string) {
 export async function verifyArtistAccess(
   slug: string,
   password: string
-): Promise<{ ok: boolean }> {
+): Promise<{ ok: boolean; error?: string }> {
   const supabase = createServiceRoleClient();
-  const { data: artist } = await supabase
+  const { data: artist, error } = await supabase
     .from("artists")
     .select("name")
     .eq("slug", slug)
     .maybeSingle();
 
-  if (!artist || password.trim().toLowerCase() !== computeArtistPassword(artist.name)) {
+  if (error) return { ok: false, error: `Artist lookup failed: ${error.message}` };
+  if (!artist) return { ok: false, error: `No artist found for slug "${slug}".` };
+
+  if (password.trim().toLowerCase() !== computeArtistPassword(artist.name)) {
     return { ok: false };
   }
 
