@@ -1,9 +1,14 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 import { DEFAULT_THEME_OVERRIDES, type ThemeOverrides } from "@/lib/theme";
+import { ColorField } from "@/components/builder/ColorField";
 
 type Selection = "background" | "header" | "cards" | null;
+
+function clamp(v: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, v));
+}
 
 export function ThemeEditor({
   value,
@@ -27,7 +32,16 @@ export function ThemeEditor({
   artistName: string;
 }) {
   const [selected, setSelected] = useState<Selection>(null);
+  const [dragging, setDragging] = useState(false);
   const t = { ...DEFAULT_THEME_OVERRIDES, ...value };
+
+  const dragState = useRef<{
+    startX: number;
+    startY: number;
+    startPosX: number;
+    startPosY: number;
+    moved: boolean;
+  } | null>(null);
 
   function set<K extends keyof ThemeOverrides>(key: K, v: ThemeOverrides[K]) {
     onChange({ ...value, [key]: v });
@@ -35,6 +49,43 @@ export function ThemeEditor({
 
   function ring(part: Selection) {
     return selected === part ? "outline outline-2 outline-offset-2 outline-[var(--accent-ring)]" : "";
+  }
+
+  function handleBgPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (!backgroundImageUrl) {
+      setSelected("background");
+      return;
+    }
+    dragState.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startPosX: t.bg_position_x,
+      startPosY: t.bg_position_y,
+      moved: false,
+    };
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDragging(true);
+  }
+
+  function handleBgPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const ds = dragState.current;
+    if (!ds) return;
+    const dx = e.clientX - ds.startX;
+    const dy = e.clientY - ds.startY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) ds.moved = true;
+    if (!ds.moved) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    set("bg_position_x", Math.round(clamp(ds.startPosX - (dx / rect.width) * 100, 0, 100)));
+    set("bg_position_y", Math.round(clamp(ds.startPosY - (dy / rect.height) * 100, 0, 100)));
+    setSelected("background");
+  }
+
+  function handleBgPointerUp() {
+    const ds = dragState.current;
+    dragState.current = null;
+    setDragging(false);
+    if (ds && !ds.moved) setSelected("background");
   }
 
   return (
@@ -48,8 +99,12 @@ export function ThemeEditor({
       </div>
 
       <div
-        onClick={() => setSelected("background")}
-        className={`relative h-72 w-full overflow-hidden rounded-lg text-white ${ring("background")}`}
+        onPointerDown={handleBgPointerDown}
+        onPointerMove={handleBgPointerMove}
+        onPointerUp={handleBgPointerUp}
+        className={`relative h-72 w-full overflow-hidden rounded-lg text-white ${ring("background")} ${
+          backgroundImageUrl ? (dragging ? "cursor-grabbing" : "cursor-grab") : ""
+        }`}
         style={{ backgroundColor: "#111", fontFamily: `"${fontFamily}", sans-serif` }}
       >
         {backgroundImageUrl && (
@@ -57,8 +112,13 @@ export function ThemeEditor({
           <img
             src={backgroundImageUrl}
             alt=""
-            className="absolute inset-0 h-full w-full object-cover"
-            style={{ filter: `contrast(${t.bg_contrast}) saturate(${t.bg_saturate})` }}
+            draggable={false}
+            className="absolute inset-0 h-full w-full object-cover select-none"
+            style={{
+              filter: `contrast(${t.bg_contrast}) saturate(${t.bg_saturate})`,
+              objectPosition: `${t.bg_position_x}% ${t.bg_position_y}%`,
+              transform: `scale(${t.bg_zoom})`,
+            }}
           />
         )}
         <div className="absolute inset-0" style={{ backgroundColor: `rgba(0,0,0,${t.bg_scrim_opacity})` }} />
@@ -100,7 +160,9 @@ export function ThemeEditor({
                   border: `1px solid rgba(255,255,255,${t.card_border_opacity})`,
                 }}
               >
-                <p className="text-[10px] uppercase tracking-wide text-white/50">{label}</p>
+                <p className="text-[10px] uppercase tracking-wide opacity-60" style={{ color: t.card_text_color }}>
+                  {label}
+                </p>
                 <p className="mt-1 text-lg font-bold" style={{ color: primaryColor }}>
                   128
                 </p>
@@ -118,6 +180,18 @@ export function ThemeEditor({
         {selected === "background" && (
           <div className="flex flex-col gap-3">
             <p className="font-medium">Background photo/video</p>
+            <p className="text-xs text-neutral-900">
+              Drag directly on the preview to reposition it. The zoom slider below resizes it.
+            </p>
+            <Slider
+              label="Zoom / resize"
+              min={1}
+              max={2.5}
+              step={0.05}
+              value={t.bg_zoom}
+              onChange={(v) => set("bg_zoom", v)}
+              displayUnit="x"
+            />
             <Slider
               label="Contrast"
               min={0.5}
@@ -194,6 +268,11 @@ export function ThemeEditor({
               step={0.05}
               value={t.card_border_opacity}
               onChange={(v) => set("card_border_opacity", v)}
+            />
+            <ColorField
+              label="Text colour"
+              value={t.card_text_color}
+              onChange={(v) => set("card_text_color", v)}
             />
           </div>
         )}

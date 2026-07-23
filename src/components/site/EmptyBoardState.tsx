@@ -8,7 +8,9 @@ export function EmptyBoardState({ noun }: { noun: string }) {
         border: "1px dashed rgba(255,255,255,calc(var(--card-border-opacity, 0.15) + 0.1))",
       }}
     >
-      <p className="text-white/60">No {noun} yet</p>
+      <p className="opacity-60" style={{ color: "var(--card-text-color, #fff)" }}>
+        No {noun} yet
+      </p>
       <button
         type="button"
         disabled

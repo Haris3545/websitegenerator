@@ -61,6 +61,8 @@ export default async function ArtistSiteLayout({
             className="h-full w-full object-cover"
             style={{
               filter: `blur(${blur * 12}px) contrast(${theme.bg_contrast}) saturate(${theme.bg_saturate})`,
+              objectPosition: `${theme.bg_position_x}% ${theme.bg_position_y}%`,
+              transform: `scale(${theme.bg_zoom})`,
             }}
           />
         ) : (
@@ -72,6 +74,8 @@ export default async function ArtistSiteLayout({
               className="h-full w-full object-cover"
               style={{
                 filter: `blur(${blur * 12}px) contrast(${theme.bg_contrast}) saturate(${theme.bg_saturate})`,
+                objectPosition: `${theme.bg_position_x}% ${theme.bg_position_y}%`,
+                transform: `scale(${theme.bg_zoom})`,
               }}
             />
           )

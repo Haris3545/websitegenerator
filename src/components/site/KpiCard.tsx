@@ -18,11 +18,18 @@ export function KpiCard({
         border: "1px solid rgba(255,255,255,var(--card-border-opacity, 0.15))",
       }}
     >
-      <p className="text-xs uppercase tracking-wide text-white/50">{label}</p>
+      <p
+        className="text-xs uppercase tracking-wide opacity-60"
+        style={{ color: "var(--card-text-color, #fff)" }}
+      >
+        {label}
+      </p>
       <p className="mt-1 text-3xl font-bold" style={{ color }}>
         {value}
       </p>
-      <p className="mt-1 text-xs text-white/40">{caption}</p>
+      <p className="mt-1 text-xs opacity-50" style={{ color: "var(--card-text-color, #fff)" }}>
+        {caption}
+      </p>
     </div>
   );
 }
