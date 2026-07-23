@@ -46,6 +46,29 @@ export async function updateSentimentFilters(artistId: string, filters: Sentimen
   revalidatePath(`/s/[slug]`, "layout");
 }
 
+/** Saves a right-click edit to a piece of static site copy (see
+ * Editable.tsx). An empty/blank value clears the override, reverting to
+ * whatever's baked into the component. */
+export async function updateContentOverride(artistId: string, key: string, value: string) {
+  const supabase = createServiceRoleClient();
+  const { data: artist } = await supabase
+    .from("artists")
+    .select("content_overrides")
+    .eq("id", artistId)
+    .maybeSingle();
+
+  const next = { ...(artist?.content_overrides ?? {}) };
+  const trimmed = value.trim();
+  if (trimmed) {
+    next[key] = trimmed;
+  } else {
+    delete next[key];
+  }
+
+  await supabase.from("artists").update({ content_overrides: next }).eq("id", artistId);
+  revalidatePath(`/s/[slug]`, "layout");
+}
+
 /** Checks the password entered on /s/[slug]/gate against the artist's
  * name-derived password and, on success, sets a long-lived cookie that
  * grants read access to the site (see middleware.ts). Data on the generated

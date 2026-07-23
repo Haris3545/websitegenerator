@@ -1,11 +1,20 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { Editable } from "@/components/site/Editable";
 import type { MediaArticle } from "@/lib/database.types";
 
 const BASE_SPEED_PX_PER_SEC = 40;
 
-export function NewsTicker({ articles }: { articles: MediaArticle[] }) {
+export function NewsTicker({
+  articles,
+  artistId,
+  emptyMessage,
+}: {
+  articles: MediaArticle[];
+  artistId: string;
+  emptyMessage: string;
+}) {
   const trackRef = useRef<HTMLDivElement>(null);
   const velocityRef = useRef(BASE_SPEED_PX_PER_SEC);
   const targetRef = useRef(BASE_SPEED_PX_PER_SEC);
@@ -42,9 +51,13 @@ export function NewsTicker({ articles }: { articles: MediaArticle[] }) {
   if (!articles.length) {
     return (
       <div className="relative mt-3 overflow-hidden border-y border-white/10 bg-black/30 py-2">
-        <p className="px-6 text-sm text-white/40 sm:px-10">
-          No coverage cached yet — this fills in automatically once articles are found.
-        </p>
+        <Editable
+          artistId={artistId}
+          contentKey="ticker.empty_state"
+          value={emptyMessage}
+          as="p"
+          className="px-6 text-sm text-white/40 sm:px-10"
+        />
       </div>
     );
   }

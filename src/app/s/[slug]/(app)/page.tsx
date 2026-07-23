@@ -2,8 +2,10 @@ import { after } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getSiteArtist } from "@/lib/getSiteArtist";
 import { refreshSentimentIfStale } from "@/lib/sentiment";
+import { resolveContent } from "@/lib/contentOverrides";
 import { KpiCard } from "@/components/site/KpiCard";
 import { ArticleCard } from "@/components/site/ArticleCard";
+import { Editable } from "@/components/site/Editable";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { TABS, LIVE_TABS } from "@/lib/tabs";
 
@@ -46,7 +48,17 @@ export default async function DashboardPage({
       <div className="mb-1 flex items-center gap-2">
         <div className="h-4 w-1 bg-[var(--accent)]" />
         <h2 className="text-lg font-bold uppercase">Dashboard</h2>
-        <span className="text-sm text-white/40">Summary of current activity</span>
+        <Editable
+          artistId={artist.id}
+          contentKey="dashboard.subtitle"
+          value={resolveContent(
+            artist.content_overrides,
+            "dashboard.subtitle",
+            "Summary of current activity"
+          )}
+          as="span"
+          className="text-sm text-white/40"
+        />
       </div>
 
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
@@ -77,7 +89,16 @@ export default async function DashboardPage({
         <div className="mt-8">
           <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase text-white/70">
             <span className="h-3 w-1 bg-[var(--accent)]" />
-            Most relevant coverage
+            <Editable
+              artistId={artist.id}
+              contentKey="dashboard.coverage_heading"
+              value={resolveContent(
+                artist.content_overrides,
+                "dashboard.coverage_heading",
+                "Most relevant coverage"
+              )}
+              as="span"
+            />
           </h3>
           <div className="flex flex-col gap-3">
             {latestArticles.map((article) => (

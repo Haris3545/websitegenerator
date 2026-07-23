@@ -2,6 +2,7 @@ import { after } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getSiteArtist } from "@/lib/getSiteArtist";
 import { refreshMediaIfStale } from "@/lib/media";
+import { resolveContent } from "@/lib/contentOverrides";
 import { googleFontsCssUrl } from "@/lib/fonts";
 import { withThemeDefaults, themeToCssVars } from "@/lib/theme";
 import { SiteHeader } from "@/components/site/SiteHeader";
@@ -122,7 +123,15 @@ export default async function ArtistSiteLayout({
         tagline={artist.tagline}
         artistName={artist.name}
       />
-      <NewsTicker articles={tickerArticles ?? []} />
+      <NewsTicker
+        articles={tickerArticles ?? []}
+        artistId={artist.id}
+        emptyMessage={resolveContent(
+          artist.content_overrides,
+          "ticker.empty_state",
+          "No coverage cached yet — this fills in automatically once articles are found."
+        )}
+      />
       <NavPills slug={slug} enabledTabs={artist.enabled_tabs} />
 
       <main className="px-6 pb-16 sm:px-10">

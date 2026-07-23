@@ -61,6 +61,7 @@ export interface Database {
           project_title: string;
           theme_overrides: ThemeOverrides;
           sentiment_summary: SentimentSummary;
+          content_overrides: Record<string, string>;
           enabled_tabs: TabKey[];
           created_at: string;
           updated_at: string;
@@ -81,6 +82,7 @@ export interface Database {
           project_title?: string;
           theme_overrides?: ThemeOverrides;
           sentiment_summary?: SentimentSummary;
+          content_overrides?: Record<string, string>;
           enabled_tabs?: TabKey[];
           created_at?: string;
           updated_at?: string;

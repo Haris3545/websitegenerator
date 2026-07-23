@@ -1,4 +1,10 @@
-export function PlaceholderSection({ title, note }: { title: string; note: string }) {
+export function PlaceholderSection({
+  title,
+  note,
+}: {
+  title: string;
+  note: React.ReactNode;
+}) {
   return (
     <div
       className="p-8 shadow-lg shadow-black/30 backdrop-blur-md"

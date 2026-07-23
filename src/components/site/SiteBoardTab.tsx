@@ -1,5 +1,7 @@
 import { getSiteArtist } from "@/lib/getSiteArtist";
+import { resolveContent } from "@/lib/contentOverrides";
 import { EmptyBoardState } from "@/components/site/EmptyBoardState";
+import { Editable } from "@/components/site/Editable";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { TABS } from "@/lib/tabs";
 import type { TabKey } from "@/lib/database.types";
@@ -17,6 +19,7 @@ export async function SiteBoardTab({
 }) {
   const artist = await getSiteArtist(slug);
   const tab = TABS.find((t) => t.key === tabKey)!;
+  const contentKey = `board.${tabKey}.subtitle`;
 
   return (
     <div>
@@ -26,7 +29,13 @@ export async function SiteBoardTab({
             <div className="h-4 w-1 bg-[var(--accent)]" />
             <h2 className="text-lg font-bold uppercase">{tab.label}</h2>
           </div>
-          <p className="mt-1 text-sm text-white/40">{subtitle}</p>
+          <Editable
+            artistId={artist.id}
+            contentKey={contentKey}
+            value={resolveContent(artist.content_overrides, contentKey, subtitle)}
+            as="p"
+            className="mt-1 text-sm text-white/40"
+          />
         </div>
       </div>
       <div className="mt-6">
