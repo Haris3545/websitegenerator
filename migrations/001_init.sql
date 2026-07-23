@@ -32,7 +32,7 @@ create table if not exists artists (
   aesthetic_prompt text not null default '',
   aesthetic_params jsonb not null default '{}'::jsonb,
 
-  tagline text not null default 'Cultural Intelligence',
+  tagline text not null default 'VCCP Cultural Intelligence',
 
   -- Which of the 11 content tabs are switched on for this artist, e.g.
   -- ["dashboard","media","music"]. Dashboard is always implicitly on.
@@ -187,3 +187,5 @@ create policy "audience_statements_member_select" on audience_statements
 -- the Supabase dashboard, or `select storage.create_bucket('artist-media', public => true);`)
 -- for background images and landing videos. Uploads are named
 -- `<artist-slug>/background.<ext>` / `<artist-slug>/landing.<ext>`.
+-- Then run 002_storage_and_defaults.sql — the bucket's "public" toggle only
+-- covers downloads; uploads need their own RLS policy on storage.objects.

@@ -11,18 +11,20 @@ built out in later phases.
 2. Run `migrations/001_init.sql` in the Supabase SQL editor.
 3. In Storage, create a public bucket named `artist-media` (background images
    and landing videos upload here).
-4. Copy `.env.example` to `.env.local` and fill in:
+4. Run `migrations/002_storage_and_defaults.sql` in the SQL editor (storage
+   upload policy + the default tagline — must run after the bucket exists).
+5. Copy `.env.example` to `.env.local` and fill in:
    - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` — from your Supabase project's API settings
    - `GEMINI_API_KEY` — used to parse the aesthetic-tailoring textbox into CSS params (free key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey), no billing required)
    - `ARTIST_SECRETS_ENCRYPTION_KEY` — generate with `openssl rand -hex 32`
    - `GOOGLE_FONTS_API_KEY` — optional, unlocks the full Google Fonts catalog instead of the bundled curated list
-5. Create your own account (Supabase Auth → Users → Add user, or sign up
+6. Create your own account (Supabase Auth → Users → Add user, or sign up
    through the app once a sign-up flow exists), then bootstrap yourself as a
    builder admin:
    ```sql
    insert into builder_admins (user_id) values ('<your-auth-user-uuid>');
    ```
-6. `npm install && npm run dev`, then visit `/builder`.
+7. `npm install && npm run dev`, then visit `/builder`.
 
 ## Structure
 

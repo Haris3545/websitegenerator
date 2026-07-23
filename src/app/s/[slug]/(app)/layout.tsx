@@ -48,17 +48,32 @@ export default async function ArtistSiteLayout({
       <link rel="stylesheet" href={googleFontsCssUrl(artist.font_family)} />
 
       <div className="fixed inset-0 -z-20" style={{ backgroundColor: artist.secondary_color }}>
-        {artist.background_image_url && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={artist.background_image_url}
-            alt=""
+        {artist.landing_video_url ? (
+          <video
+            src={artist.landing_video_url}
+            autoPlay
+            muted
+            loop
+            playsInline
             className="h-full w-full object-cover"
             style={{
               filter: `blur(${blur * 12}px)`,
               opacity: 0.55,
             }}
           />
+        ) : (
+          artist.background_image_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={artist.background_image_url}
+              alt=""
+              className="h-full w-full object-cover"
+              style={{
+                filter: `blur(${blur * 12}px)`,
+                opacity: 0.55,
+              }}
+            />
+          )
         )}
         <div
           className="absolute inset-0"
