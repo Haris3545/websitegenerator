@@ -3,10 +3,20 @@
 import { useState, useTransition } from "react";
 import { verifyArtistAccess } from "@/app/s/[slug]/actions";
 
-export function GateForm({ slug }: { slug: string }) {
+export function GateForm({
+  slug,
+  backgroundUrl,
+  backgroundColor,
+}: {
+  slug: string;
+  backgroundUrl: string | null;
+  backgroundColor: string;
+}) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const isVideo = /\.(mp4|webm|mov|m4v)(\?|$)/i.test(backgroundUrl ?? "");
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -23,10 +33,33 @@ export function GateForm({ slug }: { slug: string }) {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-neutral-950 px-4 text-white">
+    <div
+      className="relative flex min-h-screen items-center justify-center px-4 text-white"
+      style={{ backgroundColor }}
+    >
+      {backgroundUrl &&
+        (isVideo ? (
+          <video
+            src={backgroundUrl}
+            autoPlay
+            muted
+            loop
+            playsInline
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={backgroundUrl}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ))}
+      {backgroundUrl && <div className="absolute inset-0 bg-black/60" />}
+
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-sm rounded-xl border border-white/15 bg-black/40 p-8 shadow-lg backdrop-blur-md"
+        className="relative w-full max-w-sm rounded-xl border border-white/15 bg-black/40 p-8 shadow-lg backdrop-blur-md"
       >
         <h1 className="mb-1 text-xl font-semibold">Enter password</h1>
         <p className="mb-6 text-sm text-white/50">

@@ -50,6 +50,7 @@ export function ArtistForm({
     font_family: artist?.font_family ?? "Inter",
     background_image_url: artist?.background_image_url ?? null,
     landing_video_url: artist?.landing_video_url ?? null,
+    gate_background_url: artist?.gate_background_url ?? null,
     aesthetic_prompt: artist?.aesthetic_prompt ?? "",
     tagline: artist?.tagline ?? "VCCP Cultural Intelligence",
     project_title: artist?.project_title ?? "The Recording Studio",
@@ -207,6 +208,13 @@ export function ArtistForm({
             The site&apos;s background uses the video, looping and muted, whenever one is set —
             the image is only the fallback when there&apos;s no video.
           </p>
+          <MediaUploadField
+            label="Password page background"
+            slotName="gate-background"
+            artistSlug={form.slug}
+            value={form.gate_background_url}
+            onChange={(v) => update("gate_background_url", v)}
+          />
         </>
       ) : (
         <p className="text-sm text-neutral-900">Enter a name/slug to enable media uploads.</p>

@@ -65,6 +65,7 @@ export interface Database {
           published_repo_url: string | null;
           published_site_url: string | null;
           published_at: string | null;
+          gate_background_url: string | null;
           enabled_tabs: TabKey[];
           created_at: string;
           updated_at: string;
@@ -89,6 +90,7 @@ export interface Database {
           published_repo_url?: string | null;
           published_site_url?: string | null;
           published_at?: string | null;
+          gate_background_url?: string | null;
           enabled_tabs?: TabKey[];
           created_at?: string;
           updated_at?: string;
