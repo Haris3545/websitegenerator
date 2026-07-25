@@ -46,7 +46,7 @@ export async function analyzeArtistSentiment(
     .join("\n");
 
   const response = await client.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: "gemini-2.5-flash-lite",
     contents:
       `You're analyzing recent media coverage of the artist "${artistName}" for a marketing dashboard.\n\n` +
       "1. Estimate the overall sentiment split across all the coverage below as three percentages " +

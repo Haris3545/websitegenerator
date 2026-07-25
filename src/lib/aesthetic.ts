@@ -25,7 +25,7 @@ export async function parseAestheticPrompt(prompt: string): Promise<AestheticPar
 
   try {
     const response = await client.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-2.5-flash-lite",
       contents:
         "Translate this art-direction note for a dashboard's background photo into " +
         "0..1 intensity values. grain_intensity = film grain / noise texture strength. " +

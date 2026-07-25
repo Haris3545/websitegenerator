@@ -172,7 +172,7 @@ export async function refreshInsightsNow(artistId: string, artistName: string) {
   }
 
   const response = await geminiClient.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: "gemini-2.5-flash-lite",
     contents:
       `You're writing a short "what we've noticed" panel for a marketing dashboard about the ` +
       `artist "${artistName}". You're given ONLY verified facts pulled from real data below — no ` +

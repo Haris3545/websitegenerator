@@ -134,7 +134,7 @@ async function fetchWebSearchEvents(artistId: string, artistName: string): Promi
   const todayIso = new Date().toISOString().slice(0, 10);
 
   const searchRes = await geminiClient.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: "gemini-2.5-flash-lite",
     contents:
       `Search the web for musical artist "${artistName}"'s upcoming, currently-scheduled live ` +
       `shows or tour dates from ${todayIso} onward. For each one, note the date, venue name, city, ` +
@@ -147,7 +147,7 @@ async function fetchWebSearchEvents(artistId: string, artistName: string): Promi
   if (!digest.trim()) return [];
 
   const extractRes = await geminiClient.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: "gemini-2.5-flash-lite",
     contents:
       "Extract upcoming show dates from this research into structured data. Only include entries " +
       "with a clear date, venue, and city; skip anything vague, already past, or uncertain. Dates " +
