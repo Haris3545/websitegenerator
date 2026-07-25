@@ -1,132 +1,284 @@
+import { GoogleGenAI, Type } from "@google/genai";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import type { SocialMention } from "@/lib/database.types";
+import type { SocialComment, SocialCommentCategory } from "@/lib/database.types";
 
-const STALE_AFTER_MS = 60 * 60 * 1000; // 1 hour
-
-type MentionRow = Omit<SocialMention, "id" | "fetched_at"> & { fetched_at: string };
+const STALE_AFTER_MS = 6 * 60 * 60 * 1000; // 6 hours — heavier than a simple mentions fetch
+const REDDIT_USER_AGENT = "websitegenerator:cultural-intelligence:v1.0 (by /u/vccp-media)";
+const MAX_COMMENTS = 150;
 
 type RedditSearchResponse = {
   data?: {
+    children?: { data?: { title?: string; permalink?: string } }[];
+  };
+};
+
+type RedditCommentListing = {
+  data?: {
     children?: {
-      data?: {
-        id?: string;
-        title?: string;
-        selftext?: string;
-        author?: string;
-        permalink?: string;
-        score?: number;
-        created_utc?: number;
-      };
+      kind?: string;
+      data?: { author?: string; body?: string; score?: number; created_utc?: number; permalink?: string };
     }[];
   };
 };
 
-type YoutubeSearchResponse = {
-  items?: {
-    id?: { videoId?: string };
-    snippet?: {
-      title?: string;
-      description?: string;
-      channelTitle?: string;
-      publishedAt?: string;
-    };
-  }[];
-};
+async function fetchRedditPostComments(postPermalink: string, postTitle: string): Promise<SocialComment[]> {
+  try {
+    const res = await fetch(`https://www.reddit.com${postPermalink}.json?limit=10&depth=1&raw_json=1`, {
+      headers: { "User-Agent": REDDIT_USER_AGENT },
+    });
+    if (!res.ok) return [];
+    const data: RedditCommentListing[] = await res.json();
+    const comments = data[1]?.data?.children ?? [];
 
-const REDDIT_USER_AGENT = "websitegenerator:cultural-intelligence:v1.0 (by /u/vccp-media)";
+    return comments
+      .filter(
+        (c): c is { kind: string; data: NonNullable<(typeof comments)[number]["data"]> } =>
+          c.kind === "t1" && !!c.data?.body && c.data.body !== "[deleted]" && c.data.body !== "[removed]"
+      )
+      .slice(0, 8)
+      .map((c) => ({
+        platform: "reddit" as const,
+        author: c.data.author ? `u/${c.data.author}` : "unknown",
+        text: (c.data.body ?? "").slice(0, 500),
+        score: c.data.score ?? null,
+        url: c.data.permalink ? `https://reddit.com${c.data.permalink}` : `https://reddit.com${postPermalink}`,
+        context: postTitle,
+        publishedAt: c.data.created_utc ? new Date(c.data.created_utc * 1000).toISOString() : null,
+      }));
+  } catch {
+    return [];
+  }
+}
 
-/** Reddit's public search results (the ".json" suffix Reddit's own web UI
- * uses) work without any signed-in app or OAuth credentials — this is a
- * low-volume, read-only, hourly-cached lookup, well within what that
- * endpoint tolerates. Trades a small amount of robustness (no official
- * app registered) for zero setup. */
-async function fetchRedditMentions(artistId: string, artistName: string): Promise<MentionRow[]> {
+/** Finds Reddit posts mentioning the artist (via Reddit's public search —
+ * no app/OAuth needed, see below), then pulls the actual top-level
+ * comments from each, rather than treating the posts themselves as the
+ * "mentions" — a post title says a lot less than what people are actually
+ * saying underneath it. */
+async function fetchRedditComments(artistName: string): Promise<SocialComment[]> {
   const searchRes = await fetch(
-    `https://www.reddit.com/search.json?q=${encodeURIComponent(`"${artistName}"`)}&sort=new&limit=25&raw_json=1`,
+    `https://www.reddit.com/search.json?q=${encodeURIComponent(`"${artistName}"`)}&sort=comments&limit=10&raw_json=1`,
     { headers: { "User-Agent": REDDIT_USER_AGENT } }
   );
   if (!searchRes.ok) throw new Error(`Reddit search returned ${searchRes.status}`);
   const searchData: RedditSearchResponse = await searchRes.json();
 
-  return (searchData.data?.children ?? [])
-    .map((child) => child.data)
-    .filter((post): post is NonNullable<typeof post> => !!post?.id && !!post.permalink)
-    .map((post) => ({
-      artist_id: artistId,
-      platform: "reddit",
-      title: post.title ?? "",
-      url: `https://reddit.com${post.permalink}`,
-      author: post.author ? `u/${post.author}` : null,
-      excerpt: (post.selftext ?? "").slice(0, 400),
-      score: post.score ?? null,
-      published_at: post.created_utc ? new Date(post.created_utc * 1000).toISOString() : null,
-      fetched_at: new Date().toISOString(),
-    }));
+  const posts = (searchData.data?.children ?? [])
+    .map((c) => c.data)
+    .filter((p): p is NonNullable<typeof p> & { permalink: string } => !!p?.permalink)
+    .slice(0, 8);
+
+  const batches = await Promise.all(posts.map((p) => fetchRedditPostComments(p.permalink, p.title ?? "")));
+  return batches.flat();
 }
 
-async function fetchYoutubeMentions(artistId: string, artistName: string): Promise<MentionRow[]> {
+type YoutubeSearchResponse = {
+  items?: { id?: { videoId?: string }; snippet?: { title?: string } }[];
+};
+
+type YoutubeCommentThreadsResponse = {
+  items?: {
+    snippet?: {
+      topLevelComment?: {
+        snippet?: {
+          authorDisplayName?: string;
+          textDisplay?: string;
+          likeCount?: number;
+          publishedAt?: string;
+        };
+      };
+    };
+  }[];
+};
+
+async function fetchYoutubeVideoComments(
+  videoId: string,
+  videoTitle: string,
+  apiKey: string
+): Promise<SocialComment[]> {
+  try {
+    const res = await fetch(
+      `https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${encodeURIComponent(videoId)}&maxResults=15&order=relevance&key=${apiKey}`
+    );
+    if (!res.ok) return []; // comments can be disabled on a video — not worth failing the whole refresh over
+    const data: YoutubeCommentThreadsResponse = await res.json();
+
+    return (data.items ?? [])
+      .map((item) => item.snippet?.topLevelComment?.snippet)
+      .filter((s): s is NonNullable<typeof s> => !!s?.textDisplay)
+      .map((s) => ({
+        platform: "youtube" as const,
+        author: s.authorDisplayName ?? "unknown",
+        text: (s.textDisplay ?? "").replace(/<[^>]*>/g, "").slice(0, 500),
+        score: s.likeCount ?? null,
+        url: `https://youtube.com/watch?v=${videoId}`,
+        context: videoTitle,
+        publishedAt: s.publishedAt ?? null,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+/** Pulls comments from the artist's own recent videos (already tracked in
+ * youtube_stats) plus a handful of third-party videos that mention the
+ * artist by name — fan reactions on the artist's own uploads are the most
+ * directly relevant source, third-party videos widen the net. */
+async function fetchYoutubeComments(artistId: string, artistName: string): Promise<SocialComment[]> {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) return [];
 
-  const res = await fetch(
-    `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(artistName)}&order=date&maxResults=15&type=video&key=${apiKey}`
-  );
-  if (!res.ok) throw new Error(`YouTube search API returned ${res.status}`);
-  const data: YoutubeSearchResponse = await res.json();
+  const supabase = createServiceRoleClient();
+  const { data: youtubeStats } = await supabase
+    .from("youtube_stats")
+    .select("recent_videos")
+    .eq("artist_id", artistId)
+    .maybeSingle();
 
-  return (data.items ?? [])
-    .filter((item) => item.id?.videoId)
-    .map((item) => ({
-      artist_id: artistId,
-      platform: "youtube",
-      title: item.snippet?.title ?? "",
-      url: `https://youtube.com/watch?v=${item.id!.videoId}`,
-      author: item.snippet?.channelTitle ?? null,
-      excerpt: (item.snippet?.description ?? "").slice(0, 400),
-      score: null,
-      published_at: item.snippet?.publishedAt ?? null,
-      fetched_at: new Date().toISOString(),
-    }));
+  const ownVideos = (youtubeStats?.recent_videos ?? [])
+    .slice(0, 5)
+    .map((v) => ({ id: v.id, title: v.title }));
+
+  const searchRes = await fetch(
+    `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(artistName)}&order=relevance&maxResults=5&type=video&key=${apiKey}`
+  );
+  const thirdPartyVideos: { id: string; title: string }[] = [];
+  if (searchRes.ok) {
+    const searchData: YoutubeSearchResponse = await searchRes.json();
+    for (const item of searchData.items ?? []) {
+      if (item.id?.videoId) thirdPartyVideos.push({ id: item.id.videoId, title: item.snippet?.title ?? "" });
+    }
+  }
+
+  const videos = [...ownVideos, ...thirdPartyVideos];
+  const batches = await Promise.all(videos.map((v) => fetchYoutubeVideoComments(v.id, v.title, apiKey)));
+  return batches.flat();
+}
+
+const geminiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+const CATEGORY_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    categories: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          name: { type: Type.STRING },
+          subcategories: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                name: { type: Type.STRING },
+                commentIndexes: { type: Type.ARRAY, items: { type: Type.NUMBER } },
+              },
+              required: ["name", "commentIndexes"],
+            },
+          },
+        },
+        required: ["name", "subcategories"],
+      },
+    },
+  },
+  required: ["categories"],
+};
+
+/** Clusters raw comments into a category -> subcategory tree for the
+ * zoomable map, driven entirely by what's actually in this batch of
+ * comments rather than a fixed taxonomy — Gemini invents category names
+ * that fit the real content. Comments it can't confidently place (spam,
+ * unrelated) are just left out rather than forced somewhere. */
+async function categorizeComments(
+  artistName: string,
+  comments: SocialComment[]
+): Promise<SocialCommentCategory[]> {
+  const digest = comments
+    .map((c, i) => `[${i}] (${c.platform}) ${c.text.replace(/\s+/g, " ").slice(0, 300)}`)
+    .join("\n");
+
+  const response = await geminiClient.models.generateContent({
+    model: "gemini-2.5-flash-lite",
+    contents:
+      `These are real Reddit and YouTube comments mentioning the artist "${artistName}". Organize ` +
+      "them into a two-level taxonomy that reflects what's ACTUALLY being talked about: 3-6 " +
+      "top-level categories (e.g. reactions to a specific release, tour/ticket chatter, comparisons " +
+      "to other artists, nostalgia, criticism — invent whatever genuinely fits this data, don't " +
+      "force a fixed template), each with 1-4 more specific subcategories. Assign every comment's " +
+      "index number to exactly one subcategory it fits best. Skip comments that are pure spam or " +
+      "totally unrelated — you don't need to place every single one, but place as many genuine " +
+      `ones as you reasonably can.\n\nComments:\n${digest}`,
+    config: { responseMimeType: "application/json", responseSchema: CATEGORY_SCHEMA },
+  });
+
+  const parsed = JSON.parse(response.text ?? "{}");
+  const rawCategories: { name?: string; subcategories?: { name?: string; commentIndexes?: number[] }[] }[] =
+    Array.isArray(parsed.categories) ? parsed.categories : [];
+
+  return rawCategories
+    .filter((c) => c.name)
+    .map((c) => ({
+      name: c.name as string,
+      subcategories: (c.subcategories ?? [])
+        .filter((s) => s.name)
+        .map((s) => ({
+          name: s.name as string,
+          comments: (s.commentIndexes ?? []).map((i) => comments[i]).filter((c): c is SocialComment => !!c),
+        }))
+        .filter((s) => s.comments.length > 0),
+    }))
+    .filter((c) => c.subcategories.length > 0);
 }
 
 /** Best-effort per platform — a Reddit failure shouldn't drop YouTube
  * results and vice versa. YouTube contributes zero rows rather than
- * erroring when YOUTUBE_API_KEY isn't set (see fetchYoutubeMentions). */
+ * erroring when YOUTUBE_API_KEY isn't set. */
 export async function refreshSocialListeningForArtist(artistId: string, artistName: string) {
   const results = await Promise.allSettled([
-    fetchRedditMentions(artistId, artistName),
-    fetchYoutubeMentions(artistId, artistName),
+    fetchRedditComments(artistName),
+    fetchYoutubeComments(artistId, artistName),
   ]);
 
-  const rows: MentionRow[] = [];
+  const comments: SocialComment[] = [];
   for (const result of results) {
-    if (result.status === "fulfilled") rows.push(...result.value);
-    else console.error("refreshSocialListeningForArtist: a platform fetch failed:", result.reason);
+    if (result.status === "fulfilled") comments.push(...result.value);
+    else console.error(`refreshSocialListeningForArtist: a platform fetch failed for ${artistName}:`, result.reason);
   }
 
-  if (!rows.length) return 0;
-
   const supabase = createServiceRoleClient();
-  const { error } = await supabase
-    .from("social_mentions")
-    .upsert(rows, { onConflict: "artist_id,url" });
+
+  if (!comments.length) {
+    await supabase
+      .from("social_comment_map")
+      .upsert({ artist_id: artistId, categories: [], comment_count: 0, computed_at: new Date().toISOString() });
+    return 0;
+  }
+
+  const trimmed = comments.slice(0, MAX_COMMENTS);
+  const categories = await categorizeComments(artistName, trimmed);
+
+  const { error } = await supabase.from("social_comment_map").upsert({
+    artist_id: artistId,
+    categories,
+    comment_count: trimmed.length,
+    computed_at: new Date().toISOString(),
+  });
   if (error) throw new Error(error.message);
 
-  return rows.length;
+  return trimmed.length;
 }
 
 export async function refreshSocialListeningIfStale(artistId: string, artistName: string) {
   const supabase = createServiceRoleClient();
   const { data } = await supabase
-    .from("social_mentions")
-    .select("fetched_at")
+    .from("social_comment_map")
+    .select("computed_at")
     .eq("artist_id", artistId)
-    .order("fetched_at", { ascending: false })
-    .limit(1)
     .maybeSingle();
 
   const isStale =
-    !data?.fetched_at || Date.now() - new Date(data.fetched_at).getTime() > STALE_AFTER_MS;
+    !data?.computed_at || Date.now() - new Date(data.computed_at).getTime() > STALE_AFTER_MS;
   if (!isStale) return;
 
   try {

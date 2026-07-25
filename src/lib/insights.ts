@@ -12,7 +12,7 @@ type Metrics = {
   youtube_views: number | null;
   music_listeners: number | null;
   music_playcount: number | null;
-  social_mentions_count: number;
+  social_comments_count: number;
   audience_statements_count: number;
   upcoming_events_count: number;
 };
@@ -25,7 +25,7 @@ async function captureMetricSnapshot(artistId: string): Promise<Metrics> {
     { data: artistRow },
     { data: youtubeStats },
     { data: musicStats },
-    { count: socialCount },
+    { data: socialCommentMap },
     { count: audienceCount },
     { count: eventsCount },
   ] = await Promise.all([
@@ -33,7 +33,7 @@ async function captureMetricSnapshot(artistId: string): Promise<Metrics> {
     supabase.from("artists").select("sentiment_summary").eq("id", artistId).maybeSingle(),
     supabase.from("youtube_stats").select("subscriber_count, view_count").eq("artist_id", artistId).maybeSingle(),
     supabase.from("music_stats").select("listeners, playcount").eq("artist_id", artistId).maybeSingle(),
-    supabase.from("social_mentions").select("id", { count: "exact", head: true }).eq("artist_id", artistId),
+    supabase.from("social_comment_map").select("comment_count").eq("artist_id", artistId).maybeSingle(),
     supabase.from("audience_statements").select("id", { count: "exact", head: true }).eq("artist_id", artistId),
     supabase
       .from("artist_events")
@@ -50,7 +50,7 @@ async function captureMetricSnapshot(artistId: string): Promise<Metrics> {
     youtube_views: youtubeStats?.view_count ?? null,
     music_listeners: musicStats?.listeners ?? null,
     music_playcount: musicStats?.playcount ?? null,
-    social_mentions_count: socialCount ?? 0,
+    social_comments_count: socialCommentMap?.comment_count ?? 0,
     audience_statements_count: audienceCount ?? 0,
     upcoming_events_count: eventsCount ?? 0,
   };
@@ -111,7 +111,7 @@ export async function refreshInsightsNow(artistId: string, artistName: string) {
     }
   }
 
-  const [{ data: recentArticles }, { data: musicRow }, { data: topMentions }, { data: nextEvents }, { data: audienceTop }] =
+  const [{ data: recentArticles }, { data: musicRow }, { data: commentMap }, { data: nextEvents }, { data: audienceTop }] =
     await Promise.all([
       supabase
         .from("media_articles")
@@ -120,12 +120,7 @@ export async function refreshInsightsNow(artistId: string, artistName: string) {
         .order("published_at", { ascending: false })
         .limit(8),
       supabase.from("music_stats").select("top_tracks, top_tags").eq("artist_id", artistId).maybeSingle(),
-      supabase
-        .from("social_mentions")
-        .select("platform, title, score")
-        .eq("artist_id", artistId)
-        .order("score", { ascending: false, nullsFirst: false })
-        .limit(6),
+      supabase.from("social_comment_map").select("categories").eq("artist_id", artistId).maybeSingle(),
       supabase
         .from("artist_events")
         .select("event_date, venue, city, country")
@@ -141,6 +136,14 @@ export async function refreshInsightsNow(artistId: string, artistName: string) {
         .limit(6),
     ]);
 
+  const topCommentThemes = (commentMap?.categories ?? [])
+    .map((c) => ({
+      theme: c.name,
+      comment_count: c.subcategories.reduce((sum, s) => sum + s.comments.length, 0),
+    }))
+    .sort((a, b) => b.comment_count - a.comment_count)
+    .slice(0, 6);
+
   const facts = {
     artist_name: artistName,
     current_metrics: currentMetrics,
@@ -151,7 +154,7 @@ export async function refreshInsightsNow(artistId: string, artistName: string) {
     recent_headlines: recentArticles ?? [],
     top_tracks: musicRow?.top_tracks?.slice(0, 5) ?? [],
     top_tags: musicRow?.top_tags ?? [],
-    top_social_mentions: topMentions ?? [],
+    top_comment_themes: topCommentThemes,
     upcoming_shows: nextEvents ?? [],
     top_audience_segments: audienceTop ?? [],
   };
@@ -160,7 +163,7 @@ export async function refreshInsightsNow(artistId: string, artistName: string) {
     Object.values(currentMetrics).some((v) => typeof v === "number" && v > 0) ||
     facts.recent_headlines.length > 0 ||
     facts.top_tracks.length > 0 ||
-    facts.top_social_mentions.length > 0 ||
+    facts.top_comment_themes.length > 0 ||
     facts.upcoming_shows.length > 0 ||
     facts.top_audience_segments.length > 0;
 

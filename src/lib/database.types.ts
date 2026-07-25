@@ -39,6 +39,19 @@ export type SentimentSummary = {
 
 export type ArtistInsight = { headline: string; detail: string; basis: string };
 
+export type SocialComment = {
+  platform: "reddit" | "youtube";
+  author: string;
+  text: string;
+  score: number | null;
+  url: string;
+  context: string; // the parent post/video's title
+  publishedAt: string | null;
+};
+
+export type SocialCommentSubcategory = { name: string; comments: SocialComment[] };
+export type SocialCommentCategory = { name: string; subcategories: SocialCommentSubcategory[] };
+
 export type TabKey =
   | "dashboard"
   | "media"
@@ -287,6 +300,22 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["social_mentions"]["Insert"]>;
         Relationships: [];
       };
+      social_comment_map: {
+        Row: {
+          artist_id: string;
+          categories: SocialCommentCategory[];
+          comment_count: number;
+          computed_at: string;
+        };
+        Insert: {
+          artist_id: string;
+          categories?: SocialCommentCategory[];
+          comment_count?: number;
+          computed_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["social_comment_map"]["Insert"]>;
+        Relationships: [];
+      };
       youtube_stats: {
         Row: {
           artist_id: string;
@@ -378,3 +407,4 @@ export type SocialMention = Database["public"]["Tables"]["social_mentions"]["Row
 export type MusicStats = Database["public"]["Tables"]["music_stats"]["Row"];
 export type ArtistMetricSnapshot = Database["public"]["Tables"]["artist_metric_snapshots"]["Row"];
 export type ArtistInsightsRow = Database["public"]["Tables"]["artist_insights"]["Row"];
+export type SocialCommentMap = Database["public"]["Tables"]["social_comment_map"]["Row"];

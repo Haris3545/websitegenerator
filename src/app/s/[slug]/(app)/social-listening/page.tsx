@@ -2,9 +2,8 @@ import { after } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getSiteArtist } from "@/lib/getSiteArtist";
 import { refreshSocialListeningForArtist, refreshSocialListeningIfStale } from "@/lib/socialListening";
+import { CommentMap } from "@/components/site/CommentMap";
 import { SiteFooter } from "@/components/site/SiteFooter";
-
-const PLATFORM_LABEL: Record<string, string> = { reddit: "Reddit", youtube: "YouTube" };
 
 export default async function SocialListeningPage({
   params,
@@ -15,22 +14,20 @@ export default async function SocialListeningPage({
   const artist = await getSiteArtist(slug);
 
   const supabase = createServiceRoleClient();
-  let { data: mentions } = await supabase
-    .from("social_mentions")
-    .select("*")
+  let { data: map } = await supabase
+    .from("social_comment_map")
+    .select("categories, comment_count, computed_at")
     .eq("artist_id", artist.id)
-    .order("published_at", { ascending: false })
-    .limit(40);
+    .maybeSingle();
 
-  if (!mentions?.length) {
+  if (!map?.computed_at) {
     try {
       await refreshSocialListeningForArtist(artist.id, artist.name);
-      ({ data: mentions } = await supabase
-        .from("social_mentions")
-        .select("*")
+      ({ data: map } = await supabase
+        .from("social_comment_map")
+        .select("categories, comment_count, computed_at")
         .eq("artist_id", artist.id)
-        .order("published_at", { ascending: false })
-        .limit(40));
+        .maybeSingle());
     } catch (err) {
       console.error(`Initial social listening fetch failed for ${slug}:`, err);
     }
@@ -38,57 +35,40 @@ export default async function SocialListeningPage({
     after(() => refreshSocialListeningIfStale(artist.id, artist.name));
   }
 
+  const categories = map?.categories ?? [];
+  const csvRows = categories.flatMap((c) =>
+    c.subcategories.flatMap((s) =>
+      s.comments.map((comment) => ({
+        category: c.name,
+        subcategory: s.name,
+        platform: comment.platform,
+        author: comment.author,
+        text: comment.text,
+        score: comment.score,
+        context: comment.context,
+        url: comment.url,
+      }))
+    )
+  );
+
   return (
     <div>
       <div className="mb-1 flex items-center gap-2">
         <div className="h-4 w-1 bg-[var(--accent)]" />
         <h2 className="text-lg font-bold uppercase">Social listening</h2>
         <span className="text-sm text-white/40">
-          Reddit posts and YouTube videos mentioning {artist.name}
+          Reddit and YouTube comments about {artist.name}, grouped by theme
         </span>
       </div>
 
-      {!mentions?.length ? (
+      {!categories.length ? (
         <p className="mt-4 rounded-lg border border-dashed border-white/20 p-8 text-center text-white/50">
-          No mentions found yet — hit &quot;Refresh Everything&quot; below. YouTube mentions need
+          No comments found yet — hit &quot;Refresh Everything&quot; below. YouTube comments need
           YOUTUBE_API_KEY set; Reddit needs no setup at all.
         </p>
       ) : (
-        <div className="mt-4 flex flex-col gap-3">
-          {mentions.map((mention) => (
-            <a
-              key={mention.id}
-              href={mention.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block p-4 shadow-lg shadow-black/30 transition-all duration-150 ease-out hover:-translate-y-0.5 hover:shadow-[0_0_28px_var(--accent)]"
-              style={{
-                borderRadius: "var(--card-radius, 12px)",
-                backgroundColor: "rgba(0,0,0,var(--card-bg-opacity, 0.4))",
-                border: "1px solid rgba(255,255,255,var(--card-border-opacity, 0.15))",
-              }}
-            >
-              <div
-                className="flex items-center gap-2 text-xs uppercase tracking-wide opacity-60"
-                style={{ color: "var(--card-text-color, #fff)" }}
-              >
-                <span>{PLATFORM_LABEL[mention.platform] ?? mention.platform}</span>
-                {mention.author && <span>· {mention.author}</span>}
-                {mention.score !== null && <span>· {mention.score} pts</span>}
-              </div>
-              <p className="mt-1 font-semibold" style={{ color: "var(--card-text-color, #fff)" }}>
-                {mention.title}
-              </p>
-              {!!mention.excerpt && (
-                <p
-                  className="mt-1 text-sm opacity-70"
-                  style={{ color: "var(--card-text-color, #fff)" }}
-                >
-                  {mention.excerpt}
-                </p>
-              )}
-            </a>
-          ))}
+        <div className="mt-4">
+          <CommentMap categories={categories} />
         </div>
       )}
 
@@ -96,7 +76,7 @@ export default async function SocialListeningPage({
         slug={slug}
         artistId={artist.id}
         tagline={artist.tagline}
-        csvRows={mentions ?? []}
+        csvRows={csvRows}
         csvFilename={`${slug}-social-listening.csv`}
       />
     </div>

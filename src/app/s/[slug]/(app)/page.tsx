@@ -61,7 +61,7 @@ export default async function DashboardPage({
     { data: latestArticles },
     { count: eventsCount },
     { data: youtubeStats },
-    { count: socialCount },
+    { data: socialCommentMap },
     { data: musicStats },
     { count: audienceCount },
     { count: strategyCount },
@@ -82,7 +82,7 @@ export default async function DashboardPage({
       .eq("artist_id", artist.id)
       .gte("event_date", new Date().toISOString()),
     supabase.from("youtube_stats").select("*").eq("artist_id", artist.id).maybeSingle(),
-    supabase.from("social_mentions").select("id", { count: "exact", head: true }).eq("artist_id", artist.id),
+    supabase.from("social_comment_map").select("comment_count").eq("artist_id", artist.id).maybeSingle(),
     supabase.from("music_stats").select("*").eq("artist_id", artist.id).maybeSingle(),
     supabase.from("audience_statements").select("id", { count: "exact", head: true }).eq("artist_id", artist.id),
     supabase
@@ -141,8 +141,8 @@ export default async function DashboardPage({
         };
       case "social_listening":
         return {
-          value: String(socialCount ?? 0),
-          caption: socialCount ? "mentions found" : "no mentions yet",
+          value: String(socialCommentMap?.comment_count ?? 0),
+          caption: socialCommentMap?.comment_count ? "comments categorized" : "no comments yet",
         };
       case "music":
         return {
