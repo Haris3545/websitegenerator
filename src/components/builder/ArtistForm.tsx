@@ -11,6 +11,7 @@ import {
   upsertArtist,
   saveArtistSecrets,
   publishArtist,
+  unpublishArtist,
   type ArtistFormInput,
 } from "@/app/builder/actions";
 import type { Artist } from "@/lib/database.types";
@@ -76,6 +77,7 @@ export function ArtistForm({
   const [formError, setFormError] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [isUnpublishing, setIsUnpublishing] = useState(false);
   const [published, setPublished] = useState<{ repoUrl: string; siteUrl: string } | null>(
     artist?.published_repo_url && artist?.published_site_url
       ? { repoUrl: artist.published_repo_url, siteUrl: artist.published_site_url }
@@ -99,6 +101,26 @@ export function ArtistForm({
     setIsPublishing(false);
     if (result.ok) {
       setPublished({ repoUrl: result.repoUrl, siteUrl: result.siteUrl });
+    } else {
+      setPublishError(result.error);
+    }
+  }
+
+  async function handleUnpublish() {
+    if (!artist) return;
+    if (
+      !window.confirm(
+        "This permanently deletes the standalone GitHub repo and Vercel project for this artist. Continue?"
+      )
+    ) {
+      return;
+    }
+    setIsUnpublishing(true);
+    setPublishError(null);
+    const result = await unpublishArtist(artist.id);
+    setIsUnpublishing(false);
+    if (result.ok) {
+      setPublished(null);
     } else {
       setPublishError(result.error);
     }
@@ -345,6 +367,14 @@ export function ArtistForm({
               <p className="mt-1 text-xs text-neutral-900">
                 The Vercel deployment can take a minute or two to finish building the first time.
               </p>
+              <button
+                type="button"
+                disabled={isUnpublishing}
+                onClick={handleUnpublish}
+                className="mt-2 self-start rounded border border-red-300 px-3 py-2 text-sm font-medium text-red-700 disabled:opacity-50"
+              >
+                {isUnpublishing ? "Deleting..." : "Delete standalone site"}
+              </button>
             </div>
           ) : (
             <button

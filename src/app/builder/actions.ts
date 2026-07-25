@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { parseAestheticPrompt } from "@/lib/aesthetic";
 import { encryptSecret } from "@/lib/crypto";
-import { publishArtistSite, type PublishResult } from "@/lib/publish";
+import { publishArtistSite, unpublishArtistSite, type PublishResult, type UnpublishResult } from "@/lib/publish";
 import { ALL_TAB_KEYS } from "@/lib/tabs";
 import type { TabKey } from "@/lib/database.types";
 import type { ThemeOverrides } from "@/lib/theme";
@@ -119,6 +119,12 @@ export async function getSavedSecretKeys(artistId: string): Promise<string[]> {
 
 export async function publishArtist(artistId: string): Promise<PublishResult> {
   const result = await publishArtistSite(artistId);
+  if (result.ok) revalidatePath(`/builder/artists/${artistId}`);
+  return result;
+}
+
+export async function unpublishArtist(artistId: string): Promise<UnpublishResult> {
+  const result = await unpublishArtistSite(artistId);
   if (result.ok) revalidatePath(`/builder/artists/${artistId}`);
   return result;
 }

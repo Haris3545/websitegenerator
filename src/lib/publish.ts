@@ -141,3 +141,70 @@ export async function publishArtistSite(artistId: string): Promise<PublishResult
 
   return { ok: true, repoUrl, siteUrl };
 }
+
+export type UnpublishResult = { ok: true } | { ok: false; error: string };
+
+/** Deletes the standalone GitHub repo + Vercel project created by
+ * publishArtistSite and clears the stored URLs, so the artist can be
+ * published fresh again (e.g. to pick up template changes made since the
+ * original publish — there's no in-place sync yet, only republish-from-
+ * scratch). Idempotent — a 404 from either API (already deleted) is treated
+ * as success rather than an error. */
+export async function unpublishArtistSite(artistId: string): Promise<UnpublishResult> {
+  const githubToken = process.env.GITHUB_ACCESS_TOKEN;
+  const vercelToken = process.env.VERCEL_API_TOKEN;
+  if (!githubToken) {
+    return { ok: false, error: "GITHUB_ACCESS_TOKEN isn't set in this deployment's environment variables." };
+  }
+  if (!vercelToken) {
+    return { ok: false, error: "VERCEL_API_TOKEN isn't set in this deployment's environment variables." };
+  }
+
+  const supabase = createServiceRoleClient();
+  const { data: artist, error: fetchError } = await supabase
+    .from("artists")
+    .select("slug, published_repo_url")
+    .eq("id", artistId)
+    .maybeSingle();
+
+  if (fetchError) return { ok: false, error: `Couldn't load artist: ${fetchError.message}` };
+  if (!artist) return { ok: false, error: "Artist not found." };
+  if (!artist.published_repo_url) return { ok: false, error: "This artist hasn't been published." };
+
+  const repoName = `${artist.slug}-dashboard`;
+  const errors: string[] = [];
+
+  const deleteProjectRes = await fetch(`${VERCEL_API}/v9/projects/${repoName}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${vercelToken}` },
+  });
+  if (!deleteProjectRes.ok && deleteProjectRes.status !== 404) {
+    const body = await deleteProjectRes.text();
+    errors.push(`Vercel project deletion failed (${deleteProjectRes.status}): ${body}`);
+  }
+
+  const deleteRepoRes = await fetch(`${GITHUB_API}/repos/${TEMPLATE_OWNER}/${repoName}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${githubToken}`,
+      Accept: "application/vnd.github+json",
+    },
+  });
+  if (!deleteRepoRes.ok && deleteRepoRes.status !== 404) {
+    const body = await deleteRepoRes.text();
+    errors.push(
+      `GitHub repo deletion failed (${deleteRepoRes.status}): ${body}. This usually means ` +
+        `GITHUB_ACCESS_TOKEN is missing the "delete_repo" scope — edit the token at ` +
+        "github.com/settings/tokens to add it, then try again."
+    );
+  }
+
+  if (errors.length) return { ok: false, error: errors.join(" ") };
+
+  await supabase
+    .from("artists")
+    .update({ published_repo_url: null, published_site_url: null, published_at: null })
+    .eq("id", artistId);
+
+  return { ok: true };
+}
