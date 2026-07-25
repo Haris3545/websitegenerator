@@ -1,13 +1,14 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { parseAestheticPrompt } from "@/lib/aesthetic";
 import { encryptSecret } from "@/lib/crypto";
 import { publishArtistSite, unpublishArtistSite, type PublishResult, type UnpublishResult } from "@/lib/publish";
 import { parseAudienceFile, storeAudienceUpload } from "@/lib/audience";
 import { ALL_TAB_KEYS } from "@/lib/tabs";
+import { artistCacheTag } from "@/lib/getSiteArtist";
 import type { TabKey } from "@/lib/database.types";
 import type { ThemeOverrides } from "@/lib/theme";
 
@@ -82,6 +83,7 @@ export async function upsertArtist(
 
     revalidatePath("/builder/artists");
     revalidatePath(`/builder/artists/${id}`);
+    updateTag(artistCacheTag(input.slug));
     return { ok: true, id };
   } catch (err) {
     return {
@@ -145,14 +147,26 @@ export async function getSavedSecretKeys(artistId: string): Promise<string[]> {
 
 export async function publishArtist(artistId: string): Promise<PublishResult> {
   const result = await publishArtistSite(artistId);
-  if (result.ok) revalidatePath(`/builder/artists/${artistId}`);
+  if (result.ok) {
+    revalidatePath(`/builder/artists/${artistId}`);
+    await revalidateArtistCacheById(artistId);
+  }
   return result;
 }
 
 export async function unpublishArtist(artistId: string): Promise<UnpublishResult> {
   const result = await unpublishArtistSite(artistId);
-  if (result.ok) revalidatePath(`/builder/artists/${artistId}`);
+  if (result.ok) {
+    revalidatePath(`/builder/artists/${artistId}`);
+    await revalidateArtistCacheById(artistId);
+  }
   return result;
+}
+
+async function revalidateArtistCacheById(artistId: string) {
+  const supabase = await createClient();
+  const { data } = await supabase.from("artists").select("slug").eq("id", artistId).maybeSingle();
+  if (data?.slug) updateTag(artistCacheTag(data.slug));
 }
 
 /** Parses and stores an uploaded GWI-style audience research export (CSV or

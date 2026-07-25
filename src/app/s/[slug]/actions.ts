@@ -2,7 +2,7 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { refreshMediaForArtist } from "@/lib/media";
 import { refreshSentimentNow } from "@/lib/sentiment";
@@ -11,6 +11,7 @@ import { refreshYoutubeStats } from "@/lib/youtube";
 import { refreshSocialListeningForArtist } from "@/lib/socialListening";
 import { refreshMusicStats } from "@/lib/music";
 import { computeArtistPassword, artistAccessCookieName } from "@/lib/artistAccess";
+import { artistCacheTag } from "@/lib/getSiteArtist";
 import type { SentimentFilter, BoardItem } from "@/lib/database.types";
 
 export async function refreshEverything(slug: string) {
@@ -49,6 +50,7 @@ export async function refreshEverything(slug: string) {
   } catch (err) {
     console.error(`refreshEverything: music refresh failed for ${slug}:`, err);
   }
+  updateTag(artistCacheTag(slug));
   revalidatePath(`/s/${slug}`, "layout");
 }
 
@@ -60,7 +62,7 @@ export async function updateSentimentFilters(artistId: string, filters: Sentimen
   const supabase = createServiceRoleClient();
   const { data: artist } = await supabase
     .from("artists")
-    .select("sentiment_summary")
+    .select("slug, sentiment_summary")
     .eq("id", artistId)
     .maybeSingle();
 
@@ -71,6 +73,7 @@ export async function updateSentimentFilters(artistId: string, filters: Sentimen
     })
     .eq("id", artistId);
 
+  if (artist?.slug) updateTag(artistCacheTag(artist.slug));
   revalidatePath(`/s/[slug]`, "layout");
 }
 
@@ -81,7 +84,7 @@ export async function updateContentOverride(artistId: string, key: string, value
   const supabase = createServiceRoleClient();
   const { data: artist } = await supabase
     .from("artists")
-    .select("content_overrides")
+    .select("slug, content_overrides")
     .eq("id", artistId)
     .maybeSingle();
 
@@ -94,6 +97,7 @@ export async function updateContentOverride(artistId: string, key: string, value
   }
 
   await supabase.from("artists").update({ content_overrides: next }).eq("id", artistId);
+  if (artist?.slug) updateTag(artistCacheTag(artist.slug));
   revalidatePath(`/s/[slug]`, "layout");
 }
 
