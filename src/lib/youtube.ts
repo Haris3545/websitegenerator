@@ -1,5 +1,4 @@
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { getArtistSecret } from "@/lib/secrets";
 import type { YoutubeVideo } from "@/lib/database.types";
 
 const STALE_AFTER_MS = 6 * 60 * 60 * 1000; // 6 hours
@@ -23,11 +22,9 @@ type YoutubeSearchResponse = {
 };
 
 export async function refreshYoutubeStats(artistId: string, channelId: string) {
-  const apiKey = await getArtistSecret(artistId, "youtube_api_key");
+  const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) {
-    throw new Error(
-      "No YouTube API key set for this artist — add one under \"Data source API keys\" in the builder."
-    );
+    throw new Error("YOUTUBE_API_KEY isn't set — ask whoever manages this app's Vercel project to add it.");
   }
 
   const channelRes = await fetch(

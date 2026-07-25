@@ -1,5 +1,4 @@
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { getArtistSecret } from "@/lib/secrets";
 import type { SocialMention } from "@/lib/database.types";
 
 const STALE_AFTER_MS = 60 * 60 * 1000; // 1 hour
@@ -39,8 +38,8 @@ type YoutubeSearchResponse = {
 const REDDIT_USER_AGENT = "websitegenerator:cultural-intelligence:v1.0 (by /u/vccp-media)";
 
 async function fetchRedditMentions(artistId: string, artistName: string): Promise<MentionRow[]> {
-  const clientId = await getArtistSecret(artistId, "reddit_client_id");
-  const clientSecret = await getArtistSecret(artistId, "reddit_client_secret");
+  const clientId = process.env.REDDIT_CLIENT_ID;
+  const clientSecret = process.env.REDDIT_CLIENT_SECRET;
   if (!clientId || !clientSecret) return [];
 
   const tokenRes = await fetch("https://www.reddit.com/api/v1/access_token", {
@@ -85,7 +84,7 @@ async function fetchRedditMentions(artistId: string, artistName: string): Promis
 }
 
 async function fetchYoutubeMentions(artistId: string, artistName: string): Promise<MentionRow[]> {
-  const apiKey = await getArtistSecret(artistId, "youtube_api_key");
+  const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) return [];
 
   const res = await fetch(

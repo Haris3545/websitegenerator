@@ -1,5 +1,4 @@
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { getArtistSecret } from "@/lib/secrets";
 
 const STALE_AFTER_MS = 12 * 60 * 60 * 1000; // 12 hours
 
@@ -16,15 +15,14 @@ type BandsintownEvent = {
 };
 
 /** Fetches upcoming tour dates from Bandsintown's public events API and
- * caches them. Requires a Bandsintown app_id (see the artist's "Data source
- * API keys" in the builder) — Bandsintown ties rate limits/access to a
- * registered app_id, so there's no reasonable default that works for
- * everyone. */
+ * caches them. Bandsintown ties access to one registered app_id rather than
+ * per-artist credentials, so this is a single shared key (BANDSINTOWN_APP_ID)
+ * set once for the whole app, not something each artist configures. */
 export async function refreshEventsForArtist(artistId: string, artistName: string) {
-  const appId = await getArtistSecret(artistId, "bandsintown_app_id");
+  const appId = process.env.BANDSINTOWN_APP_ID;
   if (!appId) {
     throw new Error(
-      "No Bandsintown app_id set for this artist — add one under \"Data source API keys\" in the builder."
+      "BANDSINTOWN_APP_ID isn't set — ask whoever manages this app's Vercel project to add it."
     );
   }
 

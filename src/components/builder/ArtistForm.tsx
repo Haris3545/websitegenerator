@@ -10,7 +10,6 @@ import { TabsChecklist } from "@/components/builder/TabsChecklist";
 import { ThemeEditor } from "@/components/builder/ThemeEditor";
 import {
   upsertArtist,
-  saveArtistSecrets,
   uploadAudienceResearch,
   publishArtist,
   unpublishArtist,
@@ -27,21 +26,7 @@ function slugify(name: string) {
     .replace(/(^-|-$)/g, "");
 }
 
-const SECRET_FIELDS = [
-  { key: "youtube_api_key", label: "YouTube Data API key" },
-  { key: "reddit_client_id", label: "Reddit client ID" },
-  { key: "reddit_client_secret", label: "Reddit client secret" },
-  { key: "lastfm_api_key", label: "Last.fm API key" },
-  { key: "bandsintown_app_id", label: "Bandsintown app_id (for Locations/Calendar)" },
-] as const;
-
-export function ArtistForm({
-  artist,
-  savedSecretKeys = [],
-}: {
-  artist?: Artist;
-  savedSecretKeys?: string[];
-}) {
+export function ArtistForm({ artist }: { artist?: Artist }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [form, setForm] = useState<ArtistFormInput>({
@@ -75,9 +60,6 @@ export function ArtistForm({
     ],
   });
   const [slugTouched, setSlugTouched] = useState(!!artist);
-  const [secrets, setSecrets] = useState<Record<string, string>>({});
-  const [secretsSaved, setSecretsSaved] = useState(false);
-  const [secretsError, setSecretsError] = useState<string | null>(null);
   const [audienceFile, setAudienceFile] = useState<File | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -142,18 +124,10 @@ export function ArtistForm({
         return;
       }
 
-      // A brand-new artist doesn't have a row to attach secrets/audience
-      // data to until upsertArtist just created one — run those deferred
-      // steps now, using the id it just returned.
+      // A brand-new artist doesn't have a row to attach an audience upload
+      // to until upsertArtist just created one — run that deferred step
+      // now, using the id it just returned.
       if (isNew) {
-        const hasSecrets = Object.values(secrets).some((v) => v.trim());
-        if (hasSecrets) {
-          const secretsResult = await saveArtistSecrets(result.id, secrets);
-          if (!secretsResult.ok) {
-            setFormError(`Artist created, but saving the API keys failed: ${secretsResult.error}`);
-            return;
-          }
-        }
         if (audienceFile) {
           const formData = new FormData();
           formData.append("file", audienceFile);
@@ -309,64 +283,6 @@ export function ArtistForm({
         value={form.enabled_tabs}
         onChange={(tabs) => update("enabled_tabs", tabs)}
       />
-
-      <div className="rounded border border-neutral-200 p-4">
-        <h2 className="mb-1 text-sm font-semibold">Data source API keys</h2>
-        <p className="mb-3 text-xs text-neutral-900">
-          Stored encrypted. Leave a field blank to keep its current value unchanged.
-          {!artist && " Saved automatically when you create this artist below."}
-        </p>
-        <div className="flex flex-col gap-3">
-          {SECRET_FIELDS.map((field) => {
-            const isSet = savedSecretKeys.includes(field.key);
-            return (
-              <label key={field.key} className="flex flex-col gap-1 text-sm">
-                <span>
-                  {field.label}{" "}
-                  {artist && (
-                    <span className={isSet ? "text-green-700" : "text-neutral-500"}>
-                      ({isSet ? "currently set" : "not set"})
-                    </span>
-                  )}
-                </span>
-                <input
-                  type="password"
-                  placeholder={isSet ? "Leave blank to keep the saved value" : "Not set"}
-                  value={secrets[field.key] ?? ""}
-                  onChange={(e) =>
-                    setSecrets((s) => ({ ...s, [field.key]: e.target.value }))
-                  }
-                  className="rounded border border-neutral-300 px-3 py-2 font-mono text-xs"
-                />
-              </label>
-            );
-          })}
-          {artist && (
-            <button
-              type="button"
-              onClick={() =>
-                startTransition(async () => {
-                  setSecretsSaved(false);
-                  setSecretsError(null);
-                  const result = await saveArtistSecrets(artist.id, secrets);
-                  if (result.ok) {
-                    setSecrets({});
-                    setSecretsSaved(true);
-                    router.refresh();
-                  } else {
-                    setSecretsError(result.error);
-                  }
-                })
-              }
-              className="self-start rounded border border-neutral-300 px-3 py-2 text-sm font-medium"
-            >
-              Save API keys
-            </button>
-          )}
-          {secretsSaved && <p className="text-xs text-green-600">Saved.</p>}
-          {secretsError && <p className="text-xs text-red-600">{secretsError}</p>}
-        </div>
-      </div>
 
       <div className="rounded border border-neutral-200 p-4">
         <h2 className="mb-1 text-sm font-semibold">Audience research</h2>

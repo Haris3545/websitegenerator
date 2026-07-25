@@ -1,5 +1,4 @@
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { getArtistSecret } from "@/lib/secrets";
 import type { MusicTopTrack } from "@/lib/database.types";
 
 const STALE_AFTER_MS = 12 * 60 * 60 * 1000; // 12 hours
@@ -18,11 +17,9 @@ type LastfmTopTracksResponse = {
 };
 
 export async function refreshMusicStats(artistId: string, artistName: string) {
-  const apiKey = await getArtistSecret(artistId, "lastfm_api_key");
+  const apiKey = process.env.LASTFM_API_KEY;
   if (!apiKey) {
-    throw new Error(
-      "No Last.fm API key set for this artist — add one under \"Data source API keys\" in the builder."
-    );
+    throw new Error("LASTFM_API_KEY isn't set — ask whoever manages this app's Vercel project to add it.");
   }
 
   const infoRes = await fetch(

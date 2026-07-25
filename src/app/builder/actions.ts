@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { revalidatePath, updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { parseAestheticPrompt } from "@/lib/aesthetic";
-import { encryptSecret } from "@/lib/crypto";
 import { publishArtistSite, unpublishArtistSite, type PublishResult, type UnpublishResult } from "@/lib/publish";
 import { parseAudienceFile, storeAudienceUpload } from "@/lib/audience";
 import { ALL_TAB_KEYS } from "@/lib/tabs";
@@ -98,51 +97,6 @@ export async function deleteArtist(id: string) {
   const { error } = await supabase.from("artists").delete().eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/builder/artists");
-}
-
-/** API keys are encrypted before storage; never round-tripped back to the client.
- * Merges with whatever's already saved — a blank field means "leave this key
- * alone," not "clear it." */
-export async function saveArtistSecrets(
-  artistId: string,
-  secrets: Record<string, string>
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  try {
-    const supabase = await createClient();
-
-    const { data: existing } = await supabase
-      .from("artist_secrets")
-      .select("encrypted")
-      .eq("artist_id", artistId)
-      .maybeSingle();
-
-    const encrypted: Record<string, string> = { ...(existing?.encrypted ?? {}) };
-    for (const [key, value] of Object.entries(secrets)) {
-      if (value) encrypted[key] = encryptSecret(value);
-    }
-
-    const { error } = await supabase
-      .from("artist_secrets")
-      .upsert({ artist_id: artistId, encrypted, updated_at: new Date().toISOString() });
-    if (error) return { ok: false, error: error.message };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Failed to save API keys." };
-  }
-
-  revalidatePath(`/builder/artists/${artistId}`);
-  return { ok: true };
-}
-
-/** Which secret keys already have a value saved, without ever exposing the
- * decrypted value itself — used to show "already set" in the form. */
-export async function getSavedSecretKeys(artistId: string): Promise<string[]> {
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("artist_secrets")
-    .select("encrypted")
-    .eq("artist_id", artistId)
-    .maybeSingle();
-  return Object.keys(data?.encrypted ?? {});
 }
 
 export async function publishArtist(artistId: string): Promise<PublishResult> {
