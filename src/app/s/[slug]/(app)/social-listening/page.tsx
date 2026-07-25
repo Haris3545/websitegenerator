@@ -59,7 +59,7 @@ export default async function SocialListeningPage({
         contentOverrides={artist.content_overrides}
         tabKey="social_listening"
         title="Social listening"
-        subtitle={`Reddit and YouTube comments about ${artist.name}, grouped by theme`}
+        subtitle={`YouTube comments about ${artist.name}, grouped by theme`}
       />
 
       {map?.computed_at && (
@@ -82,8 +82,8 @@ export default async function SocialListeningPage({
       ) : !categories.length ? (
         <div className="mt-4 rounded-lg border border-dashed border-white/20 p-8 text-center text-white/50">
           <p>
-            No comments found yet — hit &quot;Refresh Everything&quot; below. YouTube comments need
-            YOUTUBE_API_KEY set; Reddit uses the same GEMINI_API_KEY the rest of this app already needs.
+            No comments found yet — hit &quot;Refresh Everything&quot; below. Needs YOUTUBE_API_KEY set.
+            (Reddit is temporarily disabled — it was hitting Gemini&apos;s free-tier rate limit.)
           </p>
         </div>
       ) : (

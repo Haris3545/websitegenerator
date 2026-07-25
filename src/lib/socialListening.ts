@@ -24,90 +24,6 @@ function safeParseJson(text: string | undefined): Record<string, unknown> {
   }
 }
 
-const REDDIT_COMMENTS_SCHEMA = {
-  type: Type.OBJECT,
-  properties: {
-    comments: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          text: { type: Type.STRING },
-          author: { type: Type.STRING },
-          subreddit: { type: Type.STRING },
-          context: { type: Type.STRING },
-          url: { type: Type.STRING },
-        },
-        required: ["text"],
-      },
-    },
-  },
-  required: ["comments"],
-};
-
-type ExtractedRedditComment = {
-  text?: string;
-  author?: string;
-  subreddit?: string;
-  context?: string;
-  url?: string;
-};
-
-/** Reddit's own public JSON search endpoint reliably gets blocked when
- * called from a cloud/serverless IP — a known, common anti-scraping
- * measure that has nothing to do with our request being malformed (see
- * refreshSocialListeningForArtist's last_error handling, which surfaced
- * exactly this). This sidesteps it entirely by having Gemini do the
- * searching (Google Search grounding, the same pattern events.ts already
- * uses for tour dates) rather than us fetching reddit.com directly — same
- * two-step shape: a free-text research pass, then structured extraction
- * from that. Comments are only as reliable as the model's search-grounded
- * reporting, so this is explicitly told to quote real text it found
- * evidence for rather than summarize or invent. */
-async function fetchRedditCommentsViaGemini(artistName: string): Promise<SocialComment[]> {
-  const searchRes = await geminiClient.models.generateContent({
-    model: "gemini-2.5-flash-lite",
-    contents:
-      `Search Reddit for real discussion threads and comments about the musical artist "${artistName}". ` +
-      "Find actual comments people have genuinely posted — quote them verbatim, don't summarize or " +
-      "paraphrase — along with who posted each one, which subreddit it's from, and what the post/" +
-      "thread was about. Only report comments you have real search evidence for; if you can't find " +
-      "genuine Reddit comments, say so plainly rather than inventing any.",
-    config: { tools: [{ googleSearch: {} }] },
-  });
-  const digest = searchRes.text ?? "";
-  if (!digest.trim()) return [];
-
-  const extractRes = await geminiClient.models.generateContent({
-    model: "gemini-2.5-flash-lite",
-    contents:
-      "Extract individual Reddit comments from this research into structured data. Each entry needs " +
-      "the comment's actual quoted text; skip anything that reads like a summary rather than a real " +
-      `quote, and skip duplicates.\n\nResearch:\n${digest}`,
-    config: { responseMimeType: "application/json", responseSchema: REDDIT_COMMENTS_SCHEMA },
-  });
-
-  const parsed = safeParseJson(extractRes.text);
-  const extracted: ExtractedRedditComment[] = Array.isArray(parsed.comments) ? (parsed.comments as ExtractedRedditComment[]) : [];
-
-  return extracted
-    .filter((c): c is ExtractedRedditComment & { text: string } => !!c.text?.trim())
-    .slice(0, 30)
-    .map((c) => {
-      const author = c.author ? (c.author.startsWith("u/") ? c.author : `u/${c.author}`) : "unknown";
-      const subreddit = c.subreddit ? `r/${c.subreddit.replace(/^r\//, "")}` : null;
-      return {
-        platform: "reddit" as const,
-        author,
-        text: c.text!.slice(0, 500),
-        score: null,
-        url: c.url || `https://www.reddit.com/search/?q=${encodeURIComponent(artistName)}`,
-        context: [subreddit, c.context].filter(Boolean).join(" — ") || "Reddit",
-        publishedAt: null,
-      };
-    });
-}
-
 type YoutubeSearchResponse = {
   items?: { id?: { videoId?: string }; snippet?: { title?: string } }[];
 };
@@ -235,7 +151,7 @@ async function categorizeComments(
   const response = await geminiClient.models.generateContent({
     model: "gemini-2.5-flash-lite",
     contents:
-      `These are real Reddit and YouTube comments mentioning the artist "${artistName}". Organize ` +
+      `These are real YouTube comments mentioning the artist "${artistName}". Organize ` +
       "them into a two-level taxonomy that reflects what's ACTUALLY being talked about: 3-6 " +
       "top-level categories (e.g. reactions to a specific release, tour/ticket chatter, comparisons " +
       "to other artists, nostalgia, criticism — invent whatever genuinely fits this data, don't " +
@@ -267,43 +183,30 @@ async function categorizeComments(
     .filter((c) => c.subcategories.length > 0);
 }
 
-/** Describes what actually happened on one platform's fetch, unconditionally
- * — not just when something went wrong — so last_error always has enough
- * detail to tell "the API call itself failed" apart from "it ran fine and
- * genuinely found nothing," without needing server log access to tell them
- * apart. */
-function describePlatformResult(platform: string, result: PromiseSettledResult<SocialComment[]>): string {
-  if (result.status === "rejected") {
-    return `${platform}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`;
-  }
-  return `${platform}: ${result.value.length} found`;
-}
-
-/** Best-effort per platform — a Reddit failure shouldn't drop YouTube
- * results and vice versa. YouTube contributes zero rows rather than
- * erroring when YOUTUBE_API_KEY isn't set. Every run records a per-platform
- * status in last_error (not just failures) — worth surfacing rather than
- * leaving the UI's empty state looking identical whether it's a real
- * platform issue or a genuinely quiet search. */
+/** Reddit is temporarily disabled: the Gemini-search-based discovery this
+ * used (see git history) burned through the same free-tier Gemini quota
+ * (20 requests/day) that sentiment/insights/events/wikipedia-trends/
+ * categorization all share, so on any real refresh it was routinely
+ * exhausted before categorization — the one step that actually organizes
+ * the YouTube comments we DO reliably get — even ran. Re-add a Reddit
+ * source once there's quota headroom (a paid tier, or a direct non-Gemini
+ * fetch) to spend instead. */
 export async function refreshSocialListeningForArtist(artistId: string, artistName: string) {
-  const results = await Promise.allSettled([
-    fetchRedditCommentsViaGemini(artistName),
-    fetchYoutubeComments(artistId, artistName),
-  ]);
-
   const comments: SocialComment[] = [];
-  const [redditResult, youtubeResult] = results;
-  if (redditResult.status === "fulfilled") comments.push(...redditResult.value);
-  if (youtubeResult.status === "fulfilled") comments.push(...youtubeResult.value);
+  let platformStatus: string;
+
+  if (!process.env.YOUTUBE_API_KEY) {
+    platformStatus = "YouTube: YOUTUBE_API_KEY isn't set";
+  } else {
+    try {
+      comments.push(...(await fetchYoutubeComments(artistId, artistName)));
+      platformStatus = `YouTube: ${comments.length} found`;
+    } catch (err) {
+      platformStatus = `YouTube: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }
 
   const supabase = createServiceRoleClient();
-
-  const platformStatus = [
-    !process.env.GEMINI_API_KEY ? "Reddit: GEMINI_API_KEY isn't set" : describePlatformResult("Reddit", redditResult),
-    !process.env.YOUTUBE_API_KEY
-      ? "YouTube: YOUTUBE_API_KEY isn't set"
-      : describePlatformResult("YouTube", youtubeResult),
-  ].join("; ");
 
   if (!comments.length) {
     console.error(`refreshSocialListeningForArtist: no comments found for ${artistName}: ${platformStatus}`);
