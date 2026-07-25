@@ -7,6 +7,23 @@ const MAX_COMMENTS = 150;
 
 const geminiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
+/** Gemini's structured-output mode occasionally still wraps its response in
+ * a ```json fence or trails whitespace/prose around the object even with
+ * responseSchema set — a plain JSON.parse on that throws, and a thrown
+ * parse error here used to silently blow away real comments that were
+ * already fetched (see categorizeComments's caller, which now treats a
+ * parse failure as "categorization failed", not "no comments exist"). */
+function safeParseJson(text: string | undefined): Record<string, unknown> {
+  if (!text) return {};
+  const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch (err) {
+    console.error("socialListening: failed to parse Gemini JSON response:", err, "raw:", cleaned.slice(0, 500));
+    return {};
+  }
+}
+
 const REDDIT_COMMENTS_SCHEMA = {
   type: Type.OBJECT,
   properties: {
@@ -70,8 +87,8 @@ async function fetchRedditCommentsViaGemini(artistName: string): Promise<SocialC
     config: { responseMimeType: "application/json", responseSchema: REDDIT_COMMENTS_SCHEMA },
   });
 
-  const parsed = JSON.parse(extractRes.text ?? "{}");
-  const extracted: ExtractedRedditComment[] = Array.isArray(parsed.comments) ? parsed.comments : [];
+  const parsed = safeParseJson(extractRes.text);
+  const extracted: ExtractedRedditComment[] = Array.isArray(parsed.comments) ? (parsed.comments as ExtractedRedditComment[]) : [];
 
   return extracted
     .filter((c): c is ExtractedRedditComment & { text: string } => !!c.text?.trim())
@@ -229,9 +246,11 @@ async function categorizeComments(
     config: { responseMimeType: "application/json", responseSchema: CATEGORY_SCHEMA },
   });
 
-  const parsed = JSON.parse(response.text ?? "{}");
+  const parsed = safeParseJson(response.text);
   const rawCategories: { name?: string; subcategories?: { name?: string; commentIndexes?: number[] }[] }[] =
-    Array.isArray(parsed.categories) ? parsed.categories : [];
+    Array.isArray(parsed.categories)
+      ? (parsed.categories as { name?: string; subcategories?: { name?: string; commentIndexes?: number[] }[] }[])
+      : [];
 
   return rawCategories
     .filter((c) => c.name)
@@ -295,13 +314,30 @@ export async function refreshSocialListeningForArtist(artistId: string, artistNa
   }
 
   const trimmed = comments.slice(0, MAX_COMMENTS);
-  const categories = await categorizeComments(artistName, trimmed);
+
+  // Real comments were found — from here on, never let a categorization
+  // hiccup make them disappear from the UI entirely (which reads only
+  // `categories`, not comment_count). A parse failure or an
+  // over-conservative Gemini pass that places nothing both fall back to one
+  // flat, uncategorized bucket rather than an empty map with no explanation.
+  let categories: SocialCommentCategory[];
+  let categorizeError: string | null = null;
+  try {
+    categories = await categorizeComments(artistName, trimmed);
+    if (!categories.length) categorizeError = "Categorization returned no groupings for these comments";
+  } catch (err) {
+    categories = [];
+    categorizeError = `Categorization failed: ${err instanceof Error ? err.message : "unknown error"}`;
+  }
+  if (!categories.length) {
+    categories = [{ name: "All comments", subcategories: [{ name: "Uncategorized", comments: trimmed }] }];
+  }
 
   const { error } = await supabase.from("social_comment_map").upsert({
     artist_id: artistId,
     categories,
     comment_count: trimmed.length,
-    last_error: null,
+    last_error: categorizeError,
     computed_at: new Date().toISOString(),
   });
   if (error) throw new Error(error.message);
