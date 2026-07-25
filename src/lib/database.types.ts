@@ -22,6 +22,13 @@ export type MusicTopTrack = {
   url: string;
 };
 
+export type MusicAlbum = {
+  name: string;
+  playcount: number | null;
+  url: string;
+  artworkUrl: string | null;
+};
+
 export type SentimentSummary = {
   positive_pct?: number;
   negative_pct?: number;
@@ -309,6 +316,7 @@ export interface Database {
           playcount: number | null;
           top_tags: string[];
           top_tracks: MusicTopTrack[];
+          top_albums: MusicAlbum[];
           fetched_at: string;
         };
         Insert: {
@@ -317,6 +325,7 @@ export interface Database {
           playcount?: number | null;
           top_tags?: string[];
           top_tracks?: MusicTopTrack[];
+          top_albums?: MusicAlbum[];
           fetched_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["music_stats"]["Insert"]>;

@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getSiteArtist } from "@/lib/getSiteArtist";
 import { refreshMusicStats, refreshMusicIfStale } from "@/lib/music";
 import { KpiCard } from "@/components/site/KpiCard";
+import { AlbumCoverFlow } from "@/components/site/AlbumCoverFlow";
 import { SiteFooter } from "@/components/site/SiteFooter";
 
 export default async function MusicPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -46,7 +47,13 @@ export default async function MusicPage({ params }: { params: Promise<{ slug: st
         </p>
       ) : (
         <>
-          <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
+          {!!stats.top_albums.length && (
+            <div className="mt-6">
+              <AlbumCoverFlow albums={stats.top_albums} />
+            </div>
+          )}
+
+          <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3">
             <KpiCard
               label="Listeners"
               value={stats.listeners?.toLocaleString() ?? "—"}

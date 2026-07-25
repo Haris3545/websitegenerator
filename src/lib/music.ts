@@ -1,7 +1,8 @@
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import type { MusicTopTrack } from "@/lib/database.types";
+import type { MusicTopTrack, MusicAlbum } from "@/lib/database.types";
 
 const STALE_AFTER_MS = 12 * 60 * 60 * 1000; // 12 hours
+const ALBUM_COUNT = 12;
 
 type LastfmArtistInfoResponse = {
   artist?: {
@@ -15,6 +16,35 @@ type LastfmTopTracksResponse = {
     track?: { name?: string; playcount?: string; listeners?: string; url?: string }[];
   };
 };
+
+type LastfmTopAlbumsResponse = {
+  topalbums?: {
+    album?: { name?: string; playcount?: string; url?: string }[];
+  };
+};
+
+type ItunesSearchResponse = {
+  results?: { artworkUrl100?: string }[];
+};
+
+/** Last.fm's own album artwork URLs have been broken placeholder images for
+ * years (a long-standing, widely-reported issue on their end) — so real
+ * cover art comes from Apple's iTunes Search API instead, which is free,
+ * keyless, and actually reliable for this. artworkUrl100 is swapped for a
+ * larger size using iTunes's well-known URL-suffix convention. */
+async function fetchAlbumArtwork(artistName: string, albumName: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://itunes.apple.com/search?term=${encodeURIComponent(`${artistName} ${albumName}`)}&entity=album&limit=1`
+    );
+    if (!res.ok) return null;
+    const data: ItunesSearchResponse = await res.json();
+    const artwork = data.results?.[0]?.artworkUrl100;
+    return artwork ? artwork.replace("100x100", "600x600") : null;
+  } catch {
+    return null;
+  }
+}
 
 export async function refreshMusicStats(artistId: string, artistName: string) {
   const apiKey = process.env.LASTFM_API_KEY;
@@ -50,6 +80,25 @@ export async function refreshMusicStats(artistId: string, artistName: string) {
       url: t.url ?? "",
     }));
 
+  const albumsRes = await fetch(
+    `https://ws.audioscrobbler.com/2.0/?method=artist.gettopalbums&artist=${encodeURIComponent(artistName)}&api_key=${apiKey}&format=json&limit=${ALBUM_COUNT}`
+  );
+  if (!albumsRes.ok) throw new Error(`Last.fm artist.gettopalbums returned ${albumsRes.status}`);
+  const albumsData: LastfmTopAlbumsResponse = await albumsRes.json();
+  const rawAlbums = albumsData.topalbums?.album;
+  const albumList = (Array.isArray(rawAlbums) ? rawAlbums : rawAlbums ? [rawAlbums] : [])
+    .filter((a) => a.name)
+    .slice(0, ALBUM_COUNT);
+
+  const topAlbums: MusicAlbum[] = await Promise.all(
+    albumList.map(async (a) => ({
+      name: a.name as string,
+      playcount: a.playcount ? Number(a.playcount) : null,
+      url: a.url ?? "",
+      artworkUrl: await fetchAlbumArtwork(artistName, a.name as string),
+    }))
+  );
+
   const supabase = createServiceRoleClient();
   const { error } = await supabase.from("music_stats").upsert({
     artist_id: artistId,
@@ -57,6 +106,7 @@ export async function refreshMusicStats(artistId: string, artistName: string) {
     playcount: infoData.artist.stats?.playcount ? Number(infoData.artist.stats.playcount) : null,
     top_tags: topTags,
     top_tracks: topTracks,
+    top_albums: topAlbums,
     fetched_at: new Date().toISOString(),
   });
   if (error) throw new Error(error.message);
