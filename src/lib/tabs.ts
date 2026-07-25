@@ -31,4 +31,5 @@ export const LIVE_TABS: TabKey[] = [
   "calendar",
   "youtube",
   "social_listening",
+  "music",
 ];

@@ -15,6 +15,13 @@ export type SentimentFilter = { label: string; keywords: string[] };
 
 export type YoutubeVideo = { id: string; title: string; publishedAt: string; thumbnail: string };
 
+export type MusicTopTrack = {
+  name: string;
+  playcount: number | null;
+  listeners: number | null;
+  url: string;
+};
+
 export type SentimentSummary = {
   positive_pct?: number;
   negative_pct?: number;
@@ -291,6 +298,26 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["youtube_stats"]["Insert"]>;
         Relationships: [];
       };
+      music_stats: {
+        Row: {
+          artist_id: string;
+          listeners: number | null;
+          playcount: number | null;
+          top_tags: string[];
+          top_tracks: MusicTopTrack[];
+          fetched_at: string;
+        };
+        Insert: {
+          artist_id: string;
+          listeners?: number | null;
+          playcount?: number | null;
+          top_tags?: string[];
+          top_tracks?: MusicTopTrack[];
+          fetched_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["music_stats"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -305,3 +332,4 @@ export type BoardItem = Database["public"]["Tables"]["board_items"]["Row"];
 export type ArtistEvent = Database["public"]["Tables"]["artist_events"]["Row"];
 export type YoutubeStats = Database["public"]["Tables"]["youtube_stats"]["Row"];
 export type SocialMention = Database["public"]["Tables"]["social_mentions"]["Row"];
+export type MusicStats = Database["public"]["Tables"]["music_stats"]["Row"];

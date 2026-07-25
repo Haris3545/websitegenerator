@@ -9,6 +9,7 @@ import { refreshSentimentNow } from "@/lib/sentiment";
 import { refreshEventsForArtist } from "@/lib/events";
 import { refreshYoutubeStats } from "@/lib/youtube";
 import { refreshSocialListeningForArtist } from "@/lib/socialListening";
+import { refreshMusicStats } from "@/lib/music";
 import { computeArtistPassword, artistAccessCookieName } from "@/lib/artistAccess";
 import type { SentimentFilter, BoardItem } from "@/lib/database.types";
 
@@ -42,6 +43,11 @@ export async function refreshEverything(slug: string) {
     await refreshSocialListeningForArtist(artist.id, artist.name);
   } catch (err) {
     console.error(`refreshEverything: social listening refresh failed for ${slug}:`, err);
+  }
+  try {
+    await refreshMusicStats(artist.id, artist.name);
+  } catch (err) {
+    console.error(`refreshEverything: music refresh failed for ${slug}:`, err);
   }
   revalidatePath(`/s/${slug}`, "layout");
 }
