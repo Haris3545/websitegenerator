@@ -52,6 +52,8 @@ export type SocialComment = {
 export type SocialCommentSubcategory = { name: string; comments: SocialComment[] };
 export type SocialCommentCategory = { name: string; subcategories: SocialCommentSubcategory[] };
 
+export type ConversationTheme = { name: string; count: number };
+
 export type WikipediaArticleTrend = {
   title: string;
   last7DayViews: number;
@@ -357,6 +359,12 @@ export interface Database {
         Row: { usage_date: string; request_count: number };
         Insert: { usage_date: string; request_count?: number };
         Update: Partial<Database["public"]["Tables"]["gemini_usage"]["Insert"]>;
+        Relationships: [];
+      };
+      conversation_themes: {
+        Row: { artist_id: string; themes: ConversationTheme[]; computed_at: string };
+        Insert: { artist_id: string; themes?: ConversationTheme[]; computed_at?: string };
+        Update: Partial<Database["public"]["Tables"]["conversation_themes"]["Insert"]>;
         Relationships: [];
       };
       youtube_stats: {

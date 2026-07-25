@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { hierarchy, pack, type HierarchyCircularNode } from "d3-hierarchy";
 import type { SocialComment, SocialCommentCategory } from "@/lib/database.types";
 
@@ -29,7 +29,6 @@ const CATEGORY_COLORS: Record<string, string> = {
   Reactions: "#fb923c",
   "Nostalgia & comparisons": "#f472b6",
   "Live & touring": "#facc15",
-  "General discussion": "#9ca3af",
 };
 const FALLBACK_COLOR = "#a78bfa";
 
@@ -37,13 +36,8 @@ function colorFor(categoryName: string): string {
   return CATEGORY_COLORS[categoryName] ?? FALLBACK_COLOR;
 }
 
-function lighten(hex: string, amount: number): string {
-  const n = parseInt(hex.slice(1), 16);
-  const r = (n >> 16) & 255;
-  const g = (n >> 8) & 255;
-  const b = n & 255;
-  const mix = (c: number) => Math.round(c + (255 - c) * amount);
-  return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
+function slug(name: string): string {
+  return name.replace(/[^a-zA-Z0-9]+/g, "-").toLowerCase();
 }
 
 function clamp(v: number, min: number, max: number) {
@@ -53,24 +47,55 @@ function clamp(v: number, min: number, max: number) {
 function ancestorCategoryName(node: Node): string {
   let n: Node | null = node;
   while (n && n.depth > 1) n = n.parent;
-  return n?.data.name ?? "General discussion";
+  return n?.data.name ?? "";
+}
+
+// How visible each depth is at a given zoom level k — the "only see the
+// breakdown once you zoom in" behavior: everything starts folded into one
+// soft "Commentary" blob (depth 0), which fades out as categories fade in,
+// then subcategories, then individual comment bubbles last, each stage
+// only reachable by zooming further than the one before it.
+function stageOpacity(depth: number, k: number): number {
+  if (depth === 0) return clamp(1 - (k - 1) / 1.2, 0, 1);
+  if (depth === 1) return clamp((k - 1) / 1.2, 0, 1);
+  if (depth === 2) return clamp((k - 3) / 3, 0, 1);
+  return clamp((k - 6) / 6, 0, 1);
+}
+
+// Pulls every node inward toward its parent's already-placed center by a
+// depth-dependent factor, deliberately breaking d3.pack's default
+// non-overlapping guarantee — the point is bubbles that overlap and blend
+// like light sources within their cluster, not tidy non-touching circles.
+function compressToward(node: Node) {
+  if (!node.children) return;
+  for (const child of node.children) {
+    const factor = child.depth === 1 ? 0.74 : child.depth === 2 ? 0.64 : 0.52;
+    child.x = node.x + (child.x - node.x) * factor;
+    child.y = node.y + (child.y - node.y) * factor;
+    compressToward(child);
+  }
 }
 
 type Tooltip = { node: Node; clientX: number; clientY: number };
 
 /** A zoomable circle-packing map: every category, subcategory, and
  * individual comment is a bubble, sized by how many comments it holds and
- * nested inside its parent — scroll (or the +/- buttons) zooms continuously
- * rather than jumping between separate screens, so subcategories and then
- * individual comments emerge as you zoom in, the same way a map reveals
- * more detail as you get closer. Circle positions/radii come from
- * d3-hierarchy's pack() layout, computed once per categories prop; panning
- * and zooming afterward are pure transform math applied directly to the DOM
+ * nested inside its parent, rendered as soft overlapping glows (radial
+ * gradient + screen blend) rather than flat opaque shapes. Everything
+ * starts folded into one "Commentary" blob; scrolling (or the +/- buttons)
+ * zooms continuously, revealing categories, then subcategories, then
+ * individual comments in turn — the same way a map reveals more detail as
+ * you get closer, rather than jumping between separate screens. Circle
+ * positions/radii come from d3-hierarchy's pack() layout (then deliberately
+ * compressed to overlap), computed once per categories prop; panning and
+ * zooming afterward are pure transform math applied directly to the DOM
  * (bypassing React state) so dragging/scrolling stays smooth even with a
  * few hundred bubbles on screen. */
 export function CommentMap({ categories }: { categories: SocialCommentCategory[] }) {
+  const uid = useId();
   const svgRef = useRef<SVGSVGElement>(null);
   const groupRef = useRef<SVGGElement>(null);
+  const circleRefs = useRef(new Map<number, SVGCircleElement>());
   const labelRefs = useRef(new Map<number, SVGGElement>());
   const transformRef = useRef({ x: 0, y: 0, k: 1 });
   const dragState = useRef<{ startX: number; startY: number; startTx: number; startTy: number; moved: boolean } | null>(
@@ -82,7 +107,7 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
 
   const root = useMemo(() => {
     const data: PackNode = {
-      name: "root",
+      name: "Commentary",
       kind: "root",
       children: categories.map((cat) => ({
         name: cat.name,
@@ -100,11 +125,12 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
     pack<PackNode>()
       .size([VIEW_SIZE, VIEW_SIZE])
       .padding((d) => (d.depth === 0 ? 30 : d.depth === 1 ? 12 : 2))(h);
+    compressToward(h as Node);
     return h;
   }, [categories]);
 
-  const nodes = useMemo(() => root.descendants().filter((d) => d.depth > 0) as Node[], [root]);
-  const labelNodes = useMemo(() => nodes.filter((n) => n.depth === 1 || n.depth === 2), [nodes]);
+  const nodes = useMemo(() => root.descendants() as Node[], [root]);
+  const labelNodes = useMemo(() => nodes.filter((n) => n.depth <= 2), [nodes]);
 
   function applyTransform(withTransition: boolean) {
     const { x, y, k } = transformRef.current;
@@ -114,18 +140,27 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
       g.style.transform = `translate(${x}px, ${y}px) scale(${k})`;
       g.style.transformOrigin = "0 0";
     }
+    circleRefs.current.forEach((el, index) => {
+      const node = nodes[index];
+      if (!node) return;
+      const opacity = stageOpacity(node.depth, k);
+      el.style.transition = withTransition ? "opacity 400ms ease" : "none";
+      el.style.opacity = String(opacity);
+      el.style.pointerEvents = opacity > 0.05 ? "auto" : "none";
+    });
     labelRefs.current.forEach((el, index) => {
+      const node = labelNodes[index];
+      if (!node) return;
       el.style.transition = withTransition ? ZOOM_TRANSITION : "none";
       el.style.transform = `scale(${1 / k})`;
-      const node = labelNodes[index];
-      if (node?.depth === 2) {
-        const screenRadius = node.r * k;
-        el.style.opacity = String(clamp((screenRadius - 24) / 40, 0, 1));
-      }
+      el.style.opacity = String(stageOpacity(node.depth, k));
     });
     if (withTransition) {
       window.setTimeout(() => {
         if (groupRef.current) groupRef.current.style.transition = "none";
+        circleRefs.current.forEach((el) => {
+          el.style.transition = "none";
+        });
         labelRefs.current.forEach((el) => {
           el.style.transition = "none";
         });
@@ -228,14 +263,16 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
     resetView();
   }
 
-  if (!nodes.length) return null;
+  if (nodes.length <= 1) return null;
+
+  const paletteColors = [...new Set([...Object.values(CATEGORY_COLORS), FALLBACK_COLOR])];
 
   return (
     <div className="relative">
       <div
         className="relative h-[28rem] w-full select-none overflow-hidden rounded-lg sm:h-[34rem]"
         style={{
-          backgroundColor: "rgba(0,0,0,var(--card-bg-opacity, 0.4))",
+          backgroundColor: "rgba(0,0,0,0.55)",
           border: "1px solid rgba(255,255,255,var(--card-border-opacity, 0.15))",
           borderRadius: "var(--card-radius, 12px)",
         }}
@@ -250,26 +287,40 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
           onPointerLeave={handlePointerUp}
           onClick={handleBackgroundClick}
         >
+          <defs>
+            <radialGradient id={`glow-root-${uid}`} cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#ffffff" stopOpacity={0.4} />
+              <stop offset="60%" stopColor="#ffffff" stopOpacity={0.14} />
+              <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
+            </radialGradient>
+            {paletteColors.map((color) => (
+              <radialGradient key={color} id={`glow-${uid}-${slug(color)}`} cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor={color} stopOpacity={0.95} />
+                <stop offset="55%" stopColor={color} stopOpacity={0.5} />
+                <stop offset="100%" stopColor={color} stopOpacity={0} />
+              </radialGradient>
+            ))}
+          </defs>
+
           <g ref={groupRef}>
             {nodes.map((node, i) => {
-              const isLeaf = node.depth === 3;
               const categoryName = ancestorCategoryName(node);
-              const base = colorFor(categoryName);
-              const fill = node.depth === 1 ? base : node.depth === 2 ? lighten(base, 0.45) : lighten(base, 0.75);
-              const baseOpacity = node.depth === 1 ? 0.5 : node.depth === 2 ? 0.6 : 0.85;
+              const color = node.depth === 0 ? null : colorFor(categoryName);
+              const fillUrl = color ? `url(#glow-${uid}-${slug(color)})` : `url(#glow-root-${uid})`;
+              const baseOpacity = node.depth === 1 ? 0.7 : node.depth === 2 ? 0.85 : 1;
               const isHovered = tooltip?.node === node;
               return (
                 <circle
                   key={i}
+                  ref={(el) => {
+                    if (el) circleRefs.current.set(i, el);
+                  }}
                   cx={node.x}
                   cy={node.y}
                   r={node.r}
-                  fill={fill}
-                  fillOpacity={isHovered ? Math.min(1, baseOpacity + 0.25) : baseOpacity}
-                  stroke={isLeaf ? "rgba(0,0,0,0.25)" : "rgba(255,255,255,0.2)"}
-                  strokeWidth={isLeaf ? 0.5 : 1}
-                  vectorEffect="non-scaling-stroke"
-                  style={{ transition: "fill-opacity 150ms ease" }}
+                  fill={fillUrl}
+                  fillOpacity={isHovered ? 1 : baseOpacity}
+                  style={{ transition: "fill-opacity 150ms ease", mixBlendMode: "screen" }}
                   className="cursor-pointer"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -288,10 +339,27 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
                     textAnchor="middle"
                     dominantBaseline="middle"
                     className="pointer-events-none select-none font-semibold"
-                    style={{ fontSize: node.depth === 1 ? 22 : 15, fill: "#fff", paintOrder: "stroke", stroke: "rgba(0,0,0,0.55)", strokeWidth: 3 }}
+                    style={{
+                      fontSize: node.depth === 0 ? 30 : node.depth === 1 ? 22 : 15,
+                      fill: "#fff",
+                      paintOrder: "stroke",
+                      stroke: "rgba(0,0,0,0.55)",
+                      strokeWidth: 3,
+                    }}
                   >
                     {node.data.name}
                   </text>
+                  {node.depth === 0 && (
+                    <text
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      y={34}
+                      className="pointer-events-none select-none"
+                      style={{ fontSize: 15, fill: "rgba(255,255,255,0.6)", paintOrder: "stroke", stroke: "rgba(0,0,0,0.55)", strokeWidth: 3 }}
+                    >
+                      {node.value ?? 0} comments · scroll to explore
+                    </text>
+                  )}
                 </g>
               </g>
             ))}

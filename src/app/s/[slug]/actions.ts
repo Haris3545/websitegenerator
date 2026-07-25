@@ -12,6 +12,7 @@ import { refreshSocialListeningForArtist } from "@/lib/socialListening";
 import { refreshMusicStats } from "@/lib/music";
 import { refreshInsightsNow } from "@/lib/insights";
 import { refreshWikipediaTrendsNow } from "@/lib/wikipedia";
+import { refreshConversationThemesForArtist } from "@/lib/conversationThemes";
 import { computeArtistPassword, artistAccessCookieName } from "@/lib/artistAccess";
 import { artistCacheTag } from "@/lib/getSiteArtist";
 import { ALL_TAB_KEYS } from "@/lib/tabs";
@@ -35,7 +36,7 @@ export async function refreshEverything(slug: string) {
   const supabase = createServiceRoleClient();
   const { data: artist } = await supabase
     .from("artists")
-    .select("id, name, youtube_channel_id")
+    .select("id, name, youtube_channel_id, project_title")
     .eq("slug", slug)
     .single();
 
@@ -76,6 +77,14 @@ export async function refreshEverything(slug: string) {
       (err) => console.error(`refreshEverything: Wikipedia trends refresh failed for ${slug}:`, err)
     ),
   ]);
+
+  // Reads across Wikipedia trends and social_comment_map, both only just
+  // refreshed above, so it has to run after — never in parallel with them.
+  try {
+    await refreshConversationThemesForArtist(artist.id, artist.project_title);
+  } catch (err) {
+    console.error(`refreshEverything: conversation themes refresh failed for ${slug}:`, err);
+  }
 
   updateTag(artistCacheTag(slug));
   revalidatePath(`/s/${slug}`, "layout");

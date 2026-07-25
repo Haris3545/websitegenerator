@@ -2,8 +2,10 @@ import { after } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getSiteArtist } from "@/lib/getSiteArtist";
 import { refreshYoutubeStats, refreshYoutubeIfStale } from "@/lib/youtube";
+import { refreshSocialListeningForArtist, refreshSocialListeningIfStale } from "@/lib/socialListening";
 import { getRecentTrends, formatTrend } from "@/lib/trends";
 import { KpiCard } from "@/components/site/KpiCard";
+import { CommentMap } from "@/components/site/CommentMap";
 import { TabHeading } from "@/components/site/TabHeading";
 import { SiteFooter } from "@/components/site/SiteFooter";
 
@@ -35,6 +37,29 @@ export default async function YoutubePage({ params }: { params: Promise<{ slug: 
 
   const videos = stats?.recent_videos ?? [];
   const trends = stats ? await getRecentTrends(artist.id) : {};
+
+  let { data: map, error: mapError } = await supabase
+    .from("social_comment_map")
+    .select("categories, comment_count, last_error, computed_at")
+    .eq("artist_id", artist.id)
+    .maybeSingle();
+
+  if (!map?.computed_at && !mapError) {
+    try {
+      await refreshSocialListeningForArtist(artist.id, artist.name);
+      ({ data: map, error: mapError } = await supabase
+        .from("social_comment_map")
+        .select("categories, comment_count, last_error, computed_at")
+        .eq("artist_id", artist.id)
+        .maybeSingle());
+    } catch (err) {
+      console.error(`Initial comment map fetch failed for ${slug}:`, err);
+    }
+  } else if (!mapError) {
+    after(() => refreshSocialListeningIfStale(artist.id, artist.name));
+  }
+
+  const commentCategories = map?.categories ?? [];
 
   return (
     <div>
@@ -121,6 +146,38 @@ export default async function YoutubePage({ params }: { params: Promise<{ slug: 
           )}
         </>
       )}
+
+      <div className="mt-8">
+        <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase text-white/70">
+          <span className="h-3 w-1 bg-[var(--accent)]" />
+          Comment themes
+        </h3>
+        {map?.computed_at && (
+          <p className="mb-2 text-xs text-white/30">
+            {map.comment_count ?? 0} comment{map.comment_count === 1 ? "" : "s"} · last checked{" "}
+            {new Date(map.computed_at).toLocaleString()}
+            {map.last_error && <span className="text-white/50"> · {map.last_error}</span>}
+          </p>
+        )}
+        {mapError ? (
+          <div className="rounded-lg border border-dashed border-red-400/40 p-8 text-center text-red-300/80">
+            <p>
+              Database error reading social_comment_map — this table is probably missing a column a
+              migration adds. Run <code className="text-red-200">migrations/020_social_comment_map_last_error.sql</code>{" "}
+              in Supabase, then refresh this page.
+            </p>
+            <p className="mt-3 text-xs text-red-300/60">{mapError.message}</p>
+          </div>
+        ) : !commentCategories.length ? (
+          <div className="rounded-lg border border-dashed border-white/20 p-8 text-center text-white/50">
+            <p>
+              No comments found yet — hit &quot;Refresh Everything&quot; below. Needs YOUTUBE_API_KEY set.
+            </p>
+          </div>
+        ) : (
+          <CommentMap categories={commentCategories} />
+        )}
+      </div>
 
       <SiteFooter
         slug={slug}
