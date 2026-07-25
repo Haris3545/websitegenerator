@@ -2,6 +2,7 @@ import { after } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getSiteArtist } from "@/lib/getSiteArtist";
 import { refreshYoutubeStats, refreshYoutubeIfStale } from "@/lib/youtube";
+import { getRecentTrends, formatTrend } from "@/lib/trends";
 import { KpiCard } from "@/components/site/KpiCard";
 import { SiteFooter } from "@/components/site/SiteFooter";
 
@@ -32,6 +33,7 @@ export default async function YoutubePage({ params }: { params: Promise<{ slug: 
   }
 
   const videos = stats?.recent_videos ?? [];
+  const trends = stats ? await getRecentTrends(artist.id) : {};
 
   return (
     <div>
@@ -59,12 +61,14 @@ export default async function YoutubePage({ params }: { params: Promise<{ slug: 
               label="Subscribers"
               value={stats.subscriber_count?.toLocaleString() ?? "—"}
               caption={stats.channel_title ?? artist.name}
+              trend={formatTrend(trends.youtube_subscribers)}
               color="var(--accent)"
             />
             <KpiCard
               label="Total views"
               value={stats.view_count?.toLocaleString() ?? "—"}
               caption="lifetime channel views"
+              trend={formatTrend(trends.youtube_views)}
               color="var(--primary)"
             />
             <KpiCard

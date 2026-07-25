@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getSiteArtist } from "@/lib/getSiteArtist";
 import { refreshSentimentNow, refreshSentimentIfStale } from "@/lib/sentiment";
 import { refreshInsightsNow, refreshInsightsIfStale } from "@/lib/insights";
+import { getRecentTrends, formatTrend } from "@/lib/trends";
 import { resolveContent } from "@/lib/contentOverrides";
 import { KpiCard } from "@/components/site/KpiCard";
 import { ArticleCard } from "@/components/site/ArticleCard";
@@ -68,6 +69,7 @@ export default async function DashboardPage({
     { count: tacticsCount },
     { count: ideasCount },
     { count: researchCount },
+    trends,
   ] = await Promise.all([
     supabase.from("media_articles").select("id", { count: "exact", head: true }).eq("artist_id", artist.id),
     supabase
@@ -105,6 +107,7 @@ export default async function DashboardPage({
       .select("id", { count: "exact", head: true })
       .eq("artist_id", artist.id)
       .eq("board_key", "research"),
+    getRecentTrends(artist.id),
   ]);
 
   const otherTabs = TABS.filter(
@@ -127,39 +130,44 @@ export default async function DashboardPage({
   function kpiFor(tabKey: TabKey) {
     switch (tabKey) {
       case "media":
-        return { value: String(mediaCount ?? 0), caption: mediaCaption };
+        return { value: String(mediaCount ?? 0), caption: mediaCaption, trend: formatTrend(trends.media_count) };
       case "locations":
       case "calendar":
         return {
           value: String(eventsCount ?? 0),
           caption: eventsCount ? "upcoming dates" : "no dates yet",
+          trend: formatTrend(trends.upcoming_events_count),
         };
       case "youtube":
         return {
           value: youtubeStats?.subscriber_count?.toLocaleString() ?? "—",
           caption: youtubeStats ? "subscribers" : "no channel linked yet",
+          trend: formatTrend(trends.youtube_subscribers),
         };
       case "social_listening":
         return {
           value: String(socialCommentMap?.comment_count ?? 0),
           caption: socialCommentMap?.comment_count ? "comments categorized" : "no comments yet",
+          trend: formatTrend(trends.social_comments_count),
         };
       case "music":
         return {
           value: musicStats?.listeners?.toLocaleString() ?? "—",
           caption: musicStats ? "Last.fm listeners" : "no data yet",
+          trend: formatTrend(trends.music_listeners),
         };
       case "audience":
         return {
           value: String(audienceCount ?? 0),
           caption: audienceCount ? "statements imported" : "no research uploaded yet",
+          trend: formatTrend(trends.audience_statements_count),
         };
       case "strategy":
       case "tactics":
       case "ideas":
       case "research": {
         const count = boardCount[tabKey] ?? 0;
-        return { value: String(count), caption: count ? "cards" : "no cards yet" };
+        return { value: String(count), caption: count ? "cards" : "no cards yet", trend: null };
       }
       default:
         return null;
@@ -193,6 +201,7 @@ export default async function DashboardPage({
               label={tab.label}
               value={kpi?.value ?? "—"}
               caption={kpi?.caption ?? (LIVE_TABS.includes(tab.key) ? "no data yet" : "live in a later phase")}
+              trend={kpi?.trend}
               color={tab.key === "media" ? "var(--accent)" : "var(--primary)"}
             />
           );

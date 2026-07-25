@@ -2,6 +2,7 @@ import { after } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getSiteArtist } from "@/lib/getSiteArtist";
 import { refreshMusicStats, refreshMusicIfStale } from "@/lib/music";
+import { getRecentTrends, formatTrend } from "@/lib/trends";
 import { KpiCard } from "@/components/site/KpiCard";
 import { AlbumCoverFlow } from "@/components/site/AlbumCoverFlow";
 import { SiteFooter } from "@/components/site/SiteFooter";
@@ -32,6 +33,8 @@ export default async function MusicPage({ params }: { params: Promise<{ slug: st
     after(() => refreshMusicIfStale(artist.id, artist.name));
   }
 
+  const trends = stats ? await getRecentTrends(artist.id) : {};
+
   return (
     <div>
       <div className="mb-1 flex items-center gap-2">
@@ -58,12 +61,14 @@ export default async function MusicPage({ params }: { params: Promise<{ slug: st
               label="Listeners"
               value={stats.listeners?.toLocaleString() ?? "—"}
               caption="unique Last.fm listeners"
+              trend={formatTrend(trends.music_listeners)}
               color="var(--accent)"
             />
             <KpiCard
               label="Scrobbles"
               value={stats.playcount?.toLocaleString() ?? "—"}
               caption="total plays tracked by Last.fm"
+              trend={formatTrend(trends.music_playcount)}
               color="var(--primary)"
             />
           </div>

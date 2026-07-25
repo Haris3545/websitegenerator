@@ -111,38 +111,55 @@ export async function refreshInsightsNow(artistId: string, artistName: string) {
     }
   }
 
-  const [{ data: recentArticles }, { data: musicRow }, { data: commentMap }, { data: nextEvents }, { data: audienceTop }] =
-    await Promise.all([
-      supabase
-        .from("media_articles")
-        .select("title, source")
-        .eq("artist_id", artistId)
-        .order("published_at", { ascending: false })
-        .limit(8),
-      supabase.from("music_stats").select("top_tracks, top_tags").eq("artist_id", artistId).maybeSingle(),
-      supabase.from("social_comment_map").select("categories").eq("artist_id", artistId).maybeSingle(),
-      supabase
-        .from("artist_events")
-        .select("event_date, venue, city, country")
-        .eq("artist_id", artistId)
-        .gte("event_date", new Date().toISOString())
-        .order("event_date", { ascending: true })
-        .limit(5),
-      supabase
-        .from("audience_statements")
-        .select("statement, segment, index_value")
-        .eq("artist_id", artistId)
-        .order("index_value", { ascending: false, nullsFirst: false })
-        .limit(6),
-    ]);
+  const [
+    { data: recentArticles },
+    { data: musicRow },
+    { data: commentMap },
+    { data: nextEvents },
+    { data: audienceTop },
+    { data: artistRow },
+  ] = await Promise.all([
+    supabase
+      .from("media_articles")
+      .select("title, source")
+      .eq("artist_id", artistId)
+      .order("published_at", { ascending: false })
+      .limit(8),
+    supabase.from("music_stats").select("top_tracks, top_tags, top_albums").eq("artist_id", artistId).maybeSingle(),
+    supabase.from("social_comment_map").select("categories").eq("artist_id", artistId).maybeSingle(),
+    supabase
+      .from("artist_events")
+      .select("event_date, venue, city, country")
+      .eq("artist_id", artistId)
+      .gte("event_date", new Date().toISOString())
+      .order("event_date", { ascending: true })
+      .limit(5),
+    supabase
+      .from("audience_statements")
+      .select("statement, segment, index_value")
+      .eq("artist_id", artistId)
+      .order("index_value", { ascending: false, nullsFirst: false })
+      .limit(6),
+    supabase.from("artists").select("sentiment_summary").eq("id", artistId).maybeSingle(),
+  ]);
 
   const topCommentThemes = (commentMap?.categories ?? [])
     .map((c) => ({
       theme: c.name,
       comment_count: c.subcategories.reduce((sum, s) => sum + s.comments.length, 0),
+      example_subcategories: c.subcategories.slice(0, 3).map((s) => s.name),
     }))
     .sort((a, b) => b.comment_count - a.comment_count)
     .slice(0, 6);
+
+  const { positive_pct, neutral_pct, negative_pct } = artistRow?.sentiment_summary ?? {};
+  const hasSentimentBreakdown =
+    typeof positive_pct === "number" && (positive_pct > 0 || neutral_pct! > 0 || negative_pct! > 0);
+
+  // Deezer albums are already sorted newest-first (see music.ts), so the
+  // first entry genuinely is the latest release — safe to hand Gemini as a
+  // real fact, not a guess.
+  const latestAlbum = musicRow?.top_albums?.[0]?.name ?? null;
 
   const facts = {
     artist_name: artistName,
@@ -151,6 +168,8 @@ export async function refreshInsightsNow(artistId: string, artistName: string) {
     days_since_last_check: previous
       ? Math.max(0, Math.round((Date.now() - new Date(previous.captured_at).getTime()) / 86_400_000))
       : null,
+    media_sentiment_breakdown: hasSentimentBreakdown ? { positive_pct, neutral_pct, negative_pct } : null,
+    latest_album: latestAlbum,
     recent_headlines: recentArticles ?? [],
     top_tracks: musicRow?.top_tracks?.slice(0, 5) ?? [],
     top_tags: musicRow?.top_tags ?? [],
@@ -165,7 +184,9 @@ export async function refreshInsightsNow(artistId: string, artistName: string) {
     facts.top_tracks.length > 0 ||
     facts.top_comment_themes.length > 0 ||
     facts.upcoming_shows.length > 0 ||
-    facts.top_audience_segments.length > 0;
+    facts.top_audience_segments.length > 0 ||
+    !!facts.media_sentiment_breakdown ||
+    !!facts.latest_album;
 
   if (!hasAnyData) {
     await supabase
@@ -178,13 +199,23 @@ export async function refreshInsightsNow(artistId: string, artistName: string) {
     model: "gemini-2.5-flash-lite",
     contents:
       `You're writing a short "what we've noticed" panel for a marketing dashboard about the ` +
-      `artist "${artistName}". You're given ONLY verified facts pulled from real data below — no ` +
-      "outside knowledge, no assumptions. Write 3-6 short insight cards, each a specific, " +
-      "evidence-based observation. Every card's \"basis\" field must name the exact number or fact " +
-      "from the data below it's drawn from. Do not invent numbers, trends, or facts not present " +
-      "below. If a category (e.g. changes_since_last_check) is null or empty, don't write a card " +
-      "about it — skip it entirely rather than speculating. Prefer specific, useful observations " +
-      "over vague ones — name the actual track, city, or topic rather than generalizing.\n\n" +
+      `artist "${artistName}", for a media team that already knows the basics — write like a sharp ` +
+      "analyst flagging what's actually interesting, not a report summarizing every field. You're " +
+      "given ONLY verified facts pulled from real data below — no outside knowledge, no assumptions " +
+      "beyond what's written. Write 3-6 short insight cards. Every card's \"basis\" field must name " +
+      "the exact number or fact from the data below it's drawn from. Do not invent numbers, trends, " +
+      "causal links, or facts not present below — e.g. media_sentiment_breakdown is sentiment across " +
+      "ALL recent coverage, not necessarily about latest_album specifically, unless recent_headlines " +
+      "or top_comment_themes actually reference that album by name. If a category is null or empty, " +
+      "skip it entirely rather than speculating or padding.\n\n" +
+      "Style rules: avoid dry, templated filler like \"most coverage is about X\" or \"sentiment is " +
+      "positive\" — instead lead with the real number: e.g. \"Coverage is running 68% positive, 9% " +
+      "negative\" beats \"sentiment is good\", and \"comments about touring jumped from 12 to 40\" " +
+      "beats \"there's more talk about touring\". When changes_since_last_check has a real delta, " +
+      "frame it as a rise or fall over days_since_last_check (e.g. \"+340 subscribers over the past " +
+      "3 days\") rather than restating the raw current_metrics number. Name the actual track, city, " +
+      "theme, or segment rather than generalizing. Prefer punchy, specific, quantified language over " +
+      "vague reassurance.\n\n" +
       `Data:\n${JSON.stringify(facts, null, 2)}`,
     config: { responseMimeType: "application/json", responseSchema: INSIGHTS_SCHEMA },
   });

@@ -47,6 +47,37 @@ export function AlbumCoverFlow({ albums }: { albums: MusicAlbum[] }) {
     let startX = 0;
     let moved = false;
     let clickedIndex: number | null = null;
+    let wheelAccum = 0;
+    let wheelSettleTimer: ReturnType<typeof setTimeout> | null = null;
+
+    // A trackpad two-finger swipe (unlike a mouse-button drag or a touch
+    // swipe) never fires pointerdown/move/up at all — it's a wheel event
+    // with a horizontal delta. Without this, that gesture did nothing, so
+    // the cover flow just resettled back on the album it started at,
+    // reading as "scrolling snaps back to the first album." Only the
+    // horizontal-dominant case is captured (and prevented from bubbling)
+    // so a normal vertical mouse-wheel scroll of the page still works when
+    // the cursor happens to be over the widget.
+    function onWheel(e: WheelEvent) {
+      if (albums.length <= 1) return;
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+      e.preventDefault();
+
+      wheelAccum += e.deltaX;
+      setIsDragging(true);
+      setDragOffset(wheelAccum);
+
+      if (wheelSettleTimer) clearTimeout(wheelSettleTimer);
+      wheelSettleTimer = setTimeout(() => {
+        const moveBy = Math.round(wheelAccum / COVER_GAP);
+        wheelAccum = 0;
+        setIsDragging(false);
+        setDragOffset(0);
+        if (moveBy !== 0) {
+          setIndex((i) => Math.max(0, Math.min(albums.length - 1, i + moveBy)));
+        }
+      }, 140);
+    }
 
     function onPointerDown(e: PointerEvent) {
       pointerId = e.pointerId;
@@ -83,11 +114,14 @@ export function AlbumCoverFlow({ albums }: { albums: MusicAlbum[] }) {
     el.addEventListener("pointermove", onPointerMove);
     el.addEventListener("pointerup", onPointerUp);
     el.addEventListener("pointercancel", onPointerUp);
+    el.addEventListener("wheel", onWheel, { passive: false });
     return () => {
       el.removeEventListener("pointerdown", onPointerDown);
       el.removeEventListener("pointermove", onPointerMove);
       el.removeEventListener("pointerup", onPointerUp);
       el.removeEventListener("pointercancel", onPointerUp);
+      el.removeEventListener("wheel", onWheel);
+      if (wheelSettleTimer) clearTimeout(wheelSettleTimer);
     };
   }, [albums.length]);
 
