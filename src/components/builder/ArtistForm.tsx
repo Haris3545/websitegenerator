@@ -54,6 +54,7 @@ export function ArtistForm({
     background_image_url: artist?.background_image_url ?? null,
     landing_video_url: artist?.landing_video_url ?? null,
     gate_background_url: artist?.gate_background_url ?? null,
+    youtube_channel_id: artist?.youtube_channel_id ?? null,
     aesthetic_prompt: artist?.aesthetic_prompt ?? "",
     tagline: artist?.tagline ?? "VCCP Cultural Intelligence",
     project_title: artist?.project_title ?? "The Recording Studio",
@@ -190,6 +191,21 @@ export function ArtistForm({
           onChange={(e) => update("tagline", e.target.value)}
           className="rounded border border-neutral-300 px-3 py-2"
         />
+      </label>
+
+      <label className="flex flex-col gap-1 text-sm">
+        YouTube channel ID
+        <input
+          value={form.youtube_channel_id ?? ""}
+          onChange={(e) => update("youtube_channel_id", e.target.value || null)}
+          placeholder="UCxxxxxxxxxxxxxxxxxxxxxx"
+          className="rounded border border-neutral-300 px-3 py-2 font-mono text-xs"
+        />
+        <span className="text-xs text-neutral-900">
+          Powers the YouTube tab. Find it on the channel&apos;s &quot;About&quot; page →
+          &quot;Share channel&quot; → &quot;Copy channel ID&quot;. Also needs the YouTube Data
+          API key below.
+        </span>
       </label>
 
       <div className="flex gap-6">

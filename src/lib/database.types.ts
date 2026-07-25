@@ -13,6 +13,8 @@ export type AestheticParams = {
 
 export type SentimentFilter = { label: string; keywords: string[] };
 
+export type YoutubeVideo = { id: string; title: string; publishedAt: string; thumbnail: string };
+
 export type SentimentSummary = {
   positive_pct?: number;
   negative_pct?: number;
@@ -66,6 +68,7 @@ export interface Database {
           published_site_url: string | null;
           published_at: string | null;
           gate_background_url: string | null;
+          youtube_channel_id: string | null;
           enabled_tabs: TabKey[];
           created_at: string;
           updated_at: string;
@@ -91,6 +94,7 @@ export interface Database {
           published_site_url?: string | null;
           published_at?: string | null;
           gate_background_url?: string | null;
+          youtube_channel_id?: string | null;
           enabled_tabs?: TabKey[];
           created_at?: string;
           updated_at?: string;
@@ -237,6 +241,28 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["artist_events"]["Insert"]>;
         Relationships: [];
       };
+      youtube_stats: {
+        Row: {
+          artist_id: string;
+          channel_title: string | null;
+          subscriber_count: number | null;
+          view_count: number | null;
+          video_count: number | null;
+          recent_videos: YoutubeVideo[];
+          fetched_at: string;
+        };
+        Insert: {
+          artist_id: string;
+          channel_title?: string | null;
+          subscriber_count?: number | null;
+          view_count?: number | null;
+          video_count?: number | null;
+          recent_videos?: YoutubeVideo[];
+          fetched_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["youtube_stats"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -249,3 +275,4 @@ export type Artist = Database["public"]["Tables"]["artists"]["Row"];
 export type MediaArticle = Database["public"]["Tables"]["media_articles"]["Row"];
 export type BoardItem = Database["public"]["Tables"]["board_items"]["Row"];
 export type ArtistEvent = Database["public"]["Tables"]["artist_events"]["Row"];
+export type YoutubeStats = Database["public"]["Tables"]["youtube_stats"]["Row"];

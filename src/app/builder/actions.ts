@@ -28,6 +28,7 @@ export type ArtistFormInput = {
   background_image_url: string | null;
   landing_video_url: string | null;
   gate_background_url: string | null;
+  youtube_channel_id: string | null;
   aesthetic_prompt: string;
   tagline: string;
   project_title: string;
@@ -51,6 +52,7 @@ export async function upsertArtist(input: ArtistFormInput) {
     background_image_url: input.background_image_url,
     landing_video_url: input.landing_video_url,
     gate_background_url: input.gate_background_url,
+    youtube_channel_id: input.youtube_channel_id,
     aesthetic_prompt: input.aesthetic_prompt,
     aesthetic_params,
     tagline: input.tagline,

@@ -29,4 +29,5 @@ export const LIVE_TABS: TabKey[] = [
   "audience",
   "locations",
   "calendar",
+  "youtube",
 ];
