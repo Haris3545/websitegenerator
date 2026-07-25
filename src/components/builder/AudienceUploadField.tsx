@@ -44,7 +44,7 @@ export function AudienceUploadField({
 
   return (
     <div className="flex flex-col gap-2 text-sm">
-      <span className="text-xs font-medium uppercase tracking-wide text-white/50">
+      <span className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-white/50">
         Audience research (CSV or XLSX)
       </span>
       <input
@@ -62,22 +62,22 @@ export function AudienceUploadField({
         type="button"
         disabled={uploading}
         onClick={() => inputRef.current?.click()}
-        className="self-start rounded-lg border border-white/15 px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/5 disabled:opacity-50"
+        className="self-start rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
       >
         {uploading ? "Uploading..." : queuedName ? "Replace file" : "Upload spreadsheet"}
       </button>
       {queuedName && (
-        <p className="text-xs text-white/50">
+        <p className="text-xs text-neutral-500 dark:text-white/50">
           Queued: {queuedName} — imported once you create this artist below.
         </p>
       )}
-      {message && <p className="text-xs text-emerald-400">{message}</p>}
+      {message && <p className="text-xs text-emerald-600 dark:text-emerald-400">{message}</p>}
       {error && (
-        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+        <p className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
           {error}
         </p>
       )}
-      <p className="text-xs text-white/40">
+      <p className="text-xs text-neutral-400 dark:text-white/40">
         Needs a header row with columns recognizable as &quot;statement&quot; and
         &quot;segment&quot; (or &quot;audience&quot;) — other GWI-style columns like
         universe/responses/column %/row %/index are picked up automatically if present. Each

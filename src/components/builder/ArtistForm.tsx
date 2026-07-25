@@ -28,9 +28,10 @@ function slugify(name: string) {
 }
 
 const inputClass =
-  "rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-white placeholder-white/30 focus:border-violet-400 focus:outline-none";
-const labelClass = "text-xs font-medium uppercase tracking-wide text-white/50";
-const sectionClass = "flex flex-col gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-5";
+  "rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder-neutral-400 focus:border-violet-400 focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-white dark:placeholder-white/30";
+const labelClass = "text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-white/50";
+const sectionClass =
+  "flex flex-col gap-4 rounded-xl border border-neutral-200 bg-neutral-50 p-5 dark:border-white/10 dark:bg-white/[0.03]";
 
 function Section({
   title,
@@ -44,8 +45,10 @@ function Section({
   return (
     <div className={sectionClass}>
       <div>
-        <h2 className="text-sm font-semibold text-white">{title}</h2>
-        {description && <p className="mt-0.5 text-xs text-white/40">{description}</p>}
+        <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">{title}</h2>
+        {description && (
+          <p className="mt-0.5 text-xs text-neutral-500 dark:text-white/40">{description}</p>
+        )}
       </div>
       {children}
     </div>
@@ -263,22 +266,22 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
     error: "Couldn't save",
   };
   const saveStatusColor: Record<typeof saveStatus, string> = {
-    idle: "text-white/40",
-    dirty: "text-amber-400",
-    saving: "text-white/50",
-    saved: "text-emerald-400",
-    error: "text-red-400",
+    idle: "text-neutral-400 dark:text-white/40",
+    dirty: "text-amber-600 dark:text-amber-400",
+    saving: "text-neutral-500 dark:text-white/50",
+    saved: "text-emerald-600 dark:text-emerald-400",
+    error: "text-red-600 dark:text-red-400",
   };
 
   return (
     <form onSubmit={handleSubmit} className="flex max-w-2xl flex-col gap-6">
-      <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 dark:border-white/10 dark:bg-white/[0.03]">
         <p className={`text-xs font-medium ${saveStatusColor[saveStatus]}`}>{saveStatusText[saveStatus]}</p>
         <button
           type="button"
           onClick={() => void saveProgress()}
           disabled={saveStatus === "saving" || !form.name.trim() || !form.slug.trim()}
-          className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-white/80 hover:bg-white/5 disabled:opacity-40"
+          className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-40 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
         >
           Save progress
         </button>
@@ -315,7 +318,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
             onChange={(e) => update("project_title", e.target.value)}
             className={inputClass}
           />
-          <span className="text-xs text-white/40">
+          <span className="text-xs text-neutral-500 dark:text-white/40">
             The big title shown top-left on the site (e.g. &quot;The Recording Studio&quot;). The
             artist&apos;s name is shown separately, top-right.
           </span>
@@ -356,21 +359,23 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
                 }
               })
             }
-            className="rounded-lg border border-white/15 px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/5 disabled:opacity-40"
+            className="rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-40 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
           >
             {isLookingUpYoutube ? "Looking up..." : "Find channel"}
           </button>
         </div>
         {youtubeLookup?.status === "success" && (
-          <p className="text-xs text-emerald-400">
+          <p className="text-xs text-emerald-600 dark:text-emerald-400">
             ✓ Found: {youtubeLookup.channelTitle || form.youtube_channel_id}
           </p>
         )}
         {youtubeLookup?.status === "error" && (
-          <p className="text-xs text-red-400">{youtubeLookup.error}</p>
+          <p className="text-xs text-red-600 dark:text-red-400">{youtubeLookup.error}</p>
         )}
         {!youtubeLookup && form.youtube_channel_id && (
-          <p className="text-xs text-white/40">Currently linked: {form.youtube_channel_id}</p>
+          <p className="text-xs text-neutral-500 dark:text-white/40">
+            Currently linked: {form.youtube_channel_id}
+          </p>
         )}
       </Section>
 
@@ -397,7 +402,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
               value={form.background_image_url}
               onChange={(v) => update("background_image_url", v)}
             />
-            <p className="-mt-2 text-xs text-white/40">
+            <p className="-mt-2 text-xs text-neutral-500 dark:text-white/40">
               Shown behind every page of the dashboard (not the password page — that&apos;s set
               separately below). An image or a looping muted video, either works.
             </p>
@@ -410,7 +415,9 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
             />
           </>
         ) : (
-          <p className="text-sm text-white/40">Enter a name/slug to enable media uploads.</p>
+          <p className="text-sm text-neutral-500 dark:text-white/40">
+            Enter a name/slug to enable media uploads.
+          </p>
         )}
       </Section>
 
@@ -450,7 +457,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
       </Section>
 
       {formError && (
-        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-400">
+        <p className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
           {formError}
         </p>
       )}
@@ -470,21 +477,31 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
         >
           {published ? (
             <div className="flex flex-col gap-1 text-sm">
-              <p className="text-emerald-400">Published.</p>
-              <a href={published.repoUrl} target="_blank" rel="noreferrer" className="text-violet-400 underline">
+              <p className="text-emerald-600 dark:text-emerald-400">Published.</p>
+              <a
+                href={published.repoUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-violet-600 underline dark:text-violet-400"
+              >
                 {published.repoUrl}
               </a>
-              <a href={published.siteUrl} target="_blank" rel="noreferrer" className="text-violet-400 underline">
+              <a
+                href={published.siteUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-violet-600 underline dark:text-violet-400"
+              >
                 {published.siteUrl}
               </a>
-              <p className="mt-1 text-xs text-white/40">
+              <p className="mt-1 text-xs text-neutral-500 dark:text-white/40">
                 The Vercel deployment can take a minute or two to finish building the first time.
               </p>
               <button
                 type="button"
                 disabled={isUnpublishing}
                 onClick={handleUnpublish}
-                className="mt-2 self-start rounded-lg border border-red-500/30 px-3 py-2 text-sm font-medium text-red-400 hover:bg-red-500/10 disabled:opacity-50"
+                className="mt-2 self-start rounded-lg border border-red-300 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-500/30 dark:text-red-400 dark:hover:bg-red-500/10"
               >
                 {isUnpublishing ? "Deleting..." : "Delete standalone site"}
               </button>
@@ -494,14 +511,14 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
               type="button"
               disabled={isPublishing}
               onClick={handlePublish}
-              className="self-start rounded-lg border border-white/15 px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/5 disabled:opacity-50"
+              className="self-start rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
             >
               {isPublishing ? "Publishing..." : "Publish to GitHub + Vercel"}
             </button>
           )}
 
           {publishError && (
-            <p className="mt-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+            <p className="mt-2 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
               {publishError}
             </p>
           )}

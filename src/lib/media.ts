@@ -1,7 +1,37 @@
 import { XMLParser } from "fast-xml-parser";
+import { unstable_cache } from "next/cache";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { artistCacheTag } from "@/lib/getSiteArtist";
+import type { MediaArticle } from "@/lib/database.types";
 
 const STALE_AFTER_MS = 30 * 60 * 1000; // 30 minutes
+const TICKER_CACHE_SECONDS = 20;
+
+/** The news ticker (shown in the shared layout, so this runs on every
+ * single /s/[slug]/* navigation) used to run this as a live, uncached
+ * Supabase query on every tab switch — one of the 2-3 sequential round
+ * trips per navigation that made switching tabs feel sluggish. Cached the
+ * same way as getSiteArtist: a short revalidate window, tagged so the
+ * existing updateTag(artistCacheTag(slug)) call sites (Refresh Everything,
+ * publish, inline edits) still bust it immediately rather than waiting out
+ * the window. */
+export async function getTickerArticles(artistId: string, slug: string): Promise<MediaArticle[]> {
+  const data = await unstable_cache(
+    async () => {
+      const supabase = createServiceRoleClient();
+      const { data } = await supabase
+        .from("media_articles")
+        .select("*")
+        .eq("artist_id", artistId)
+        .order("published_at", { ascending: false })
+        .limit(6);
+      return data ?? [];
+    },
+    [`ticker-articles-${slug}`],
+    { revalidate: TICKER_CACHE_SECONDS, tags: [artistCacheTag(slug)] }
+  )();
+  return data;
+}
 
 type RssItem = {
   title: string;

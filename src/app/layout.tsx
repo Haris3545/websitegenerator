@@ -27,7 +27,20 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {/* Runs synchronously before paint so a returning builder-admin user
+            who chose dark mode doesn't see a flash of the light default —
+            inert everywhere else, since only the builder's Tailwind classes
+            react to a `dark` class on <html>; the generated artist sites use
+            their own per-artist inline theme instead. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{if(localStorage.getItem('builder-theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}",
+          }}
+        />
+        {children}
+      </body>
     </html>
   );
 }

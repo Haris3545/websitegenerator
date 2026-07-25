@@ -28,11 +28,13 @@ export function DeleteArtistButton({ artistId, artistName }: { artistId: string;
         type="button"
         disabled={isPending}
         onClick={handleDelete}
-        className="text-xs font-medium text-red-400 hover:underline disabled:opacity-50"
+        className="text-xs font-medium text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
       >
         {isPending ? "Deleting..." : "Delete"}
       </button>
-      {error && <p className="max-w-xs text-right text-xs text-red-400">{error}</p>}
+      {error && (
+        <p className="max-w-xs text-right text-xs text-red-600 dark:text-red-400">{error}</p>
+      )}
     </div>
   );
 }

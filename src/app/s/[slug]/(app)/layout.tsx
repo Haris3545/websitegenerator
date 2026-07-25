@@ -1,7 +1,7 @@
 import { after } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getSiteArtist } from "@/lib/getSiteArtist";
-import { refreshMediaForArtist, refreshMediaIfStale } from "@/lib/media";
+import { refreshMediaForArtist, refreshMediaIfStale, getTickerArticles } from "@/lib/media";
 import { resolveContent } from "@/lib/contentOverrides";
 import { googleFontsCssUrl } from "@/lib/fonts";
 import { withThemeDefaults, themeToCssVars } from "@/lib/theme";
@@ -27,25 +27,24 @@ export default async function ArtistSiteLayout({
   // the same fetch instead of querying the artist row a second time.
   const artist = await getSiteArtist(slug);
 
-  let { data: tickerArticles } = await supabase
-    .from("media_articles")
-    .select("*")
-    .eq("artist_id", artist.id)
-    .order("published_at", { ascending: false })
-    .limit(6);
+  let tickerArticles = await getTickerArticles(artist.id, slug);
 
-  if (!tickerArticles?.length) {
+  if (!tickerArticles.length) {
     // Nothing cached at all yet (a brand-new artist) — worth the wait so
     // the very first visit isn't just empty. Once anything's cached, stay
-    // fast: refresh staleness in the background instead (see below).
+    // fast: refresh staleness in the background instead (see below). This
+    // one-time re-query goes straight to Supabase rather than through the
+    // (still briefly stale) cache, since it just wrote the very rows it
+    // needs to see immediately.
     try {
       await refreshMediaForArtist(artist.id, artist.name);
-      ({ data: tickerArticles } = await supabase
+      const { data } = await supabase
         .from("media_articles")
         .select("*")
         .eq("artist_id", artist.id)
         .order("published_at", { ascending: false })
-        .limit(6));
+        .limit(6);
+      tickerArticles = data ?? [];
     } catch (err) {
       console.error(`Initial media fetch failed for ${slug}:`, err);
     }

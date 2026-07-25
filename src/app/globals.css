@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+/* Class-based dark mode (toggled explicitly, e.g. by the builder's
+   light/dark switch) instead of Tailwind's default OS-preference-based
+   `dark:` variant — this app only ever wants dark mode when the user
+   picked it, never inferred from prefers-color-scheme. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

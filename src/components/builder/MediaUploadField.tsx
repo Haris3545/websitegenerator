@@ -77,19 +77,25 @@ export function MediaUploadField({
 
   return (
     <div className="flex flex-col gap-2 text-sm">
-      <span className="text-xs font-medium uppercase tracking-wide text-white/50">{label}</span>
+      <span className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-white/50">
+        {label}
+      </span>
       {value &&
         (isVideoUrl ? (
           <video
             src={value}
-            className="h-32 w-full rounded-lg border border-white/10 object-cover"
+            className="h-32 w-full rounded-lg border border-neutral-200 object-cover dark:border-white/10"
             muted
             loop
             autoPlay
           />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={value} alt="" className="h-32 w-full rounded-lg border border-white/10 object-cover" />
+          <img
+            src={value}
+            alt=""
+            className="h-32 w-full rounded-lg border border-neutral-200 object-cover dark:border-white/10"
+          />
         ))}
       <input
         ref={inputRef}
@@ -107,12 +113,12 @@ export function MediaUploadField({
         type="button"
         disabled={uploading}
         onClick={() => inputRef.current?.click()}
-        className="self-start rounded-lg border border-white/15 px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/5 disabled:opacity-50"
+        className="self-start rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
       >
         {uploading ? "Uploading..." : value ? "Replace file" : "Choose file"}
       </button>
-      {error && <p className="text-red-400">{error}</p>}
-      <p className="text-xs text-white/40">
+      {error && <p className="text-red-600 dark:text-red-400">{error}</p>}
+      <p className="text-xs text-neutral-400 dark:text-white/40">
         Accepts an image or a video. Images are auto-compressed to fit {IMAGE_MAX_DIMENSION}px /
         ~2MB. Videos are capped at {VIDEO_MAX_MB}MB (compress heavy files before uploading —
         client-side transcoding isn&apos;t wired up).

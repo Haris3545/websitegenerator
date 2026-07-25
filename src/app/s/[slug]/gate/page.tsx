@@ -6,7 +6,7 @@ export default async function GatePage({ params }: { params: Promise<{ slug: str
   const supabase = createServiceRoleClient();
   const { data: artist } = await supabase
     .from("artists")
-    .select("secondary_color, gate_background_url")
+    .select("secondary_color, accent_color, gate_background_url, project_title, tagline, font_family")
     .eq("slug", slug)
     .maybeSingle();
 
@@ -15,6 +15,10 @@ export default async function GatePage({ params }: { params: Promise<{ slug: str
       slug={slug}
       backgroundUrl={artist?.gate_background_url ?? null}
       backgroundColor={artist?.secondary_color ?? "#0a0a0a"}
+      accentColor={artist?.accent_color ?? "#eab308"}
+      projectTitle={artist?.project_title ?? "The Recording Studio"}
+      tagline={artist?.tagline ?? "VCCP Cultural Intelligence"}
+      fontFamily={artist?.font_family ?? "Inter"}
     />
   );
 }

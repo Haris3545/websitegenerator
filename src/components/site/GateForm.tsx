@@ -2,15 +2,24 @@
 
 import { useState, useTransition } from "react";
 import { verifyArtistAccess } from "@/app/s/[slug]/actions";
+import { googleFontsCssUrl } from "@/lib/fonts";
 
 export function GateForm({
   slug,
   backgroundUrl,
   backgroundColor,
+  accentColor,
+  projectTitle,
+  tagline,
+  fontFamily,
 }: {
   slug: string;
   backgroundUrl: string | null;
   backgroundColor: string;
+  accentColor: string;
+  projectTitle: string;
+  tagline: string;
+  fontFamily: string;
 }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -34,9 +43,11 @@ export function GateForm({
 
   return (
     <div
-      className="relative flex min-h-screen items-center justify-center px-4 text-white"
-      style={{ backgroundColor }}
+      className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 text-white"
+      style={{ backgroundColor, fontFamily: `"${fontFamily}", sans-serif` }}
     >
+      <link rel="stylesheet" href={googleFontsCssUrl(fontFamily)} />
+
       {backgroundUrl &&
         (isVideo ? (
           <video
@@ -55,34 +66,36 @@ export function GateForm({
             className="absolute inset-0 h-full w-full object-cover"
           />
         ))}
-      {backgroundUrl && <div className="absolute inset-0 bg-black/60" />}
+      {backgroundUrl && <div className="absolute inset-0 bg-black/55" />}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/70" />
 
-      <form
-        onSubmit={handleSubmit}
-        className="relative w-full max-w-sm rounded-xl border border-white/15 bg-black/40 p-8 shadow-lg backdrop-blur-md"
-      >
-        <h1 className="mb-1 text-xl font-semibold">Enter password</h1>
-        <p className="mb-6 text-sm text-white/50">
-          Ask whoever shared this dashboard link with you for the password.
-        </p>
-        <input
-          type="password"
-          required
-          autoFocus
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded border border-white/20 bg-black/30 px-3 py-2 text-sm"
-          placeholder="Password"
-        />
-        {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
-        <button
-          type="submit"
-          disabled={isPending}
-          className="mt-4 w-full rounded bg-white px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
-        >
-          {isPending ? "Checking..." : "View dashboard"}
-        </button>
-      </form>
+      <div className="relative z-10 flex w-full max-w-4xl flex-col items-center px-4 text-center">
+        <p className="text-xs font-semibold uppercase tracking-[0.35em] text-white/70">{tagline}</p>
+        <h1 className="mt-3 text-4xl font-bold uppercase leading-none tracking-tight sm:text-6xl lg:text-7xl">
+          {projectTitle}
+        </h1>
+        <div className="mt-6 h-px w-24" style={{ backgroundColor: accentColor }} />
+
+        <form onSubmit={handleSubmit} className="mt-10 flex w-full max-w-sm flex-col gap-4">
+          <input
+            type="password"
+            required
+            autoFocus
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            className="w-full rounded-full border border-white/30 bg-black/30 px-6 py-3 text-center text-sm tracking-wide text-white placeholder-white/40 backdrop-blur-sm focus:border-white/60 focus:outline-none"
+          />
+          {error && <p className="text-sm text-red-400">{error}</p>}
+          <button
+            type="submit"
+            disabled={isPending}
+            className="w-full rounded-full border border-white/40 py-3 text-xs font-semibold uppercase tracking-[0.25em] text-white transition-colors hover:bg-white hover:text-black disabled:opacity-50"
+          >
+            {isPending ? "Checking..." : "Enter"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

@@ -96,7 +96,7 @@ export function ThemeEditor({
     <div className="flex flex-col gap-4 text-sm" style={{ "--accent-ring": accentColor } as CSSProperties}>
       <div>
         <p className="font-medium">Fine-tune the look, by hand</p>
-        <p className="text-xs text-white/40">
+        <p className="text-xs text-neutral-500 dark:text-white/40">
           Click a part of the preview below to select it, then adjust it with the controls that
           appear underneath.
         </p>
@@ -176,15 +176,17 @@ export function ThemeEditor({
         </div>
       </div>
 
-      <div className="rounded-lg border border-white/15 bg-white/5 p-4">
+      <div className="rounded-lg border border-neutral-300 bg-neutral-50 p-4 dark:border-white/15 dark:bg-white/5">
         {selected === null && (
-          <p className="text-white/50">Click the background, the title, or a card above.</p>
+          <p className="text-neutral-500 dark:text-white/50">
+            Click the background, the title, or a card above.
+          </p>
         )}
 
         {selected === "background" && (
           <div className="flex flex-col gap-3">
             <p className="font-medium">Background photo/video</p>
-            <p className="text-xs text-white/40">
+            <p className="text-xs text-neutral-500 dark:text-white/40">
               Drag directly on the preview to reposition it. The zoom slider below resizes it.
             </p>
             <Slider
@@ -308,7 +310,7 @@ function Slider({
     <label className="flex flex-col gap-1">
       <span className="flex justify-between">
         <span>{label}</span>
-        <span className="font-mono text-xs text-white/40">
+        <span className="font-mono text-xs text-neutral-500 dark:text-white/40">
           {value}
           {displayUnit}
         </span>

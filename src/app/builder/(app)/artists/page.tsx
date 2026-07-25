@@ -7,7 +7,7 @@ export default async function ArtistsPage() {
   const [{ data: artists }, { data: folders }] = await Promise.all([
     supabase
       .from("artists")
-      .select("id, name, slug, updated_at, folder_id, sort_order")
+      .select("id, name, slug, updated_at, folder_id, sort_order, primary_color")
       .order("sort_order", { ascending: true }),
     supabase.from("artist_folders").select("id, name, position").order("position", { ascending: true }),
   ]);
@@ -17,7 +17,9 @@ export default async function ArtistsPage() {
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Artists</h1>
-          <p className="text-sm text-white/40">Drag cards between folders to organize.</p>
+          <p className="text-sm text-neutral-500 dark:text-white/40">
+            Click a folder to open it, or a site for options. Drag icons to organize.
+          </p>
         </div>
         <Link
           href="/builder/artists/new"
@@ -28,7 +30,7 @@ export default async function ArtistsPage() {
       </div>
 
       {!artists?.length ? (
-        <p className="rounded-xl border border-dashed border-white/10 p-8 text-center text-sm text-white/40">
+        <p className="rounded-xl border border-dashed border-neutral-300 p-8 text-center text-sm text-neutral-500 dark:border-white/10 dark:text-white/40">
           No artist dashboards yet. Create the first one to get started.
         </p>
       ) : (

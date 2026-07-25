@@ -17,10 +17,12 @@ export function TabsChecklist({
 
   return (
     <div className="flex flex-col gap-1.5 text-sm">
-      <span className="text-xs font-medium uppercase tracking-wide text-white/50">Tabs</span>
-      <div className="grid grid-cols-2 gap-2 rounded-lg border border-white/15 bg-white/5 p-3 sm:grid-cols-3">
+      <span className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-white/50">
+        Tabs
+      </span>
+      <div className="grid grid-cols-2 gap-2 rounded-lg border border-neutral-300 bg-white p-3 dark:border-white/15 dark:bg-white/5 sm:grid-cols-3">
         {TABS.map((tab) => (
-          <label key={tab.key} className="flex items-center gap-2 text-white/80">
+          <label key={tab.key} className="flex items-center gap-2 text-neutral-700 dark:text-white/80">
             <input
               type="checkbox"
               checked={tab.key === "dashboard" || value.includes(tab.key)}
