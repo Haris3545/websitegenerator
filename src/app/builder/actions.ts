@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { parseAestheticPrompt } from "@/lib/aesthetic";
 import { publishArtistSite, unpublishArtistSite, type PublishResult, type UnpublishResult } from "@/lib/publish";
 import { parseAudienceFile, storeAudienceUpload } from "@/lib/audience";
+import { resolveYoutubeChannel, type YoutubeChannelLookup } from "@/lib/youtube";
 import { ALL_TAB_KEYS } from "@/lib/tabs";
 import { artistCacheTag } from "@/lib/getSiteArtist";
 import type { TabKey } from "@/lib/database.types";
@@ -15,6 +16,13 @@ export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();
   redirect("/builder/login");
+}
+
+/** Resolves whatever's pasted into the builder's YouTube field (a channel
+ * URL, a video URL, a bare @handle) into the actual channel ID, so nobody
+ * has to go find and copy that string by hand. */
+export async function lookupYoutubeChannel(input: string): Promise<YoutubeChannelLookup> {
+  return resolveYoutubeChannel(input);
 }
 
 export type ArtistFormInput = {

@@ -11,6 +11,7 @@ import { ThemeEditor } from "@/components/builder/ThemeEditor";
 import {
   upsertArtist,
   uploadAudienceResearch,
+  lookupYoutubeChannel,
   publishArtist,
   unpublishArtist,
   type ArtistFormInput,
@@ -61,6 +62,11 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
   });
   const [slugTouched, setSlugTouched] = useState(!!artist);
   const [audienceFile, setAudienceFile] = useState<File | null>(null);
+  const [youtubeUrlInput, setYoutubeUrlInput] = useState("");
+  const [isLookingUpYoutube, startYoutubeLookup] = useTransition();
+  const [youtubeLookup, setYoutubeLookup] = useState<
+    { status: "success"; channelTitle: string } | { status: "error"; error: string } | null
+  >(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
@@ -192,20 +198,53 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
         />
       </label>
 
-      <label className="flex flex-col gap-1 text-sm">
-        YouTube channel ID
-        <input
-          value={form.youtube_channel_id ?? ""}
-          onChange={(e) => update("youtube_channel_id", e.target.value || null)}
-          placeholder="UCxxxxxxxxxxxxxxxxxxxxxx"
-          className="rounded border border-neutral-300 px-3 py-2 font-mono text-xs"
-        />
+      <div className="flex flex-col gap-1 text-sm">
+        <span>YouTube channel</span>
+        <div className="flex gap-2">
+          <input
+            value={youtubeUrlInput}
+            onChange={(e) => {
+              setYoutubeUrlInput(e.target.value);
+              setYoutubeLookup(null);
+            }}
+            placeholder="Paste the channel's URL, or a link to one of their videos"
+            className="flex-1 rounded border border-neutral-300 px-3 py-2 text-sm"
+          />
+          <button
+            type="button"
+            disabled={isLookingUpYoutube || !youtubeUrlInput.trim()}
+            onClick={() =>
+              startYoutubeLookup(async () => {
+                const result = await lookupYoutubeChannel(youtubeUrlInput);
+                if (result.ok) {
+                  update("youtube_channel_id", result.channelId);
+                  setYoutubeLookup({ status: "success", channelTitle: result.channelTitle });
+                } else {
+                  setYoutubeLookup({ status: "error", error: result.error });
+                }
+              })
+            }
+            className="rounded border border-neutral-300 px-3 py-2 text-sm font-medium disabled:opacity-50"
+          >
+            {isLookingUpYoutube ? "Looking up..." : "Find channel"}
+          </button>
+        </div>
+        {youtubeLookup?.status === "success" && (
+          <p className="text-xs text-green-700">
+            ✓ Found: {youtubeLookup.channelTitle || form.youtube_channel_id}
+          </p>
+        )}
+        {youtubeLookup?.status === "error" && (
+          <p className="text-xs text-red-600">{youtubeLookup.error}</p>
+        )}
+        {!youtubeLookup && form.youtube_channel_id && (
+          <p className="text-xs text-neutral-900">Currently linked: {form.youtube_channel_id}</p>
+        )}
         <span className="text-xs text-neutral-900">
-          Powers the YouTube tab. Find it on the channel&apos;s &quot;About&quot; page →
-          &quot;Share channel&quot; → &quot;Copy channel ID&quot;. Also needs the YouTube Data
-          API key below.
+          Powers the YouTube tab — no need to hunt for a channel ID, just paste any link from the
+          channel.
         </span>
-      </label>
+      </div>
 
       <div className="flex gap-6">
         <ColorField
