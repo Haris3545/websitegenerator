@@ -52,6 +52,13 @@ export type SocialComment = {
 export type SocialCommentSubcategory = { name: string; comments: SocialComment[] };
 export type SocialCommentCategory = { name: string; subcategories: SocialCommentSubcategory[] };
 
+export type WikipediaArticleTrend = {
+  title: string;
+  last7DayViews: number;
+  changePct: number | null;
+  dailyViews: number[];
+};
+
 export type TabKey =
   | "dashboard"
   | "media"
@@ -315,15 +322,33 @@ export interface Database {
           artist_id: string;
           categories: SocialCommentCategory[];
           comment_count: number;
+          last_error: string | null;
           computed_at: string;
         };
         Insert: {
           artist_id: string;
           categories?: SocialCommentCategory[];
           comment_count?: number;
+          last_error?: string | null;
           computed_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["social_comment_map"]["Insert"]>;
+        Relationships: [];
+      };
+      wikipedia_trends: {
+        Row: {
+          artist_id: string;
+          articles: WikipediaArticleTrend[];
+          top_mover: WikipediaArticleTrend | null;
+          computed_at: string;
+        };
+        Insert: {
+          artist_id: string;
+          articles?: WikipediaArticleTrend[];
+          top_mover?: WikipediaArticleTrend | null;
+          computed_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["wikipedia_trends"]["Insert"]>;
         Relationships: [];
       };
       youtube_stats: {

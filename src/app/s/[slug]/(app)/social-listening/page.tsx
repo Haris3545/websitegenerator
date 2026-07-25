@@ -16,7 +16,7 @@ export default async function SocialListeningPage({
   const supabase = createServiceRoleClient();
   let { data: map } = await supabase
     .from("social_comment_map")
-    .select("categories, comment_count, computed_at")
+    .select("categories, comment_count, last_error, computed_at")
     .eq("artist_id", artist.id)
     .maybeSingle();
 
@@ -25,7 +25,7 @@ export default async function SocialListeningPage({
       await refreshSocialListeningForArtist(artist.id, artist.name);
       ({ data: map } = await supabase
         .from("social_comment_map")
-        .select("categories, comment_count, computed_at")
+        .select("categories, comment_count, last_error, computed_at")
         .eq("artist_id", artist.id)
         .maybeSingle());
     } catch (err) {
@@ -62,10 +62,17 @@ export default async function SocialListeningPage({
       </div>
 
       {!categories.length ? (
-        <p className="mt-4 rounded-lg border border-dashed border-white/20 p-8 text-center text-white/50">
-          No comments found yet — hit &quot;Refresh Everything&quot; below. YouTube comments need
-          YOUTUBE_API_KEY set; Reddit needs no setup at all.
-        </p>
+        <div className="mt-4 rounded-lg border border-dashed border-white/20 p-8 text-center text-white/50">
+          <p>
+            No comments found yet — hit &quot;Refresh Everything&quot; below. YouTube comments need
+            YOUTUBE_API_KEY set; Reddit needs no setup at all.
+          </p>
+          {map?.last_error && (
+            <p className="mt-3 text-xs text-white/40">
+              Last attempt: <span className="text-white/60">{map.last_error}</span>
+            </p>
+          )}
+        </div>
       ) : (
         <div className="mt-4">
           <CommentMap categories={categories} />

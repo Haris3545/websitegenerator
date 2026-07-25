@@ -11,6 +11,13 @@ import { NavPills } from "@/components/site/NavPills";
 import { PageTransition } from "@/components/site/PageTransition";
 import { EditModeProvider } from "@/components/site/EditModeContext";
 
+// "Refresh Everything" (a Server Action invoked from a page under this
+// layout) fans out to several external APIs plus multiple Gemini calls —
+// even parallelized, that can run well past Vercel's default serverless
+// timeout. Raised here since a layout's maxDuration governs every action
+// invoked from any page nested under it.
+export const maxDuration = 300;
+
 export default async function ArtistSiteLayout({
   children,
   params,
@@ -58,7 +65,7 @@ export default async function ArtistSiteLayout({
   const isBackgroundVideo = /\.(mp4|webm|mov|m4v)(\?|$)/i.test(artist.background_image_url ?? "");
 
   return (
-    <EditModeProvider>
+    <EditModeProvider editingAllowed={!process.env.PINNED_ARTIST_SLUG}>
     <div
       className="relative min-h-screen text-white"
       style={
@@ -143,7 +150,18 @@ export default async function ArtistSiteLayout({
           "No coverage cached yet — this fills in automatically once articles are found."
         )}
       />
-      <NavPills slug={slug} enabledTabs={artist.enabled_tabs} />
+      {/* Keying on the tab list itself forces a full remount (resetting
+          NavPills' local drag-order state to match) whenever enabled_tabs
+          changes from anywhere — including the Dashboard's KPI grid, a
+          sibling component under this same layout with its own local copy
+          of the same underlying order — rather than needing an effect to
+          sync props into state. */}
+      <NavPills
+        key={artist.enabled_tabs.join(",")}
+        slug={slug}
+        artistId={artist.id}
+        enabledTabs={artist.enabled_tabs}
+      />
 
       <main className="px-6 pb-16 sm:px-10">
         <PageTransition>{children}</PageTransition>

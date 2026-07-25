@@ -1,14 +1,9 @@
-import { unstable_cache } from "next/cache";
+import { createServiceRoleClient } from "@/lib/supabase/server";
+import type { WikipediaArticleTrend } from "@/lib/database.types";
 
 const DAYS = 60;
 const MAX_CANDIDATES = 9; // artist name + up to 8 albums
-
-export type WikipediaArticleTrend = {
-  title: string;
-  last7DayViews: number;
-  changePct: number | null;
-  dailyViews: number[];
-};
+const STALE_AFTER_MS = 24 * 60 * 60 * 1000; // 24 hours, matching the pageviews API's own ~1 day lag
 
 export type WikipediaTrends = {
   articles: WikipediaArticleTrend[];
@@ -102,13 +97,48 @@ async function computeWikipediaTrends(artistName: string, albumNames: string[]):
   return { articles, topMover };
 }
 
-/** Cached for a day (matching the "Data lags ~1 day" reality of the
- * pageviews API itself) and keyed per artist, so this never re-runs the
- * ~9-candidate x 2-request fetch fan-out on every Dashboard visit. */
-export async function getWikipediaTrends(artistId: string, artistName: string, albumNames: string[]): Promise<WikipediaTrends> {
-  return unstable_cache(
-    () => computeWikipediaTrends(artistName, albumNames),
-    [`wikipedia-trends-${artistId}`],
-    { revalidate: 24 * 60 * 60 }
-  )();
+/** Computes fresh trends and persists them — same "compute now, store,
+ * read back later" shape as every other refresh in this app (media,
+ * sentiment, insights, etc.), rather than the previous unstable_cache
+ * approach, which fully blocked the Dashboard's render on every cache miss
+ * (including every deploy). Storing in a real table lets the page follow
+ * the same block-only-if-never-computed / else-serve-cached-plus-
+ * background-refresh pattern as everything else. */
+export async function refreshWikipediaTrendsNow(
+  artistId: string,
+  artistName: string,
+  albumNames: string[]
+): Promise<WikipediaTrends> {
+  const trends = await computeWikipediaTrends(artistName, albumNames);
+  const supabase = createServiceRoleClient();
+  await supabase.from("wikipedia_trends").upsert({
+    artist_id: artistId,
+    articles: trends.articles,
+    top_mover: trends.topMover,
+    computed_at: new Date().toISOString(),
+  });
+  return trends;
+}
+
+export async function refreshWikipediaTrendsIfStale(
+  artistId: string,
+  artistName: string,
+  albumNames: string[]
+) {
+  const supabase = createServiceRoleClient();
+  const { data } = await supabase
+    .from("wikipedia_trends")
+    .select("computed_at")
+    .eq("artist_id", artistId)
+    .maybeSingle();
+
+  const isStale =
+    !data?.computed_at || Date.now() - new Date(data.computed_at).getTime() > STALE_AFTER_MS;
+  if (!isStale) return;
+
+  try {
+    await refreshWikipediaTrendsNow(artistId, artistName, albumNames);
+  } catch (err) {
+    console.error(`refreshWikipediaTrendsIfStale failed for artist ${artistId}:`, err);
+  }
 }

@@ -11,9 +11,24 @@ import { refreshYoutubeStats } from "@/lib/youtube";
 import { refreshSocialListeningForArtist } from "@/lib/socialListening";
 import { refreshMusicStats } from "@/lib/music";
 import { refreshInsightsNow } from "@/lib/insights";
+import { refreshWikipediaTrendsNow } from "@/lib/wikipedia";
 import { computeArtistPassword, artistAccessCookieName } from "@/lib/artistAccess";
 import { artistCacheTag } from "@/lib/getSiteArtist";
-import type { SentimentFilter, BoardItem } from "@/lib/database.types";
+import { ALL_TAB_KEYS } from "@/lib/tabs";
+import type { SentimentFilter, BoardItem, TabKey } from "@/lib/database.types";
+
+/** These six steps are independent of each other — running them
+ * sequentially (as this used to) meant the total wall-clock time was their
+ * SUM, which easily blew past Vercel's default serverless function timeout
+ * once insights/sentiment/events/social-listening were all making their own
+ * Gemini calls: four+ sequential LLM round trips reliably crossed 10s+ and
+ * the whole action (and the page navigation waiting on it) would get killed
+ * mid-flight, which is what actually produced the "page crashed" / 404
+ * behavior — not a bug in any single step. Running them concurrently caps
+ * the time at the SLOWEST single step instead. Only insights depends on
+ * everything else having finished (it reads across all the refreshed data),
+ * so it alone still has to run last. */
+const STEP_LABELS = ["media", "sentiment", "events", "youtube", "social listening", "music"] as const;
 
 export async function refreshEverything(slug: string) {
   const supabase = createServiceRoleClient();
@@ -25,39 +40,42 @@ export async function refreshEverything(slug: string) {
 
   if (!artist) return;
 
-  await refreshMediaForArtist(artist.id, artist.name);
-  await refreshSentimentNow(artist.id, artist.name);
-  try {
-    // Best-effort — TICKETMASTER_API_KEY might not be set yet, and that
-    // shouldn't block the rest of the refresh.
-    await refreshEventsForArtist(artist.id, artist.name);
-  } catch (err) {
-    console.error(`refreshEverything: events refresh failed for ${slug}:`, err);
-  }
-  if (artist.youtube_channel_id) {
-    try {
-      await refreshYoutubeStats(artist.id, artist.youtube_channel_id);
-    } catch (err) {
-      console.error(`refreshEverything: YouTube refresh failed for ${slug}:`, err);
+  const results = await Promise.allSettled([
+    refreshMediaForArtist(artist.id, artist.name),
+    refreshSentimentNow(artist.id, artist.name),
+    refreshEventsForArtist(artist.id, artist.name),
+    artist.youtube_channel_id
+      ? refreshYoutubeStats(artist.id, artist.youtube_channel_id)
+      : Promise.resolve(),
+    refreshSocialListeningForArtist(artist.id, artist.name),
+    refreshMusicStats(artist.id, artist.name),
+  ]);
+
+  results.forEach((result, i) => {
+    if (result.status === "rejected") {
+      console.error(`refreshEverything: ${STEP_LABELS[i]} refresh failed for ${slug}:`, result.reason);
     }
-  }
-  try {
-    await refreshSocialListeningForArtist(artist.id, artist.name);
-  } catch (err) {
-    console.error(`refreshEverything: social listening refresh failed for ${slug}:`, err);
-  }
-  try {
-    await refreshMusicStats(artist.id, artist.name);
-  } catch (err) {
-    console.error(`refreshEverything: music refresh failed for ${slug}:`, err);
-  }
-  try {
-    // Runs last — reads across everything refreshed above to compute the
-    // Dashboard's insight cards.
-    await refreshInsightsNow(artist.id, artist.name);
-  } catch (err) {
-    console.error(`refreshEverything: insights refresh failed for ${slug}:`, err);
-  }
+  });
+
+  // Both of these read across data refreshed above (insights reads
+  // everything; Wikipedia trends reads the just-refreshed album list), but
+  // not across each other, so they run alongside one another rather than
+  // adding another fully sequential step.
+  const { data: musicRow } = await supabase
+    .from("music_stats")
+    .select("top_albums")
+    .eq("artist_id", artist.id)
+    .maybeSingle();
+
+  await Promise.allSettled([
+    refreshInsightsNow(artist.id, artist.name).catch((err) =>
+      console.error(`refreshEverything: insights refresh failed for ${slug}:`, err)
+    ),
+    refreshWikipediaTrendsNow(artist.id, artist.name, (musicRow?.top_albums ?? []).map((a) => a.name)).catch(
+      (err) => console.error(`refreshEverything: Wikipedia trends refresh failed for ${slug}:`, err)
+    ),
+  ]);
+
   updateTag(artistCacheTag(slug));
   revalidatePath(`/s/${slug}`, "layout");
 }
@@ -105,6 +123,25 @@ export async function updateContentOverride(artistId: string, key: string, value
   }
 
   await supabase.from("artists").update({ content_overrides: next }).eq("id", artistId);
+  if (artist?.slug) updateTag(artistCacheTag(artist.slug));
+  revalidatePath(`/s/[slug]`, "layout");
+}
+
+/** Saves a drag-reorder or a tab/card removal made directly on the live
+ * site in edit mode (see NavPills and DashboardKpiGrid) — the nav pills
+ * and the Dashboard's KPI cards are both just different renderings of this
+ * one enabled_tabs array, so reordering or removing either one updates the
+ * same underlying, permanently-persisted list. "dashboard" is filtered out
+ * defensively even though the UI never lets it be dragged/removed — it's
+ * always force-included as tab order's fixed first entry. */
+export async function updateTabOrder(artistId: string, orderedTabs: TabKey[]) {
+  const validTabs = orderedTabs.filter((t) => ALL_TAB_KEYS.includes(t) && t !== "dashboard");
+  const enabled_tabs: TabKey[] = ["dashboard", ...validTabs];
+
+  const supabase = createServiceRoleClient();
+  const { data: artist } = await supabase.from("artists").select("slug").eq("id", artistId).maybeSingle();
+
+  await supabase.from("artists").update({ enabled_tabs }).eq("id", artistId);
   if (artist?.slug) updateTag(artistCacheTag(artist.slug));
   revalidatePath(`/s/[slug]`, "layout");
 }

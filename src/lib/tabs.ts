@@ -17,6 +17,18 @@ export const TABS: { key: TabKey; label: string; path: string }[] = [
 
 export const ALL_TAB_KEYS = TABS.map((t) => t.key);
 
+export const TABS_BY_KEY: Record<TabKey, { key: TabKey; label: string; path: string }> =
+  Object.fromEntries(TABS.map((t) => [t.key, t])) as Record<TabKey, (typeof TABS)[number]>;
+
+/** Puts "dashboard" first (it's always on, never draggable/removable) and
+ * dedupes, otherwise preserving enabled_tabs' own stored order — which is
+ * what a visitor's tab/card drag-reordering in edit mode actually rewrites,
+ * rather than always falling back to this file's fixed declaration order. */
+export function orderedEnabledTabs(enabledTabs: TabKey[]): TabKey[] {
+  const rest = enabledTabs.filter((k) => k !== "dashboard");
+  return ["dashboard", ...rest];
+}
+
 /** Tabs with real functionality behind them; everything else is still a
  * "coming soon" placeholder that respects the enabled/disabled toggle. */
 export const LIVE_TABS: TabKey[] = [

@@ -233,7 +233,13 @@ async function categorizeComments(
 
 /** Best-effort per platform — a Reddit failure shouldn't drop YouTube
  * results and vice versa. YouTube contributes zero rows rather than
- * erroring when YOUTUBE_API_KEY isn't set. */
+ * erroring when YOUTUBE_API_KEY isn't set. When both come back empty, this
+ * records WHY in last_error — Reddit's public search endpoint has no API
+ * key to misconfigure, but it's known to occasionally 403/429 requests
+ * coming from cloud/datacenter IP ranges (which is what a Vercel serverless
+ * function is), so "no comments" can be a real platform-side block rather
+ * than a genuine lack of mentions — worth surfacing rather than leaving the
+ * UI's empty state looking identical either way. */
 export async function refreshSocialListeningForArtist(artistId: string, artistName: string) {
   const results = await Promise.allSettled([
     fetchRedditComments(artistName),
@@ -241,17 +247,34 @@ export async function refreshSocialListeningForArtist(artistId: string, artistNa
   ]);
 
   const comments: SocialComment[] = [];
-  for (const result of results) {
-    if (result.status === "fulfilled") comments.push(...result.value);
-    else console.error(`refreshSocialListeningForArtist: a platform fetch failed for ${artistName}:`, result.reason);
-  }
+  const [redditResult, youtubeResult] = results;
+  if (redditResult.status === "fulfilled") comments.push(...redditResult.value);
+  if (youtubeResult.status === "fulfilled") comments.push(...youtubeResult.value);
 
   const supabase = createServiceRoleClient();
 
   if (!comments.length) {
-    await supabase
-      .from("social_comment_map")
-      .upsert({ artist_id: artistId, categories: [], comment_count: 0, computed_at: new Date().toISOString() });
+    const reasons: string[] = [];
+    if (redditResult.status === "rejected") {
+      reasons.push(`Reddit: ${redditResult.reason instanceof Error ? redditResult.reason.message : "fetch failed"}`);
+    }
+    if (!process.env.YOUTUBE_API_KEY) {
+      reasons.push("YouTube: YOUTUBE_API_KEY isn't set");
+    } else if (youtubeResult.status === "rejected") {
+      reasons.push(`YouTube: ${youtubeResult.reason instanceof Error ? youtubeResult.reason.message : "fetch failed"}`);
+    }
+    const lastError = reasons.length
+      ? reasons.join("; ")
+      : "Both platforms returned zero mentions for this search — not necessarily an error, might just be genuinely quiet right now.";
+    console.error(`refreshSocialListeningForArtist: no comments found for ${artistName}: ${lastError}`);
+
+    await supabase.from("social_comment_map").upsert({
+      artist_id: artistId,
+      categories: [],
+      comment_count: 0,
+      last_error: lastError,
+      computed_at: new Date().toISOString(),
+    });
     return 0;
   }
 
@@ -262,6 +285,7 @@ export async function refreshSocialListeningForArtist(artistId: string, artistNa
     artist_id: artistId,
     categories,
     comment_count: trimmed.length,
+    last_error: null,
     computed_at: new Date().toISOString(),
   });
   if (error) throw new Error(error.message);

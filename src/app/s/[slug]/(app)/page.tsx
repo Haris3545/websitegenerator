@@ -4,15 +4,15 @@ import { getSiteArtist } from "@/lib/getSiteArtist";
 import { refreshSentimentNow, refreshSentimentIfStale } from "@/lib/sentiment";
 import { refreshInsightsNow, refreshInsightsIfStale } from "@/lib/insights";
 import { getRecentTrends, formatTrend } from "@/lib/trends";
-import { getWikipediaTrends } from "@/lib/wikipedia";
+import { refreshWikipediaTrendsNow, refreshWikipediaTrendsIfStale } from "@/lib/wikipedia";
 import { resolveContent } from "@/lib/contentOverrides";
-import { KpiCard } from "@/components/site/KpiCard";
 import { ArticleCard } from "@/components/site/ArticleCard";
 import { InsightCard } from "@/components/site/InsightCard";
 import { WikipediaTrendsSection } from "@/components/site/WikipediaTrends";
+import { DashboardKpiGrid, type KpiEntry } from "@/components/site/DashboardKpiGrid";
 import { Editable } from "@/components/site/Editable";
 import { SiteFooter } from "@/components/site/SiteFooter";
-import { TABS, LIVE_TABS } from "@/lib/tabs";
+import { TABS_BY_KEY, LIVE_TABS, orderedEnabledTabs } from "@/lib/tabs";
 import type { TabKey } from "@/lib/database.types";
 
 export default async function DashboardPage({
@@ -112,15 +112,33 @@ export default async function DashboardPage({
     getRecentTrends(artist.id),
   ]);
 
-  const wikipediaTrends = await getWikipediaTrends(
-    artist.id,
-    artist.name,
-    (musicStats?.top_albums ?? []).map((a) => a.name)
-  );
+  const albumNames = (musicStats?.top_albums ?? []).map((a) => a.name);
+  let { data: wikipediaRow } = await supabase
+    .from("wikipedia_trends")
+    .select("articles, top_mover, computed_at")
+    .eq("artist_id", artist.id)
+    .maybeSingle();
 
-  const otherTabs = TABS.filter(
-    (tab) => tab.key !== "dashboard" && artist.enabled_tabs.includes(tab.key)
-  );
+  if (!wikipediaRow?.computed_at) {
+    try {
+      const trends = await refreshWikipediaTrendsNow(artist.id, artist.name, albumNames);
+      wikipediaRow = { articles: trends.articles, top_mover: trends.topMover, computed_at: new Date().toISOString() };
+    } catch (err) {
+      console.error(`Initial Wikipedia trends fetch failed for ${slug}:`, err);
+    }
+  } else {
+    after(() => refreshWikipediaTrendsIfStale(artist.id, artist.name, albumNames));
+  }
+
+  const wikipediaTrends = { articles: wikipediaRow?.articles ?? [], topMover: wikipediaRow?.top_mover ?? null };
+
+  // Preserves whatever order a visitor last drag-reordered the tabs/cards
+  // into (see NavPills / DashboardKpiGrid), rather than always falling
+  // back to this file's fixed declaration order.
+  const otherTabs = orderedEnabledTabs(artist.enabled_tabs)
+    .filter((key) => key !== "dashboard")
+    .map((key) => TABS_BY_KEY[key])
+    .filter((tab): tab is (typeof TABS_BY_KEY)[TabKey] => !!tab);
 
   const { positive_pct = 0, negative_pct = 0, neutral_pct = 0 } = artist.sentiment_summary ?? {};
   const hasSentiment = positive_pct + negative_pct + neutral_pct > 0;
@@ -182,6 +200,18 @@ export default async function DashboardPage({
     }
   }
 
+  const kpiEntries: KpiEntry[] = otherTabs.map((tab) => {
+    const kpi = kpiFor(tab.key);
+    return {
+      tabKey: tab.key,
+      label: tab.label,
+      value: kpi?.value ?? "—",
+      caption: kpi?.caption ?? (LIVE_TABS.includes(tab.key) ? "no data yet" : "live in a later phase"),
+      trend: kpi?.trend ?? null,
+      color: tab.key === "media" ? "var(--accent)" : "var(--primary)",
+    };
+  });
+
   return (
     <div>
       <div className="mb-1 flex items-center gap-2">
@@ -200,20 +230,12 @@ export default async function DashboardPage({
         />
       </div>
 
-      <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-        {otherTabs.map((tab) => {
-          const kpi = kpiFor(tab.key);
-          return (
-            <KpiCard
-              key={tab.key}
-              label={tab.label}
-              value={kpi?.value ?? "—"}
-              caption={kpi?.caption ?? (LIVE_TABS.includes(tab.key) ? "no data yet" : "live in a later phase")}
-              trend={kpi?.trend}
-              color={tab.key === "media" ? "var(--accent)" : "var(--primary)"}
-            />
-          );
-        })}
+      <div className="mt-6">
+        <DashboardKpiGrid
+          key={otherTabs.map((t) => t.key).join(",")}
+          artistId={artist.id}
+          entries={kpiEntries}
+        />
       </div>
 
       {!!insightsRow?.insights?.length && (
