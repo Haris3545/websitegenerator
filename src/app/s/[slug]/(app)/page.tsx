@@ -21,17 +21,15 @@ export default async function DashboardPage({
 
   after(() => refreshSentimentIfStale(artist.id, artist.name));
 
-  const { count: mediaCount } = await supabase
-    .from("media_articles")
-    .select("id", { count: "exact", head: true })
-    .eq("artist_id", artist.id);
-
-  const { data: latestArticles } = await supabase
-    .from("media_articles")
-    .select("*")
-    .eq("artist_id", artist.id)
-    .order("published_at", { ascending: false })
-    .limit(5);
+  const [{ count: mediaCount }, { data: latestArticles }] = await Promise.all([
+    supabase.from("media_articles").select("id", { count: "exact", head: true }).eq("artist_id", artist.id),
+    supabase
+      .from("media_articles")
+      .select("*")
+      .eq("artist_id", artist.id)
+      .order("published_at", { ascending: false })
+      .limit(5),
+  ]);
 
   const otherTabs = TABS.filter(
     (tab) => tab.key !== "dashboard" && artist.enabled_tabs.includes(tab.key)

@@ -3,17 +3,33 @@
 import { useRef, useState } from "react";
 import { uploadAudienceResearch } from "@/app/builder/actions";
 
-export function AudienceUploadField({ artistId }: { artistId: string }) {
+export function AudienceUploadField({
+  artistId,
+  onFileSelected,
+}: {
+  /** Null for a not-yet-created artist — there's no row to attach an upload
+   * to yet, so the file is just staged (see onFileSelected) and actually
+   * uploaded by the parent form once the artist exists. */
+  artistId: string | null;
+  onFileSelected?: (file: File) => void;
+}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [queuedName, setQueuedName] = useState<string | null>(null);
 
   async function handleFile(file: File) {
-    setUploading(true);
     setError(null);
     setMessage(null);
 
+    if (!artistId) {
+      setQueuedName(file.name);
+      onFileSelected?.(file);
+      return;
+    }
+
+    setUploading(true);
     const formData = new FormData();
     formData.append("file", file);
     const result = await uploadAudienceResearch(artistId, formData);
@@ -46,8 +62,13 @@ export function AudienceUploadField({ artistId }: { artistId: string }) {
         onClick={() => inputRef.current?.click()}
         className="self-start rounded border border-neutral-300 px-3 py-2 text-sm font-medium disabled:opacity-50"
       >
-        {uploading ? "Uploading..." : "Upload spreadsheet"}
+        {uploading ? "Uploading..." : queuedName ? "Replace file" : "Upload spreadsheet"}
       </button>
+      {queuedName && (
+        <p className="text-xs text-neutral-900">
+          Queued: {queuedName} — imported once you create this artist below.
+        </p>
+      )}
       {message && <p className="text-xs text-green-700">{message}</p>}
       {error && (
         <p className="rounded border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700">

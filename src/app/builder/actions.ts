@@ -39,11 +39,12 @@ export type ArtistFormInput = {
  * thrown error message in production builds (replacing it with a generic
  * "Server Components render" digest message), so the only way for the
  * builder form to show the real failure reason is to hand it back as plain
- * data. redirect() is called after this returns, on the success path only,
- * so it's never at risk of being caught and swallowed here. */
+ * data. Returns the artist's id on success (rather than redirecting itself)
+ * so the caller can chain the deferred secrets/audience-upload steps a
+ * brand-new artist needed a real id for, then navigate once those finish. */
 export async function upsertArtist(
   input: ArtistFormInput
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   try {
     const supabase = await createClient();
 
@@ -69,22 +70,25 @@ export async function upsertArtist(
       updated_at: new Date().toISOString(),
     };
 
-    if (input.id) {
-      const { error } = await supabase.from("artists").update(row).eq("id", input.id);
+    let id = input.id;
+    if (id) {
+      const { error } = await supabase.from("artists").update(row).eq("id", id);
       if (error) return { ok: false, error: `Failed to update artist in Supabase: ${error.message}` };
     } else {
-      const { error } = await supabase.from("artists").insert(row);
+      const { data, error } = await supabase.from("artists").insert(row).select("id").single();
       if (error) return { ok: false, error: `Failed to create artist in Supabase: ${error.message}` };
+      id = data.id;
     }
+
+    revalidatePath("/builder/artists");
+    revalidatePath(`/builder/artists/${id}`);
+    return { ok: true, id };
   } catch (err) {
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Something went wrong saving this artist.",
     };
   }
-
-  revalidatePath("/builder/artists");
-  redirect("/builder/artists");
 }
 
 export async function deleteArtist(id: string) {

@@ -11,6 +11,7 @@ import { ThemeEditor } from "@/components/builder/ThemeEditor";
 import {
   upsertArtist,
   saveArtistSecrets,
+  uploadAudienceResearch,
   publishArtist,
   unpublishArtist,
   type ArtistFormInput,
@@ -77,6 +78,7 @@ export function ArtistForm({
   const [secrets, setSecrets] = useState<Record<string, string>>({});
   const [secretsSaved, setSecretsSaved] = useState(false);
   const [secretsError, setSecretsError] = useState<string | null>(null);
+  const [audienceFile, setAudienceFile] = useState<File | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
@@ -133,8 +135,39 @@ export function ArtistForm({
     e.preventDefault();
     setFormError(null);
     startTransition(async () => {
+      const isNew = !artist;
       const result = await upsertArtist(form);
-      if (!result.ok) setFormError(result.error);
+      if (!result.ok) {
+        setFormError(result.error);
+        return;
+      }
+
+      // A brand-new artist doesn't have a row to attach secrets/audience
+      // data to until upsertArtist just created one — run those deferred
+      // steps now, using the id it just returned.
+      if (isNew) {
+        const hasSecrets = Object.values(secrets).some((v) => v.trim());
+        if (hasSecrets) {
+          const secretsResult = await saveArtistSecrets(result.id, secrets);
+          if (!secretsResult.ok) {
+            setFormError(`Artist created, but saving the API keys failed: ${secretsResult.error}`);
+            return;
+          }
+        }
+        if (audienceFile) {
+          const formData = new FormData();
+          formData.append("file", audienceFile);
+          const audienceResult = await uploadAudienceResearch(result.id, formData);
+          if (!audienceResult.ok) {
+            setFormError(
+              `Artist created, but importing the audience file failed: ${audienceResult.error}`
+            );
+            return;
+          }
+        }
+      }
+
+      router.push(isNew ? `/builder/artists/${result.id}` : "/builder/artists");
     });
   }
 
@@ -277,49 +310,38 @@ export function ArtistForm({
         onChange={(tabs) => update("enabled_tabs", tabs)}
       />
 
-      {formError && (
-        <p className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {formError}
+      <div className="rounded border border-neutral-200 p-4">
+        <h2 className="mb-1 text-sm font-semibold">Data source API keys</h2>
+        <p className="mb-3 text-xs text-neutral-900">
+          Stored encrypted. Leave a field blank to keep its current value unchanged.
+          {!artist && " Saved automatically when you create this artist below."}
         </p>
-      )}
-
-      <button
-        type="submit"
-        disabled={isPending}
-        className="self-start rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-      >
-        {isPending ? "Saving..." : artist ? "Save changes" : "Create artist"}
-      </button>
-
-      {artist && (
-        <div className="rounded border border-neutral-200 p-4">
-          <h2 className="mb-1 text-sm font-semibold">Data source API keys</h2>
-          <p className="mb-3 text-xs text-neutral-900">
-            Stored encrypted. Leave a field blank to keep its current value unchanged.
-          </p>
-          <div className="flex flex-col gap-3">
-            {SECRET_FIELDS.map((field) => {
-              const isSet = savedSecretKeys.includes(field.key);
-              return (
-                <label key={field.key} className="flex flex-col gap-1 text-sm">
-                  <span>
-                    {field.label}{" "}
+        <div className="flex flex-col gap-3">
+          {SECRET_FIELDS.map((field) => {
+            const isSet = savedSecretKeys.includes(field.key);
+            return (
+              <label key={field.key} className="flex flex-col gap-1 text-sm">
+                <span>
+                  {field.label}{" "}
+                  {artist && (
                     <span className={isSet ? "text-green-700" : "text-neutral-500"}>
                       ({isSet ? "currently set" : "not set"})
                     </span>
-                  </span>
-                  <input
-                    type="password"
-                    placeholder={isSet ? "Leave blank to keep the saved value" : "Not set"}
-                    value={secrets[field.key] ?? ""}
-                    onChange={(e) =>
-                      setSecrets((s) => ({ ...s, [field.key]: e.target.value }))
-                    }
-                    className="rounded border border-neutral-300 px-3 py-2 font-mono text-xs"
-                  />
-                </label>
-              );
-            })}
+                  )}
+                </span>
+                <input
+                  type="password"
+                  placeholder={isSet ? "Leave blank to keep the saved value" : "Not set"}
+                  value={secrets[field.key] ?? ""}
+                  onChange={(e) =>
+                    setSecrets((s) => ({ ...s, [field.key]: e.target.value }))
+                  }
+                  className="rounded border border-neutral-300 px-3 py-2 font-mono text-xs"
+                />
+              </label>
+            );
+          })}
+          {artist && (
             <button
               type="button"
               onClick={() =>
@@ -340,18 +362,33 @@ export function ArtistForm({
             >
               Save API keys
             </button>
-            {secretsSaved && <p className="text-xs text-green-600">Saved.</p>}
-            {secretsError && <p className="text-xs text-red-600">{secretsError}</p>}
-          </div>
+          )}
+          {secretsSaved && <p className="text-xs text-green-600">Saved.</p>}
+          {secretsError && <p className="text-xs text-red-600">{secretsError}</p>}
         </div>
+      </div>
+
+      <div className="rounded border border-neutral-200 p-4">
+        <h2 className="mb-1 text-sm font-semibold">Audience research</h2>
+        <AudienceUploadField
+          artistId={artist?.id ?? null}
+          onFileSelected={setAudienceFile}
+        />
+      </div>
+
+      {formError && (
+        <p className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {formError}
+        </p>
       )}
 
-      {artist && (
-        <div className="rounded border border-neutral-200 p-4">
-          <h2 className="mb-1 text-sm font-semibold">Audience research</h2>
-          <AudienceUploadField artistId={artist.id} />
-        </div>
-      )}
+      <button
+        type="submit"
+        disabled={isPending}
+        className="self-start rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+      >
+        {isPending ? "Saving..." : artist ? "Save changes" : "Create artist"}
+      </button>
 
       {artist && (
         <div className="rounded border border-neutral-200 p-4">
