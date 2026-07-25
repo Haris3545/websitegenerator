@@ -40,6 +40,7 @@ export default async function CalendarPage({ params }: { params: Promise<{ slug:
 
       <SiteFooter
         slug={slug}
+        artistId={artist.id}
         tagline={artist.tagline}
         csvRows={events ?? []}
         csvFilename={`${slug}-calendar.csv`}

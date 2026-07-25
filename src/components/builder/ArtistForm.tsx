@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter, unstable_rethrow } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { ColorField } from "@/components/builder/ColorField";
 import { FontPicker } from "@/components/builder/FontPicker";
 import { MediaUploadField } from "@/components/builder/MediaUploadField";
@@ -76,6 +76,7 @@ export function ArtistForm({
   const [slugTouched, setSlugTouched] = useState(!!artist);
   const [secrets, setSecrets] = useState<Record<string, string>>({});
   const [secretsSaved, setSecretsSaved] = useState(false);
+  const [secretsError, setSecretsError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
@@ -132,16 +133,8 @@ export function ArtistForm({
     e.preventDefault();
     setFormError(null);
     startTransition(async () => {
-      try {
-        await upsertArtist(form);
-      } catch (err) {
-        // upsertArtist redirects on success, which Next.js implements by
-        // throwing a special internal error that must keep propagating —
-        // unstable_rethrow lets that through untouched and only stops here
-        // for a genuine failure (e.g. a Supabase/RLS error).
-        unstable_rethrow(err);
-        setFormError(err instanceof Error ? err.message : "Something went wrong saving this artist.");
-      }
+      const result = await upsertArtist(form);
+      if (!result.ok) setFormError(result.error);
     });
   }
 
@@ -331,10 +324,16 @@ export function ArtistForm({
               type="button"
               onClick={() =>
                 startTransition(async () => {
-                  await saveArtistSecrets(artist.id, secrets);
-                  setSecrets({});
-                  setSecretsSaved(true);
-                  router.refresh();
+                  setSecretsSaved(false);
+                  setSecretsError(null);
+                  const result = await saveArtistSecrets(artist.id, secrets);
+                  if (result.ok) {
+                    setSecrets({});
+                    setSecretsSaved(true);
+                    router.refresh();
+                  } else {
+                    setSecretsError(result.error);
+                  }
                 })
               }
               className="self-start rounded border border-neutral-300 px-3 py-2 text-sm font-medium"
@@ -342,6 +341,7 @@ export function ArtistForm({
               Save API keys
             </button>
             {secretsSaved && <p className="text-xs text-green-600">Saved.</p>}
+            {secretsError && <p className="text-xs text-red-600">{secretsError}</p>}
           </div>
         </div>
       )}

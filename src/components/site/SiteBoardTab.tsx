@@ -55,7 +55,7 @@ export async function SiteBoardTab({
           initialItems={items ?? []}
         />
       </div>
-      <SiteFooter slug={slug} tagline={artist.tagline} />
+      <SiteFooter slug={slug} artistId={artist.id} tagline={artist.tagline} />
     </div>
   );
 }

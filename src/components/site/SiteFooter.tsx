@@ -27,11 +27,13 @@ function downloadCsv(rows: Record<string, unknown>[], filename: string) {
 
 export function SiteFooter({
   slug,
+  artistId,
   tagline,
   csvRows,
   csvFilename,
 }: {
   slug: string;
+  artistId: string;
   tagline: string;
   csvRows?: Record<string, unknown>[];
   csvFilename?: string;
@@ -81,7 +83,7 @@ export function SiteFooter({
 
       <div className="mt-8 flex justify-center gap-3">
         <Link
-          href={`/s/${slug}`}
+          href={`/builder/artists/${artistId}`}
           className="rounded-full border border-white/20 px-4 py-1.5 text-xs font-medium text-white/70 hover:border-white/40 hover:text-white"
         >
           Back to dashboard

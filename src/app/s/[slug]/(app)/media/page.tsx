@@ -71,6 +71,7 @@ export default async function MediaPage({ params }: { params: Promise<{ slug: st
 
       <SiteFooter
         slug={slug}
+        artistId={artist.id}
         tagline={artist.tagline}
         csvRows={articles ?? []}
         csvFilename={`${slug}-media.csv`}

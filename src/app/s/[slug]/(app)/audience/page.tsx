@@ -33,6 +33,7 @@ export default async function AudiencePage({ params }: { params: Promise<{ slug:
 
       <SiteFooter
         slug={slug}
+        artistId={artist.id}
         tagline={artist.tagline}
         csvRows={statements ?? []}
         csvFilename={`${slug}-audience.csv`}

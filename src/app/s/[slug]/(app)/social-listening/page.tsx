@@ -81,6 +81,7 @@ export default async function SocialListeningPage({
 
       <SiteFooter
         slug={slug}
+        artistId={artist.id}
         tagline={artist.tagline}
         csvRows={mentions ?? []}
         csvFilename={`${slug}-social-listening.csv`}

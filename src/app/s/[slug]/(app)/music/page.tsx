@@ -103,6 +103,7 @@ export default async function MusicPage({ params }: { params: Promise<{ slug: st
 
       <SiteFooter
         slug={slug}
+        artistId={artist.id}
         tagline={artist.tagline}
         csvRows={stats?.top_tracks ?? []}
         csvFilename={`${slug}-music.csv`}

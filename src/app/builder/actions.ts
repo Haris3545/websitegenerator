@@ -35,37 +35,52 @@ export type ArtistFormInput = {
   enabled_tabs: TabKey[];
 };
 
-export async function upsertArtist(input: ArtistFormInput) {
-  const supabase = await createClient();
+/** Returns a result instead of throwing — Next.js redacts a Server Action's
+ * thrown error message in production builds (replacing it with a generic
+ * "Server Components render" digest message), so the only way for the
+ * builder form to show the real failure reason is to hand it back as plain
+ * data. redirect() is called after this returns, on the success path only,
+ * so it's never at risk of being caught and swallowed here. */
+export async function upsertArtist(
+  input: ArtistFormInput
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const supabase = await createClient();
 
-  const enabled_tabs = input.enabled_tabs.filter((t) => ALL_TAB_KEYS.includes(t));
-  const aesthetic_params = await parseAestheticPrompt(input.aesthetic_prompt);
+    const enabled_tabs = input.enabled_tabs.filter((t) => ALL_TAB_KEYS.includes(t));
+    const aesthetic_params = await parseAestheticPrompt(input.aesthetic_prompt);
 
-  const row = {
-    slug: input.slug,
-    name: input.name,
-    primary_color: input.primary_color,
-    secondary_color: input.secondary_color,
-    accent_color: input.accent_color,
-    font_family: input.font_family,
-    background_image_url: input.background_image_url,
-    gate_background_url: input.gate_background_url,
-    youtube_channel_id: input.youtube_channel_id,
-    aesthetic_prompt: input.aesthetic_prompt,
-    aesthetic_params,
-    tagline: input.tagline,
-    project_title: input.project_title,
-    theme_overrides: input.theme_overrides,
-    enabled_tabs,
-    updated_at: new Date().toISOString(),
-  };
+    const row = {
+      slug: input.slug,
+      name: input.name,
+      primary_color: input.primary_color,
+      secondary_color: input.secondary_color,
+      accent_color: input.accent_color,
+      font_family: input.font_family,
+      background_image_url: input.background_image_url,
+      gate_background_url: input.gate_background_url,
+      youtube_channel_id: input.youtube_channel_id,
+      aesthetic_prompt: input.aesthetic_prompt,
+      aesthetic_params,
+      tagline: input.tagline,
+      project_title: input.project_title,
+      theme_overrides: input.theme_overrides,
+      enabled_tabs,
+      updated_at: new Date().toISOString(),
+    };
 
-  if (input.id) {
-    const { error } = await supabase.from("artists").update(row).eq("id", input.id);
-    if (error) throw new Error(`Failed to update artist in Supabase: ${error.message}`);
-  } else {
-    const { error } = await supabase.from("artists").insert(row);
-    if (error) throw new Error(`Failed to create artist in Supabase: ${error.message}`);
+    if (input.id) {
+      const { error } = await supabase.from("artists").update(row).eq("id", input.id);
+      if (error) return { ok: false, error: `Failed to update artist in Supabase: ${error.message}` };
+    } else {
+      const { error } = await supabase.from("artists").insert(row);
+      if (error) return { ok: false, error: `Failed to create artist in Supabase: ${error.message}` };
+    }
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Something went wrong saving this artist.",
+    };
   }
 
   revalidatePath("/builder/artists");
@@ -85,25 +100,31 @@ export async function deleteArtist(id: string) {
 export async function saveArtistSecrets(
   artistId: string,
   secrets: Record<string, string>
-) {
-  const supabase = await createClient();
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const supabase = await createClient();
 
-  const { data: existing } = await supabase
-    .from("artist_secrets")
-    .select("encrypted")
-    .eq("artist_id", artistId)
-    .maybeSingle();
+    const { data: existing } = await supabase
+      .from("artist_secrets")
+      .select("encrypted")
+      .eq("artist_id", artistId)
+      .maybeSingle();
 
-  const encrypted: Record<string, string> = { ...(existing?.encrypted ?? {}) };
-  for (const [key, value] of Object.entries(secrets)) {
-    if (value) encrypted[key] = encryptSecret(value);
+    const encrypted: Record<string, string> = { ...(existing?.encrypted ?? {}) };
+    for (const [key, value] of Object.entries(secrets)) {
+      if (value) encrypted[key] = encryptSecret(value);
+    }
+
+    const { error } = await supabase
+      .from("artist_secrets")
+      .upsert({ artist_id: artistId, encrypted, updated_at: new Date().toISOString() });
+    if (error) return { ok: false, error: error.message };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to save API keys." };
   }
 
-  const { error } = await supabase
-    .from("artist_secrets")
-    .upsert({ artist_id: artistId, encrypted, updated_at: new Date().toISOString() });
-  if (error) throw new Error(error.message);
   revalidatePath(`/builder/artists/${artistId}`);
+  return { ok: true };
 }
 
 /** Which secret keys already have a value saved, without ever exposing the
