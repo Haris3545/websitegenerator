@@ -8,6 +8,7 @@ import { refreshMediaForArtist } from "@/lib/media";
 import { refreshSentimentNow } from "@/lib/sentiment";
 import { refreshEventsForArtist } from "@/lib/events";
 import { refreshYoutubeStats } from "@/lib/youtube";
+import { refreshSocialListeningForArtist } from "@/lib/socialListening";
 import { computeArtistPassword, artistAccessCookieName } from "@/lib/artistAccess";
 import type { SentimentFilter, BoardItem } from "@/lib/database.types";
 
@@ -36,6 +37,11 @@ export async function refreshEverything(slug: string) {
     } catch (err) {
       console.error(`refreshEverything: YouTube refresh failed for ${slug}:`, err);
     }
+  }
+  try {
+    await refreshSocialListeningForArtist(artist.id, artist.name);
+  } catch (err) {
+    console.error(`refreshEverything: social listening refresh failed for ${slug}:`, err);
   }
   revalidatePath(`/s/${slug}`, "layout");
 }

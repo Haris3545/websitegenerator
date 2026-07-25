@@ -241,6 +241,34 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["artist_events"]["Insert"]>;
         Relationships: [];
       };
+      social_mentions: {
+        Row: {
+          id: string;
+          artist_id: string;
+          platform: string;
+          title: string;
+          url: string;
+          author: string | null;
+          excerpt: string;
+          score: number | null;
+          published_at: string | null;
+          fetched_at: string;
+        };
+        Insert: {
+          id?: string;
+          artist_id: string;
+          platform: string;
+          title: string;
+          url: string;
+          author?: string | null;
+          excerpt?: string;
+          score?: number | null;
+          published_at?: string | null;
+          fetched_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["social_mentions"]["Insert"]>;
+        Relationships: [];
+      };
       youtube_stats: {
         Row: {
           artist_id: string;
@@ -276,3 +304,4 @@ export type MediaArticle = Database["public"]["Tables"]["media_articles"]["Row"]
 export type BoardItem = Database["public"]["Tables"]["board_items"]["Row"];
 export type ArtistEvent = Database["public"]["Tables"]["artist_events"]["Row"];
 export type YoutubeStats = Database["public"]["Tables"]["youtube_stats"]["Row"];
+export type SocialMention = Database["public"]["Tables"]["social_mentions"]["Row"];
