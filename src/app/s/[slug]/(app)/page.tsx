@@ -2,9 +2,11 @@ import { after } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getSiteArtist } from "@/lib/getSiteArtist";
 import { refreshSentimentNow, refreshSentimentIfStale } from "@/lib/sentiment";
+import { refreshInsightsNow, refreshInsightsIfStale } from "@/lib/insights";
 import { resolveContent } from "@/lib/contentOverrides";
 import { KpiCard } from "@/components/site/KpiCard";
 import { ArticleCard } from "@/components/site/ArticleCard";
+import { InsightCard } from "@/components/site/InsightCard";
 import { Editable } from "@/components/site/Editable";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { TABS, LIVE_TABS } from "@/lib/tabs";
@@ -31,6 +33,27 @@ export default async function DashboardPage({
     }
   } else {
     after(() => refreshSentimentIfStale(artist.id, artist.name));
+  }
+
+  let { data: insightsRow } = await supabase
+    .from("artist_insights")
+    .select("insights, computed_at")
+    .eq("artist_id", artist.id)
+    .maybeSingle();
+
+  if (!insightsRow?.computed_at) {
+    try {
+      await refreshInsightsNow(artist.id, artist.name);
+      ({ data: insightsRow } = await supabase
+        .from("artist_insights")
+        .select("insights, computed_at")
+        .eq("artist_id", artist.id)
+        .maybeSingle());
+    } catch (err) {
+      console.error(`Initial insights generation failed for ${slug}:`, err);
+    }
+  } else {
+    after(() => refreshInsightsIfStale(artist.id, artist.name));
   }
 
   const [
@@ -175,6 +198,20 @@ export default async function DashboardPage({
           );
         })}
       </div>
+
+      {!!insightsRow?.insights?.length && (
+        <div className="mt-8">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase text-white/70">
+            <span className="h-3 w-1 bg-[var(--accent)]" />
+            What we&apos;ve noticed
+          </h3>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {insightsRow.insights.map((insight, i) => (
+              <InsightCard key={i} insight={insight} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {!!latestArticles?.length && (
         <div className="mt-8">

@@ -10,6 +10,7 @@ import { refreshEventsForArtist } from "@/lib/events";
 import { refreshYoutubeStats } from "@/lib/youtube";
 import { refreshSocialListeningForArtist } from "@/lib/socialListening";
 import { refreshMusicStats } from "@/lib/music";
+import { refreshInsightsNow } from "@/lib/insights";
 import { computeArtistPassword, artistAccessCookieName } from "@/lib/artistAccess";
 import { artistCacheTag } from "@/lib/getSiteArtist";
 import type { SentimentFilter, BoardItem } from "@/lib/database.types";
@@ -49,6 +50,13 @@ export async function refreshEverything(slug: string) {
     await refreshMusicStats(artist.id, artist.name);
   } catch (err) {
     console.error(`refreshEverything: music refresh failed for ${slug}:`, err);
+  }
+  try {
+    // Runs last — reads across everything refreshed above to compute the
+    // Dashboard's insight cards.
+    await refreshInsightsNow(artist.id, artist.name);
+  } catch (err) {
+    console.error(`refreshEverything: insights refresh failed for ${slug}:`, err);
   }
   updateTag(artistCacheTag(slug));
   revalidatePath(`/s/${slug}`, "layout");

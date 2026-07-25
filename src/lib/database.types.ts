@@ -30,6 +30,8 @@ export type SentimentSummary = {
   computed_at?: string;
 };
 
+export type ArtistInsight = { headline: string; detail: string; basis: string };
+
 export type TabKey =
   | "dashboard"
   | "media"
@@ -320,6 +322,36 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["music_stats"]["Insert"]>;
         Relationships: [];
       };
+      artist_metric_snapshots: {
+        Row: {
+          id: string;
+          artist_id: string;
+          captured_at: string;
+          metrics: Record<string, number | string | null>;
+        };
+        Insert: {
+          id?: string;
+          artist_id: string;
+          captured_at?: string;
+          metrics?: Record<string, number | string | null>;
+        };
+        Update: Partial<Database["public"]["Tables"]["artist_metric_snapshots"]["Insert"]>;
+        Relationships: [];
+      };
+      artist_insights: {
+        Row: {
+          artist_id: string;
+          insights: ArtistInsight[];
+          computed_at: string;
+        };
+        Insert: {
+          artist_id: string;
+          insights?: ArtistInsight[];
+          computed_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["artist_insights"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -335,3 +367,5 @@ export type ArtistEvent = Database["public"]["Tables"]["artist_events"]["Row"];
 export type YoutubeStats = Database["public"]["Tables"]["youtube_stats"]["Row"];
 export type SocialMention = Database["public"]["Tables"]["social_mentions"]["Row"];
 export type MusicStats = Database["public"]["Tables"]["music_stats"]["Row"];
+export type ArtistMetricSnapshot = Database["public"]["Tables"]["artist_metric_snapshots"]["Row"];
+export type ArtistInsightsRow = Database["public"]["Tables"]["artist_insights"]["Row"];
