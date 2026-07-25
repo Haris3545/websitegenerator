@@ -28,7 +28,7 @@ export function TabsChecklist({
               checked={tab.key === "dashboard" || value.includes(tab.key)}
               disabled={tab.key === "dashboard"}
               onChange={() => toggle(tab.key)}
-              className="accent-violet-500"
+              className="accent-builder-accent"
             />
             {tab.label}
           </label>

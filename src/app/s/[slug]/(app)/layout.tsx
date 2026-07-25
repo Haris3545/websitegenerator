@@ -133,11 +133,7 @@ export default async function ArtistSiteLayout({
         )}
       </div>
 
-      <SiteHeader
-        projectTitle={artist.project_title}
-        tagline={artist.tagline}
-        artistName={artist.name}
-      />
+      <SiteHeader projectTitle={artist.project_title} tagline={artist.tagline} />
       <NewsTicker
         articles={tickerArticles ?? []}
         artistId={artist.id}

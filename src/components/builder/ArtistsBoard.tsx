@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   createFolder,
@@ -32,7 +32,28 @@ function FolderGlyph() {
   );
 }
 
-function SiteGlyph({ color }: { color: string }) {
+/** Shows a live screenshot of the artist's own password page when it loads
+ * successfully, falling back to a plain tinted glyph otherwise (the
+ * screenshot service is a third-party dependency that can rate-limit, be
+ * slow to render a fresh page, or simply be unreachable — none of that
+ * should ever break the icon). */
+function SiteGlyph({ color, screenshotUrl }: { color: string; screenshotUrl?: string }) {
+  const [failed, setFailed] = useState(false);
+
+  if (screenshotUrl && !failed) {
+    return (
+      <div className="h-12 w-14 overflow-hidden rounded-xl border border-black/10 bg-neutral-800 shadow-sm dark:border-white/10">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={screenshotUrl}
+          alt=""
+          className="h-full w-full object-cover object-top"
+          onError={() => setFailed(true)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       className="flex h-12 w-14 items-center justify-center rounded-xl shadow-sm"
@@ -49,9 +70,11 @@ function SiteGlyph({ color }: { color: string }) {
 export function ArtistsBoard({
   initialArtists,
   initialFolders,
+  siteBaseUrl,
 }: {
   initialArtists: ArtistLite[];
   initialFolders: FolderLite[];
+  siteBaseUrl: string;
 }) {
   const [artists, setArtists] = useState(initialArtists);
   const [folders, setFolders] = useState(
@@ -64,12 +87,19 @@ export function ArtistsBoard({
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
 
+  // The menu for every artist stays mounted at all times (see
+  // data-artist-menu below) and animates purely via CSS classes, so it can
+  // ease in AND ease back out on close — an unmount-on-close approach would
+  // only ever animate the open direction. Outside-click detection checks
+  // against the currently-open artist's own wrapper via that data
+  // attribute rather than a single ref, since multiple menu wrappers exist
+  // in the DOM simultaneously.
   useEffect(() => {
     if (!menuFor) return;
     function onPointerDown(e: PointerEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuFor(null);
+      const target = e.target as HTMLElement;
+      if (!target.closest(`[data-artist-menu="${menuFor}"]`)) setMenuFor(null);
     }
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") setMenuFor(null);
@@ -162,7 +192,7 @@ export function ArtistsBoard({
             onChange={(e) => setNewFolderName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleCreateFolder()}
             placeholder="New folder name"
-            className="w-56 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm placeholder-neutral-400 focus:border-violet-400 focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-white dark:placeholder-white/30"
+            className="w-56 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm placeholder-neutral-400 focus:border-builder-accent focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-white dark:placeholder-white/30"
           />
           <button
             type="button"
@@ -186,7 +216,7 @@ export function ArtistsBoard({
           }}
           className={`flex items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-sm transition-colors ${
             dropTarget === "__back__"
-              ? "border-violet-400 bg-violet-500/5 text-violet-600 dark:text-violet-300"
+              ? "border-builder-accent bg-builder-accent/5 text-amber-700 dark:text-amber-300"
               : "border-neutral-300 text-neutral-600 dark:border-white/15 dark:text-white/60"
           }`}
         >
@@ -241,7 +271,7 @@ export function ArtistsBoard({
                   setDragId(null);
                 }}
                 className={`flex w-24 flex-col items-center gap-1.5 rounded-lg p-2 text-center transition-colors ${
-                  dropTarget === folder.id ? "bg-violet-500/10 ring-2 ring-violet-400" : "hover:bg-black/[0.03] dark:hover:bg-white/5"
+                  dropTarget === folder.id ? "bg-builder-accent/10 ring-2 ring-builder-accent" : "hover:bg-black/[0.03] dark:hover:bg-white/5"
                 }`}
               >
                 <FolderGlyph />
@@ -256,7 +286,7 @@ export function ArtistsBoard({
           })}
 
         {visibleArtists.map((artist) => (
-          <div key={artist.id} className="relative">
+          <div key={artist.id} className="relative" data-artist-menu={artist.id}>
             <div
               draggable
               onDragStart={(e) => {
@@ -278,10 +308,13 @@ export function ArtistsBoard({
               }}
               onClick={() => setMenuFor((m) => (m === artist.id ? null : artist.id))}
               className={`flex w-24 cursor-pointer flex-col items-center gap-1.5 rounded-lg p-2 text-center transition-colors ${
-                dropTarget === artist.id ? "bg-violet-500/10 ring-2 ring-violet-400" : "hover:bg-black/[0.03] dark:hover:bg-white/5"
+                dropTarget === artist.id ? "bg-builder-accent/10 ring-2 ring-builder-accent" : "hover:bg-black/[0.03] dark:hover:bg-white/5"
               }`}
             >
-              <SiteGlyph color={artist.primary_color || "#7c3aed"} />
+              <SiteGlyph
+                color={artist.primary_color || "#eab308"}
+                screenshotUrl={`https://image.thum.io/get/width/240/crop/300/noanimate/${siteBaseUrl}/s/${artist.slug}/gate`}
+              />
               <span className="w-full truncate text-xs font-medium text-neutral-800 dark:text-white/90">
                 {artist.name}
               </span>
@@ -290,45 +323,46 @@ export function ArtistsBoard({
               </span>
             </div>
 
-            {menuFor === artist.id && (
-              <div
-                ref={menuRef}
-                className="absolute left-1/2 top-full z-30 mt-1 w-40 -translate-x-1/2 overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-xl dark:border-white/10 dark:bg-neutral-900"
+            <div
+              className={`absolute left-1/2 top-full z-30 mt-1 w-40 origin-top -translate-x-1/2 overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-xl transition-all duration-150 ease-out dark:border-white/10 dark:bg-neutral-900 ${
+                menuFor === artist.id
+                  ? "scale-100 opacity-100"
+                  : "pointer-events-none scale-95 opacity-0"
+              }`}
+            >
+              <Link
+                href={`/s/${artist.slug}`}
+                className="block px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-50 dark:text-white/80 dark:hover:bg-white/5"
               >
-                <Link
-                  href={`/s/${artist.slug}`}
-                  className="block px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-50 dark:text-white/80 dark:hover:bg-white/5"
-                >
-                  View site
-                </Link>
-                <Link
-                  href={`/builder/artists/${artist.id}`}
-                  className="block px-3 py-2 text-left text-sm font-medium text-violet-600 hover:bg-neutral-50 dark:text-violet-400 dark:hover:bg-white/5"
-                >
-                  Edit
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuFor(null);
-                    if (
-                      !window.confirm(
-                        `Delete "${artist.name}" for good? This removes its dashboard, all cached data, and (if published) its standalone site. This can't be undone.`
-                      )
+                View site
+              </Link>
+              <Link
+                href={`/builder/artists/${artist.id}`}
+                className="block px-3 py-2 text-left text-sm font-medium text-amber-700 hover:bg-neutral-50 dark:text-amber-400 dark:hover:bg-white/5"
+              >
+                Edit
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuFor(null);
+                  if (
+                    !window.confirm(
+                      `Delete "${artist.name}" for good? This removes its dashboard, all cached data, and (if published) its standalone site. This can't be undone.`
                     )
-                      return;
-                    setArtists((prev) => prev.filter((a) => a.id !== artist.id));
-                    startTransition(async () => {
-                      const result = await deleteArtist(artist.id);
-                      if (!result.ok) setError(result.error);
-                    });
-                  }}
-                  className="block w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
-                >
-                  Delete
-                </button>
-              </div>
-            )}
+                  )
+                    return;
+                  setArtists((prev) => prev.filter((a) => a.id !== artist.id));
+                  startTransition(async () => {
+                    const result = await deleteArtist(artist.id);
+                    if (!result.ok) setError(result.error);
+                  });
+                }}
+                className="block w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         ))}
 

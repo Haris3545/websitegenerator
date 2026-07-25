@@ -233,7 +233,7 @@ export function ThemeEditor({
                 type="checkbox"
                 checked={t.header_bold}
                 onChange={(e) => set("header_bold", e.target.checked)}
-                className="accent-violet-500"
+                className="accent-builder-accent"
               />
               Bold
             </label>
@@ -242,7 +242,7 @@ export function ThemeEditor({
                 type="checkbox"
                 checked={t.header_italic}
                 onChange={(e) => set("header_italic", e.target.checked)}
-                className="accent-violet-500"
+                className="accent-builder-accent"
               />
               Italic
             </label>
@@ -322,7 +322,7 @@ function Slider({
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="accent-violet-500"
+        className="accent-builder-accent"
       />
     </label>
   );

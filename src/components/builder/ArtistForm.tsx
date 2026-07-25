@@ -28,7 +28,7 @@ function slugify(name: string) {
 }
 
 const inputClass =
-  "rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder-neutral-400 focus:border-violet-400 focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-white dark:placeholder-white/30";
+  "rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder-neutral-400 focus:border-builder-accent focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-white dark:placeholder-white/30";
 const labelClass = "text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-white/50";
 const sectionClass =
   "flex flex-col gap-4 rounded-xl border border-neutral-200 bg-neutral-50 p-5 dark:border-white/10 dark:bg-white/[0.03]";
@@ -465,7 +465,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
       <button
         type="submit"
         disabled={isPending}
-        className="self-start rounded-lg bg-violet-500 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-400 disabled:opacity-50"
+        className="self-start rounded-lg bg-builder-accent px-4 py-2 text-sm font-semibold text-black transition-transform duration-150 ease-out hover:-translate-y-0.5 hover:brightness-95 disabled:opacity-50"
       >
         {isPending ? "Saving..." : artist ? "Save changes" : "Create artist"}
       </button>
@@ -482,7 +482,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
                 href={published.repoUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="text-violet-600 underline dark:text-violet-400"
+                className="text-amber-700 underline dark:text-amber-400"
               >
                 {published.repoUrl}
               </a>
@@ -490,7 +490,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
                 href={published.siteUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="text-violet-600 underline dark:text-violet-400"
+                className="text-amber-700 underline dark:text-amber-400"
               >
                 {published.siteUrl}
               </a>

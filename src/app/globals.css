@@ -14,6 +14,11 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  /* The builder admin tool's single brand accent — used for solid fills
+     (buttons, active states, focus rings) with black text on top for
+     contrast, the same way the generated artist sites already treat their
+     own --accent color. */
+  --color-builder-accent: #ffc931;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }

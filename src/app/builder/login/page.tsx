@@ -46,7 +46,7 @@ function LoginForm() {
     <div className="flex min-h-screen justify-center bg-white text-neutral-900 dark:bg-neutral-950 dark:text-white">
       <div className="flex w-full max-w-sm flex-col justify-center px-4">
         <div className="mb-6 flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full bg-violet-500" />
+          <span className="h-2 w-2 rounded-full bg-builder-accent" />
           <h1 className="text-2xl font-semibold tracking-tight">Builder login</h1>
         </div>
         <p className="mb-6 text-sm text-neutral-500 dark:text-white/50">
@@ -65,7 +65,7 @@ function LoginForm() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="rounded-lg border border-neutral-300 bg-white px-3 py-2 focus:border-violet-400 focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-white"
+              className="rounded-lg border border-neutral-300 bg-white px-3 py-2 focus:border-builder-accent focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-white"
             />
           </label>
           <label className="flex flex-col gap-1.5 text-sm">
@@ -77,7 +77,7 @@ function LoginForm() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="rounded-lg border border-neutral-300 bg-white px-3 py-2 focus:border-violet-400 focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-white"
+              className="rounded-lg border border-neutral-300 bg-white px-3 py-2 focus:border-builder-accent focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-white"
             />
           </label>
           {error && (
@@ -88,7 +88,7 @@ function LoginForm() {
           <button
             type="submit"
             disabled={loading}
-            className="rounded-lg bg-violet-500 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-400 disabled:opacity-50"
+            className="rounded-lg bg-builder-accent px-3 py-2 text-sm font-semibold text-black transition-transform duration-150 ease-out hover:-translate-y-0.5 hover:brightness-95 disabled:opacity-50"
           >
             {loading ? "Signing in..." : "Sign in"}
           </button>

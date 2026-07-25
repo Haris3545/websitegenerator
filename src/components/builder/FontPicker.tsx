@@ -36,7 +36,7 @@ export function FontPicker({
         placeholder="Search fonts..."
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        className="rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder-neutral-400 focus:border-violet-400 focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-white dark:placeholder-white/30"
+        className="rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder-neutral-400 focus:border-builder-accent focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-white dark:placeholder-white/30"
       />
       <select
         size={6}

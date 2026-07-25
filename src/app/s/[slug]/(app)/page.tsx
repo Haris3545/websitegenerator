@@ -4,10 +4,12 @@ import { getSiteArtist } from "@/lib/getSiteArtist";
 import { refreshSentimentNow, refreshSentimentIfStale } from "@/lib/sentiment";
 import { refreshInsightsNow, refreshInsightsIfStale } from "@/lib/insights";
 import { getRecentTrends, formatTrend } from "@/lib/trends";
+import { getWikipediaTrends } from "@/lib/wikipedia";
 import { resolveContent } from "@/lib/contentOverrides";
 import { KpiCard } from "@/components/site/KpiCard";
 import { ArticleCard } from "@/components/site/ArticleCard";
 import { InsightCard } from "@/components/site/InsightCard";
+import { WikipediaTrendsSection } from "@/components/site/WikipediaTrends";
 import { Editable } from "@/components/site/Editable";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { TABS, LIVE_TABS } from "@/lib/tabs";
@@ -109,6 +111,12 @@ export default async function DashboardPage({
       .eq("board_key", "research"),
     getRecentTrends(artist.id),
   ]);
+
+  const wikipediaTrends = await getWikipediaTrends(
+    artist.id,
+    artist.name,
+    (musicStats?.top_albums ?? []).map((a) => a.name)
+  );
 
   const otherTabs = TABS.filter(
     (tab) => tab.key !== "dashboard" && artist.enabled_tabs.includes(tab.key)
@@ -219,6 +227,12 @@ export default async function DashboardPage({
               <InsightCard key={i} insight={insight} />
             ))}
           </div>
+        </div>
+      )}
+
+      {!!wikipediaTrends.articles.length && (
+        <div className="mt-8">
+          <WikipediaTrendsSection trends={wikipediaTrends} artistName={artist.name} />
         </div>
       )}
 

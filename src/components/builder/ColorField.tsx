@@ -51,7 +51,7 @@ export function ColorField({
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-28 rounded-lg border border-neutral-300 bg-white px-2 py-1.5 font-mono text-xs focus:border-violet-400 focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-white"
+          className="w-28 rounded-lg border border-neutral-300 bg-white px-2 py-1.5 font-mono text-xs focus:border-builder-accent focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-white"
         />
       </div>
       {open && (

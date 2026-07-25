@@ -19,10 +19,10 @@ export function NavPills({ slug, enabledTabs }: { slug: string; enabledTabs: Tab
             <Link
               key={tab.key}
               href={href}
-              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+              className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-all duration-150 ease-out hover:-translate-y-0.5 ${
                 active
-                  ? "bg-[var(--accent)] text-black"
-                  : "border border-white/30 text-white/90 hover:border-white/60"
+                  ? "bg-[var(--accent)] text-black shadow-[0_0_16px_var(--accent)]"
+                  : "border border-white/30 text-white/90 hover:border-white/60 hover:bg-white/5"
               }`}
             >
               {tab.label}
