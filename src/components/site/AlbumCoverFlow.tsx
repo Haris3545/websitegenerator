@@ -1,10 +1,11 @@
 "use client";
 
-import { useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { MusicAlbum } from "@/lib/database.types";
 
 const COVER_GAP = 130; // px between cover centers at rest
 const COVER_SIZE = 176; // px, the centered cover's width/height
+const CLICK_THRESHOLD = 6; // px of movement below which a release counts as a click, not a drag
 
 function subscribeReducedMotion(callback: () => void) {
   const mql = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -31,29 +32,67 @@ export function AlbumCoverFlow({ albums }: { albums: MusicAlbum[] }) {
     getReducedMotionSnapshot,
     getReducedMotionServerSnapshot
   );
-  const dragStartX = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Real DOM listeners on the container handle both dragging AND clicking a
+  // visible side cover — a single source of truth for what the pointer did,
+  // rather than splitting that between the container (drag) and each cover
+  // button (its own onClick), which is what silently broke both: capturing
+  // the pointer on the container suppresses the child button's native click.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    let pointerId: number | null = null;
+    let startX = 0;
+    let moved = false;
+    let clickedIndex: number | null = null;
+
+    function onPointerDown(e: PointerEvent) {
+      pointerId = e.pointerId;
+      startX = e.clientX;
+      moved = false;
+      const target = (e.target as HTMLElement).closest("[data-cover-index]");
+      clickedIndex = target ? Number(target.getAttribute("data-cover-index")) : null;
+      el!.setPointerCapture(e.pointerId);
+      setIsDragging(true);
+    }
+
+    function onPointerMove(e: PointerEvent) {
+      if (pointerId === null || e.pointerId !== pointerId) return;
+      const delta = e.clientX - startX;
+      if (Math.abs(delta) > CLICK_THRESHOLD) moved = true;
+      setDragOffset(delta);
+    }
+
+    function onPointerUp(e: PointerEvent) {
+      if (pointerId === null || e.pointerId !== pointerId) return;
+      const delta = e.clientX - startX;
+      pointerId = null;
+      setIsDragging(false);
+      setDragOffset(0);
+
+      if (moved) {
+        setIndex((i) => Math.max(0, Math.min(albums.length - 1, i + Math.round(-delta / COVER_GAP))));
+      } else if (clickedIndex !== null) {
+        setIndex(Math.max(0, Math.min(albums.length - 1, clickedIndex)));
+      }
+    }
+
+    el.addEventListener("pointerdown", onPointerDown);
+    el.addEventListener("pointermove", onPointerMove);
+    el.addEventListener("pointerup", onPointerUp);
+    el.addEventListener("pointercancel", onPointerUp);
+    return () => {
+      el.removeEventListener("pointerdown", onPointerDown);
+      el.removeEventListener("pointermove", onPointerMove);
+      el.removeEventListener("pointerup", onPointerUp);
+      el.removeEventListener("pointercancel", onPointerUp);
+    };
+  }, [albums.length]);
 
   function clamp(i: number) {
     return Math.max(0, Math.min(albums.length - 1, i));
-  }
-
-  function handlePointerDown(e: React.PointerEvent) {
-    setIsDragging(true);
-    dragStartX.current = e.clientX;
-    containerRef.current?.setPointerCapture(e.pointerId);
-  }
-
-  function handlePointerMove(e: React.PointerEvent) {
-    if (!isDragging) return;
-    setDragOffset(e.clientX - dragStartX.current);
-  }
-
-  function endDrag() {
-    if (!isDragging) return;
-    setIsDragging(false);
-    setIndex((i) => clamp(i + Math.round(-dragOffset / COVER_GAP)));
-    setDragOffset(0);
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -72,10 +111,6 @@ export function AlbumCoverFlow({ albums }: { albums: MusicAlbum[] }) {
         tabIndex={0}
         className="relative h-56 cursor-grab select-none outline-none active:cursor-grabbing sm:h-64"
         style={{ perspective: "1200px", touchAction: "none" }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
         onKeyDown={handleKeyDown}
       >
         {albums.length > 1 && (
@@ -113,12 +148,11 @@ export function AlbumCoverFlow({ albums }: { albums: MusicAlbum[] }) {
             const opacity = Math.max(0, 1 - abs * 0.3);
 
             return (
-              <button
+              <div
                 key={`${album.name}-${i}`}
-                type="button"
+                data-cover-index={i}
                 role="option"
                 aria-selected={i === index}
-                onClick={() => setIndex(i)}
                 className="absolute overflow-hidden rounded shadow-2xl shadow-black/60"
                 style={{
                   width: COVER_SIZE,
@@ -143,7 +177,7 @@ export function AlbumCoverFlow({ albums }: { albums: MusicAlbum[] }) {
                     {album.name}
                   </div>
                 )}
-              </button>
+              </div>
             );
           })}
         </div>

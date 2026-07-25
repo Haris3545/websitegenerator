@@ -24,22 +24,39 @@ type LastfmTopAlbumsResponse = {
 };
 
 type ItunesSearchResponse = {
-  results?: { artworkUrl100?: string }[];
+  results?: { artworkUrl100?: string; artistName?: string; collectionName?: string }[];
 };
+
+function normalizeForMatch(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
 
 /** Last.fm's own album artwork URLs have been broken placeholder images for
  * years (a long-standing, widely-reported issue on their end) — so real
- * cover art comes from Apple's iTunes Search API instead, which is free,
- * keyless, and actually reliable for this. artworkUrl100 is swapped for a
- * larger size using iTunes's well-known URL-suffix convention. */
+ * cover art comes from Apple's iTunes Search API instead, which is free and
+ * keyless. Searching by album title alone (attribute=albumTerm) and then
+ * verifying the result's artist actually matches — rather than trusting
+ * whatever a blended "artist album" free-text search ranked first — is
+ * what keeps this from confidently returning the wrong artist's album; if
+ * nothing matches, this returns null (a text placeholder) rather than risk
+ * showing an incorrect cover. */
 async function fetchAlbumArtwork(artistName: string, albumName: string): Promise<string | null> {
   try {
     const res = await fetch(
-      `https://itunes.apple.com/search?term=${encodeURIComponent(`${artistName} ${albumName}`)}&entity=album&limit=1`
+      `https://itunes.apple.com/search?term=${encodeURIComponent(albumName)}&attribute=albumTerm&entity=album&limit=10`
     );
     if (!res.ok) return null;
     const data: ItunesSearchResponse = await res.json();
-    const artwork = data.results?.[0]?.artworkUrl100;
+    const results = data.results ?? [];
+
+    const wantedArtist = normalizeForMatch(artistName);
+    const match = results.find((r) => {
+      if (!r.artistName) return false;
+      const gotArtist = normalizeForMatch(r.artistName);
+      return gotArtist.includes(wantedArtist) || wantedArtist.includes(gotArtist);
+    });
+
+    const artwork = match?.artworkUrl100;
     return artwork ? artwork.replace("100x100", "600x600") : null;
   } catch {
     return null;
