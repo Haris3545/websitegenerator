@@ -308,13 +308,21 @@ export async function refreshSocialListeningForArtist(artistId: string, artistNa
   if (!comments.length) {
     console.error(`refreshSocialListeningForArtist: no comments found for ${artistName}: ${platformStatus}`);
 
-    await supabase.from("social_comment_map").upsert({
+    const { error: upsertError } = await supabase.from("social_comment_map").upsert({
       artist_id: artistId,
       categories: [],
       comment_count: 0,
       last_error: platformStatus,
       computed_at: new Date().toISOString(),
     });
+    if (upsertError) {
+      // A schema mismatch here (e.g. migrations/020's last_error column
+      // never applied) would otherwise fail completely silently — the row
+      // never gets written at all, so the page keeps showing stale/no data
+      // forever with nothing pointing at why.
+      console.error(`refreshSocialListeningForArtist: failed to save empty result for ${artistName}:`, upsertError);
+      throw new Error(`social_comment_map upsert failed: ${upsertError.message}`);
+    }
     return 0;
   }
 

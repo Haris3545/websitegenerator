@@ -15,16 +15,16 @@ export default async function SocialListeningPage({
   const artist = await getSiteArtist(slug);
 
   const supabase = createServiceRoleClient();
-  let { data: map } = await supabase
+  let { data: map, error: mapError } = await supabase
     .from("social_comment_map")
     .select("categories, comment_count, last_error, computed_at")
     .eq("artist_id", artist.id)
     .maybeSingle();
 
-  if (!map?.computed_at) {
+  if (!map?.computed_at && !mapError) {
     try {
       await refreshSocialListeningForArtist(artist.id, artist.name);
-      ({ data: map } = await supabase
+      ({ data: map, error: mapError } = await supabase
         .from("social_comment_map")
         .select("categories, comment_count, last_error, computed_at")
         .eq("artist_id", artist.id)
@@ -32,7 +32,7 @@ export default async function SocialListeningPage({
     } catch (err) {
       console.error(`Initial social listening fetch failed for ${slug}:`, err);
     }
-  } else {
+  } else if (!mapError) {
     after(() => refreshSocialListeningIfStale(artist.id, artist.name));
   }
 
@@ -70,7 +70,16 @@ export default async function SocialListeningPage({
         </p>
       )}
 
-      {!categories.length ? (
+      {mapError ? (
+        <div className="mt-4 rounded-lg border border-dashed border-red-400/40 p-8 text-center text-red-300/80">
+          <p>
+            Database error reading social_comment_map — this table is probably missing a column a
+            migration adds. Run <code className="text-red-200">migrations/020_social_comment_map_last_error.sql</code>{" "}
+            in Supabase, then refresh this page.
+          </p>
+          <p className="mt-3 text-xs text-red-300/60">{mapError.message}</p>
+        </div>
+      ) : !categories.length ? (
         <div className="mt-4 rounded-lg border border-dashed border-white/20 p-8 text-center text-white/50">
           <p>
             No comments found yet — hit &quot;Refresh Everything&quot; below. YouTube comments need
