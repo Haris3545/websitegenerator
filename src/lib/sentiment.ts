@@ -1,4 +1,5 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { Type } from "@google/genai";
+import { generateContentThrottled } from "@/lib/gemini";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import type { SentimentFilter, SentimentSummary } from "@/lib/database.types";
 
@@ -25,8 +26,6 @@ const RESPONSE_SCHEMA = {
   required: ["positive_pct", "negative_pct", "neutral_pct", "filters"],
 };
 
-const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
 /** Classifies overall sentiment across recent coverage and pulls out the
  * handful of topics/themes most obviously associated with it, for the
  * Dashboard tab's overview card + filter pills. */
@@ -45,7 +44,7 @@ export async function analyzeArtistSentiment(
     .map((a, i) => `${i + 1}. ${a.title}${a.excerpt ? ` — ${a.excerpt}` : ""}`)
     .join("\n");
 
-  const response = await client.models.generateContent({
+  const response = await generateContentThrottled({
     model: "gemini-2.5-flash-lite",
     contents:
       `You're analyzing recent media coverage of the artist "${artistName}" for a marketing dashboard.\n\n` +

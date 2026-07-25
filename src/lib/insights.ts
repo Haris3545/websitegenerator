@@ -1,4 +1,5 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { Type } from "@google/genai";
+import { generateContentThrottled } from "@/lib/gemini";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import type { ArtistInsight } from "@/lib/database.types";
 
@@ -58,8 +59,6 @@ async function captureMetricSnapshot(artistId: string): Promise<Metrics> {
   await supabase.from("artist_metric_snapshots").insert({ artist_id: artistId, metrics });
   return metrics;
 }
-
-const geminiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const INSIGHTS_SCHEMA = {
   type: Type.OBJECT,
@@ -195,7 +194,7 @@ export async function refreshInsightsNow(artistId: string, artistName: string) {
     return;
   }
 
-  const response = await geminiClient.models.generateContent({
+  const response = await generateContentThrottled({
     model: "gemini-2.5-flash-lite",
     contents:
       `You're writing a short "what we've noticed" panel for a marketing dashboard about the ` +

@@ -353,6 +353,12 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["wikipedia_trends"]["Insert"]>;
         Relationships: [];
       };
+      gemini_usage: {
+        Row: { usage_date: string; request_count: number };
+        Insert: { usage_date: string; request_count?: number };
+        Update: Partial<Database["public"]["Tables"]["gemini_usage"]["Insert"]>;
+        Relationships: [];
+      };
       youtube_stats: {
         Row: {
           artist_id: string;

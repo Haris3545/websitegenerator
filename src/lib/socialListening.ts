@@ -1,28 +1,9 @@
-import { GoogleGenAI, Type } from "@google/genai";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import type { SocialComment, SocialCommentCategory } from "@/lib/database.types";
+import { categorizeCommentsLocally } from "@/lib/commentCategorizer";
+import type { SocialComment } from "@/lib/database.types";
 
 const STALE_AFTER_MS = 6 * 60 * 60 * 1000; // 6 hours — heavier than a simple mentions fetch
-const MAX_COMMENTS = 150;
-
-const geminiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-/** Gemini's structured-output mode occasionally still wraps its response in
- * a ```json fence or trails whitespace/prose around the object even with
- * responseSchema set — a plain JSON.parse on that throws, and a thrown
- * parse error here used to silently blow away real comments that were
- * already fetched (see categorizeComments's caller, which now treats a
- * parse failure as "categorization failed", not "no comments exist"). */
-function safeParseJson(text: string | undefined): Record<string, unknown> {
-  if (!text) return {};
-  const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "").trim();
-  try {
-    return JSON.parse(cleaned);
-  } catch (err) {
-    console.error("socialListening: failed to parse Gemini JSON response:", err, "raw:", cleaned.slice(0, 500));
-    return {};
-  }
-}
+const MAX_COMMENTS = 1000;
 
 type YoutubeSearchResponse = {
   items?: { id?: { videoId?: string }; snippet?: { title?: string } }[];
@@ -50,7 +31,10 @@ async function fetchYoutubeVideoComments(
 ): Promise<SocialComment[]> {
   try {
     const res = await fetch(
-      `https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${encodeURIComponent(videoId)}&maxResults=15&order=relevance&key=${apiKey}`
+      // 100 is the YouTube Data API's own per-request ceiling for this
+      // endpoint — one request per video is enough to get meaningfully more
+      // volume without adding pagination complexity for a second page.
+      `https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${encodeURIComponent(videoId)}&maxResults=100&order=relevance&key=${apiKey}`
     );
     if (!res.ok) return []; // comments can be disabled on a video — not worth failing the whole refresh over
     const data: YoutubeCommentThreadsResponse = await res.json();
@@ -73,9 +57,12 @@ async function fetchYoutubeVideoComments(
 }
 
 /** Pulls comments from the artist's own recent videos (already tracked in
- * youtube_stats) plus a handful of third-party videos that mention the
+ * youtube_stats) plus a wider net of third-party videos that mention the
  * artist by name — fan reactions on the artist's own uploads are the most
- * directly relevant source, third-party videos widen the net. */
+ * directly relevant source, third-party videos widen it further. Casting a
+ * wide net here matters more now that categorization is local keyword
+ * matching (see commentCategorizer.ts) rather than a Gemini call: more raw
+ * comments make the resulting category map actually worth exploring. */
 async function fetchYoutubeComments(artistId: string, artistName: string): Promise<SocialComment[]> {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) return [];
@@ -88,11 +75,11 @@ async function fetchYoutubeComments(artistId: string, artistName: string): Promi
     .maybeSingle();
 
   const ownVideos = (youtubeStats?.recent_videos ?? [])
-    .slice(0, 5)
+    .slice(0, 10)
     .map((v) => ({ id: v.id, title: v.title }));
 
   const searchRes = await fetch(
-    `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(artistName)}&order=relevance&maxResults=5&type=video&key=${apiKey}`
+    `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(artistName)}&order=relevance&maxResults=10&type=video&key=${apiKey}`
   );
   const thirdPartyVideos: { id: string; title: string }[] = [];
   if (searchRes.ok) {
@@ -107,90 +94,12 @@ async function fetchYoutubeComments(artistId: string, artistName: string): Promi
   return batches.flat();
 }
 
-const CATEGORY_SCHEMA = {
-  type: Type.OBJECT,
-  properties: {
-    categories: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          name: { type: Type.STRING },
-          subcategories: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                name: { type: Type.STRING },
-                commentIndexes: { type: Type.ARRAY, items: { type: Type.NUMBER } },
-              },
-              required: ["name", "commentIndexes"],
-            },
-          },
-        },
-        required: ["name", "subcategories"],
-      },
-    },
-  },
-  required: ["categories"],
-};
-
-/** Clusters raw comments into a category -> subcategory tree for the
- * zoomable map, driven entirely by what's actually in this batch of
- * comments rather than a fixed taxonomy — Gemini invents category names
- * that fit the real content. Comments it can't confidently place (spam,
- * unrelated) are just left out rather than forced somewhere. */
-async function categorizeComments(
-  artistName: string,
-  comments: SocialComment[]
-): Promise<SocialCommentCategory[]> {
-  const digest = comments
-    .map((c, i) => `[${i}] (${c.platform}) ${c.text.replace(/\s+/g, " ").slice(0, 300)}`)
-    .join("\n");
-
-  const response = await geminiClient.models.generateContent({
-    model: "gemini-2.5-flash-lite",
-    contents:
-      `These are real YouTube comments mentioning the artist "${artistName}". Organize ` +
-      "them into a two-level taxonomy that reflects what's ACTUALLY being talked about: 3-6 " +
-      "top-level categories (e.g. reactions to a specific release, tour/ticket chatter, comparisons " +
-      "to other artists, nostalgia, criticism — invent whatever genuinely fits this data, don't " +
-      "force a fixed template), each with 1-4 more specific subcategories. Assign every comment's " +
-      "index number to exactly one subcategory it fits best. Skip comments that are pure spam or " +
-      "totally unrelated — you don't need to place every single one, but place as many genuine " +
-      `ones as you reasonably can.\n\nComments:\n${digest}`,
-    config: { responseMimeType: "application/json", responseSchema: CATEGORY_SCHEMA },
-  });
-
-  const parsed = safeParseJson(response.text);
-  const rawCategories: { name?: string; subcategories?: { name?: string; commentIndexes?: number[] }[] }[] =
-    Array.isArray(parsed.categories)
-      ? (parsed.categories as { name?: string; subcategories?: { name?: string; commentIndexes?: number[] }[] }[])
-      : [];
-
-  return rawCategories
-    .filter((c) => c.name)
-    .map((c) => ({
-      name: c.name as string,
-      subcategories: (c.subcategories ?? [])
-        .filter((s) => s.name)
-        .map((s) => ({
-          name: s.name as string,
-          comments: (s.commentIndexes ?? []).map((i) => comments[i]).filter((c): c is SocialComment => !!c),
-        }))
-        .filter((s) => s.comments.length > 0),
-    }))
-    .filter((c) => c.subcategories.length > 0);
-}
-
 /** Reddit is temporarily disabled: the Gemini-search-based discovery this
  * used (see git history) burned through the same free-tier Gemini quota
- * (20 requests/day) that sentiment/insights/events/wikipedia-trends/
- * categorization all share, so on any real refresh it was routinely
- * exhausted before categorization — the one step that actually organizes
- * the YouTube comments we DO reliably get — even ran. Re-add a Reddit
- * source once there's quota headroom (a paid tier, or a direct non-Gemini
- * fetch) to spend instead. */
+ * (20 requests/day) that sentiment/insights/events/wikipedia-trends share,
+ * so on any real refresh it was routinely exhausted before anything else
+ * that needed Gemini got to run. Re-add a Reddit source once there's quota
+ * headroom (a paid tier) or a direct non-Gemini fetch to spend instead. */
 export async function refreshSocialListeningForArtist(artistId: string, artistName: string) {
   const comments: SocialComment[] = [];
   let platformStatus: string;
@@ -219,10 +128,10 @@ export async function refreshSocialListeningForArtist(artistId: string, artistNa
       computed_at: new Date().toISOString(),
     });
     if (upsertError) {
-      // A schema mismatch here (e.g. migrations/020's last_error column
-      // never applied) would otherwise fail completely silently — the row
-      // never gets written at all, so the page keeps showing stale/no data
-      // forever with nothing pointing at why.
+      // A schema mismatch here (e.g. a migration never having been applied)
+      // would otherwise fail completely silently — the row never gets
+      // written at all, so the page keeps showing stale/no data forever
+      // with nothing pointing at why.
       console.error(`refreshSocialListeningForArtist: failed to save empty result for ${artistName}:`, upsertError);
       throw new Error(`social_comment_map upsert failed: ${upsertError.message}`);
     }
@@ -231,35 +140,17 @@ export async function refreshSocialListeningForArtist(artistId: string, artistNa
 
   const trimmed = comments.slice(0, MAX_COMMENTS);
 
-  // Real comments were found — from here on, never let a categorization
-  // hiccup make them disappear from the UI entirely (which reads only
-  // `categories`, not comment_count). A parse failure or an
-  // over-conservative Gemini pass that places nothing both fall back to one
-  // flat, uncategorized bucket rather than an empty map with no explanation.
-  let categories: SocialCommentCategory[];
-  let categorizeNote: string | null = null;
-  try {
-    categories = await categorizeComments(artistName, trimmed);
-    if (!categories.length) categorizeNote = "categorization returned no groupings for these comments";
-  } catch (err) {
-    categories = [];
-    categorizeNote = `categorization failed: ${err instanceof Error ? err.message : "unknown error"}`;
-  }
-  if (!categories.length) {
-    categories = [{ name: "All comments", subcategories: [{ name: "Uncategorized", comments: trimmed }] }];
-  }
-
-  // Always keep a record of what each platform actually found, even on a
-  // clean run — this is what made the last bug (comments fetched fine, then
-  // silently dropped by categorization) visible on-page instead of only in
-  // server logs no one but a developer can reach.
-  const lastNote = [platformStatus, categorizeNote].filter(Boolean).join(" · ");
+  // Local keyword matching (see commentCategorizer.ts) always places every
+  // comment somewhere — real category or a flat fallback bucket — so unlike
+  // the old Gemini-based pass, there's no failure mode here that can make
+  // real comments silently disappear from the map.
+  const categories = categorizeCommentsLocally(trimmed);
 
   const { error } = await supabase.from("social_comment_map").upsert({
     artist_id: artistId,
     categories,
     comment_count: trimmed.length,
-    last_error: lastNote,
+    last_error: platformStatus,
     computed_at: new Date().toISOString(),
   });
   if (error) throw new Error(error.message);

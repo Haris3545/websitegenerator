@@ -1,4 +1,5 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { Type } from "@google/genai";
+import { generateContentThrottled } from "@/lib/gemini";
 import type { AestheticParams } from "@/lib/database.types";
 
 const RESPONSE_SCHEMA = {
@@ -12,8 +13,6 @@ const RESPONSE_SCHEMA = {
   required: ["grain_intensity", "tint_opacity", "blur", "vignette"],
 };
 
-const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
 /**
  * Turns free text like "film grain overlay, 30%, slight vignette" into the
  * structured 0..1 params the site shell renders the background effect with.
@@ -24,7 +23,7 @@ export async function parseAestheticPrompt(prompt: string): Promise<AestheticPar
   }
 
   try {
-    const response = await client.models.generateContent({
+    const response = await generateContentThrottled({
       model: "gemini-2.5-flash-lite",
       contents:
         "Translate this art-direction note for a dashboard's background photo into " +

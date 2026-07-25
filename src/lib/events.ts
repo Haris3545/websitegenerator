@@ -1,4 +1,5 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { Type } from "@google/genai";
+import { generateContentThrottled } from "@/lib/gemini";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 
 const STALE_AFTER_MS = 12 * 60 * 60 * 1000; // 12 hours
@@ -76,8 +77,6 @@ async function fetchTicketmasterEvents(artistId: string, artistName: string): Pr
     .filter((row): row is EventRow => row !== null);
 }
 
-const geminiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
 const EXTRACTED_EVENTS_SCHEMA = {
   type: Type.OBJECT,
   properties: {
@@ -133,7 +132,7 @@ async function geocodeCity(city: string, country: string): Promise<{ lat: number
 async function fetchWebSearchEvents(artistId: string, artistName: string): Promise<EventRow[]> {
   const todayIso = new Date().toISOString().slice(0, 10);
 
-  const searchRes = await geminiClient.models.generateContent({
+  const searchRes = await generateContentThrottled({
     model: "gemini-2.5-flash-lite",
     contents:
       `Search the web for musical artist "${artistName}"'s upcoming, currently-scheduled live ` +
@@ -146,7 +145,7 @@ async function fetchWebSearchEvents(artistId: string, artistName: string): Promi
   const digest = searchRes.text ?? "";
   if (!digest.trim()) return [];
 
-  const extractRes = await geminiClient.models.generateContent({
+  const extractRes = await generateContentThrottled({
     model: "gemini-2.5-flash-lite",
     contents:
       "Extract upcoming show dates from this research into structured data. Only include entries " +
