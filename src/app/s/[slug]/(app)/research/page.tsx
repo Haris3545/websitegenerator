@@ -1,12 +1,13 @@
-import { SitePlaceholderTab } from "@/components/site/SitePlaceholderTab";
+import { SiteBoardTab } from "@/components/site/SiteBoardTab";
 
 export default async function ResearchPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   return (
-    <SitePlaceholderTab
+    <SiteBoardTab
       slug={slug}
       tabKey="research"
-      note="Research Library with document uploads, plus a long-form written brief mixing prose, milestones, and stats — built in Phase 3."
+      noun="research notes"
+      subtitle="Findings, sources, and supporting stats"
     />
   );
 }

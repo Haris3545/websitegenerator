@@ -17,6 +17,6 @@ export const TABS: { key: TabKey; label: string; path: string }[] = [
 
 export const ALL_TAB_KEYS = TABS.map((t) => t.key);
 
-/** Phase 1 has live data behind Dashboard + Media; everything else is a
- * "coming soon" placeholder that still respects the enabled/disabled toggle. */
-export const LIVE_TABS: TabKey[] = ["dashboard", "media"];
+/** Tabs with real functionality behind them; everything else is still a
+ * "coming soon" placeholder that respects the enabled/disabled toggle. */
+export const LIVE_TABS: TabKey[] = ["dashboard", "media", "strategy", "tactics", "ideas", "research"];

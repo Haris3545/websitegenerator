@@ -7,7 +7,7 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { refreshMediaForArtist } from "@/lib/media";
 import { refreshSentimentNow } from "@/lib/sentiment";
 import { computeArtistPassword, artistAccessCookieName } from "@/lib/artistAccess";
-import type { SentimentFilter } from "@/lib/database.types";
+import type { SentimentFilter, BoardItem } from "@/lib/database.types";
 
 export async function refreshEverything(slug: string) {
   const supabase = createServiceRoleClient();
@@ -112,4 +112,32 @@ export async function logOutOfArtistSite(slug: string) {
   const cookieStore = await cookies();
   cookieStore.delete(artistAccessCookieName(slug));
   redirect(`/s/${slug}/gate`);
+}
+
+/** Adds a card to one of the Strategy/Tactics/Ideas/Research boards. */
+export async function addBoardItem(
+  artistId: string,
+  boardKey: string,
+  title: string,
+  body: string
+): Promise<{ ok: true; item: BoardItem } | { ok: false; error: string }> {
+  if (!title.trim()) return { ok: false, error: "Title can't be empty." };
+
+  const supabase = createServiceRoleClient();
+  const { data, error } = await supabase
+    .from("board_items")
+    .insert({ artist_id: artistId, board_key: boardKey, title: title.trim(), body: body.trim() })
+    .select()
+    .single();
+
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/s/[slug]`, "layout");
+  return { ok: true, item: data };
+}
+
+export async function deleteBoardItem(itemId: string) {
+  const supabase = createServiceRoleClient();
+  const { error } = await supabase.from("board_items").delete().eq("id", itemId);
+  if (error) throw new Error(error.message);
+  revalidatePath(`/s/[slug]`, "layout");
 }

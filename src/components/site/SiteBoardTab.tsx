@@ -1,6 +1,7 @@
 import { getSiteArtist } from "@/lib/getSiteArtist";
 import { resolveContent } from "@/lib/contentOverrides";
-import { EmptyBoardState } from "@/components/site/EmptyBoardState";
+import { createServiceRoleClient } from "@/lib/supabase/server";
+import { BoardList } from "@/components/site/BoardList";
 import { Editable } from "@/components/site/Editable";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { TABS } from "@/lib/tabs";
@@ -21,6 +22,14 @@ export async function SiteBoardTab({
   const tab = TABS.find((t) => t.key === tabKey)!;
   const contentKey = `board.${tabKey}.subtitle`;
 
+  const supabase = createServiceRoleClient();
+  const { data: items } = await supabase
+    .from("board_items")
+    .select("*")
+    .eq("artist_id", artist.id)
+    .eq("board_key", tabKey)
+    .order("created_at", { ascending: false });
+
   return (
     <div>
       <div className="mb-1 flex items-center justify-between">
@@ -39,7 +48,12 @@ export async function SiteBoardTab({
         </div>
       </div>
       <div className="mt-6">
-        <EmptyBoardState noun={noun} />
+        <BoardList
+          artistId={artist.id}
+          boardKey={tabKey}
+          noun={noun}
+          initialItems={items ?? []}
+        />
       </div>
       <SiteFooter slug={slug} tagline={artist.tagline} />
     </div>
