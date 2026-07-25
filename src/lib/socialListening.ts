@@ -267,12 +267,24 @@ async function categorizeComments(
     .filter((c) => c.subcategories.length > 0);
 }
 
+/** Describes what actually happened on one platform's fetch, unconditionally
+ * — not just when something went wrong — so last_error always has enough
+ * detail to tell "the API call itself failed" apart from "it ran fine and
+ * genuinely found nothing," without needing server log access to tell them
+ * apart. */
+function describePlatformResult(platform: string, result: PromiseSettledResult<SocialComment[]>): string {
+  if (result.status === "rejected") {
+    return `${platform}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`;
+  }
+  return `${platform}: ${result.value.length} found`;
+}
+
 /** Best-effort per platform — a Reddit failure shouldn't drop YouTube
  * results and vice versa. YouTube contributes zero rows rather than
- * erroring when YOUTUBE_API_KEY isn't set. When both come back empty, this
- * records WHY in last_error — worth surfacing rather than leaving the UI's
- * empty state looking identical whether it's a real platform issue or a
- * genuinely quiet search. */
+ * erroring when YOUTUBE_API_KEY isn't set. Every run records a per-platform
+ * status in last_error (not just failures) — worth surfacing rather than
+ * leaving the UI's empty state looking identical whether it's a real
+ * platform issue or a genuinely quiet search. */
 export async function refreshSocialListeningForArtist(artistId: string, artistName: string) {
   const results = await Promise.allSettled([
     fetchRedditCommentsViaGemini(artistName),
@@ -286,28 +298,21 @@ export async function refreshSocialListeningForArtist(artistId: string, artistNa
 
   const supabase = createServiceRoleClient();
 
+  const platformStatus = [
+    !process.env.GEMINI_API_KEY ? "Reddit: GEMINI_API_KEY isn't set" : describePlatformResult("Reddit", redditResult),
+    !process.env.YOUTUBE_API_KEY
+      ? "YouTube: YOUTUBE_API_KEY isn't set"
+      : describePlatformResult("YouTube", youtubeResult),
+  ].join("; ");
+
   if (!comments.length) {
-    const reasons: string[] = [];
-    if (redditResult.status === "rejected") {
-      reasons.push(
-        `Reddit search: ${redditResult.reason instanceof Error ? redditResult.reason.message : "search failed"}`
-      );
-    }
-    if (!process.env.YOUTUBE_API_KEY) {
-      reasons.push("YouTube: YOUTUBE_API_KEY isn't set");
-    } else if (youtubeResult.status === "rejected") {
-      reasons.push(`YouTube: ${youtubeResult.reason instanceof Error ? youtubeResult.reason.message : "fetch failed"}`);
-    }
-    const lastError = reasons.length
-      ? reasons.join("; ")
-      : "Both platforms returned zero mentions for this search — not necessarily an error, might just be genuinely quiet right now.";
-    console.error(`refreshSocialListeningForArtist: no comments found for ${artistName}: ${lastError}`);
+    console.error(`refreshSocialListeningForArtist: no comments found for ${artistName}: ${platformStatus}`);
 
     await supabase.from("social_comment_map").upsert({
       artist_id: artistId,
       categories: [],
       comment_count: 0,
-      last_error: lastError,
+      last_error: platformStatus,
       computed_at: new Date().toISOString(),
     });
     return 0;
@@ -321,23 +326,29 @@ export async function refreshSocialListeningForArtist(artistId: string, artistNa
   // over-conservative Gemini pass that places nothing both fall back to one
   // flat, uncategorized bucket rather than an empty map with no explanation.
   let categories: SocialCommentCategory[];
-  let categorizeError: string | null = null;
+  let categorizeNote: string | null = null;
   try {
     categories = await categorizeComments(artistName, trimmed);
-    if (!categories.length) categorizeError = "Categorization returned no groupings for these comments";
+    if (!categories.length) categorizeNote = "categorization returned no groupings for these comments";
   } catch (err) {
     categories = [];
-    categorizeError = `Categorization failed: ${err instanceof Error ? err.message : "unknown error"}`;
+    categorizeNote = `categorization failed: ${err instanceof Error ? err.message : "unknown error"}`;
   }
   if (!categories.length) {
     categories = [{ name: "All comments", subcategories: [{ name: "Uncategorized", comments: trimmed }] }];
   }
 
+  // Always keep a record of what each platform actually found, even on a
+  // clean run — this is what made the last bug (comments fetched fine, then
+  // silently dropped by categorization) visible on-page instead of only in
+  // server logs no one but a developer can reach.
+  const lastNote = [platformStatus, categorizeNote].filter(Boolean).join(" · ");
+
   const { error } = await supabase.from("social_comment_map").upsert({
     artist_id: artistId,
     categories,
     comment_count: trimmed.length,
-    last_error: categorizeError,
+    last_error: lastNote,
     computed_at: new Date().toISOString(),
   });
   if (error) throw new Error(error.message);

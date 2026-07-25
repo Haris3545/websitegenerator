@@ -62,17 +62,20 @@ export default async function SocialListeningPage({
         subtitle={`Reddit and YouTube comments about ${artist.name}, grouped by theme`}
       />
 
+      {map?.computed_at && (
+        <p className="mt-1 text-xs text-white/30">
+          {map.comment_count ?? 0} comment{map.comment_count === 1 ? "" : "s"} · last checked{" "}
+          {new Date(map.computed_at).toLocaleString()}
+          {map.last_error && <span className="text-white/50"> · {map.last_error}</span>}
+        </p>
+      )}
+
       {!categories.length ? (
         <div className="mt-4 rounded-lg border border-dashed border-white/20 p-8 text-center text-white/50">
           <p>
             No comments found yet — hit &quot;Refresh Everything&quot; below. YouTube comments need
-            YOUTUBE_API_KEY set; Reddit needs no setup at all.
+            YOUTUBE_API_KEY set; Reddit uses the same GEMINI_API_KEY the rest of this app already needs.
           </p>
-          {map?.last_error && (
-            <p className="mt-3 text-xs text-white/40">
-              Last attempt: <span className="text-white/60">{map.last_error}</span>
-            </p>
-          )}
         </div>
       ) : (
         <div className="mt-4">
