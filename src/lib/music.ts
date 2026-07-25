@@ -17,49 +17,69 @@ type LastfmTopTracksResponse = {
   };
 };
 
-type LastfmTopAlbumsResponse = {
-  topalbums?: {
-    album?: { name?: string; playcount?: string; url?: string }[];
-  };
+type DeezerArtistSearchResponse = {
+  data?: { id?: number; name?: string }[];
 };
 
-type ItunesSearchResponse = {
-  results?: { artworkUrl100?: string; artistName?: string; collectionName?: string }[];
+type DeezerAlbum = {
+  title?: string;
+  cover_medium?: string;
+  cover_big?: string;
+  cover_xl?: string;
+  release_date?: string;
+  record_type?: string;
+  link?: string;
+};
+
+type DeezerArtistAlbumsResponse = {
+  data?: DeezerAlbum[];
 };
 
 function normalizeForMatch(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-/** Last.fm's own album artwork URLs have been broken placeholder images for
- * years (a long-standing, widely-reported issue on their end) — so real
- * cover art comes from Apple's iTunes Search API instead, which is free and
- * keyless. Searching by album title alone (attribute=albumTerm) and then
- * verifying the result's artist actually matches — rather than trusting
- * whatever a blended "artist album" free-text search ranked first — is
- * what keeps this from confidently returning the wrong artist's album; if
- * nothing matches, this returns null (a text placeholder) rather than risk
- * showing an incorrect cover. */
-async function fetchAlbumArtwork(artistName: string, albumName: string): Promise<string | null> {
+/** Last.fm's own album artwork has been broken placeholder images for years,
+ * and its "top albums" ranking is popularity-based, so brand-new releases
+ * lag behind. Deezer's public API (genuinely keyless, no registration)
+ * fixes both: resolve the artist to their exact Deezer artist ID once, then
+ * pull albums directly from that artist's own catalog — the artwork is
+ * then guaranteed to belong to the right artist (no cross-catalog
+ * guessing), and sorting by release_date surfaces new albums immediately. */
+async function fetchDeezerAlbums(artistName: string): Promise<MusicAlbum[]> {
   try {
-    const res = await fetch(
-      `https://itunes.apple.com/search?term=${encodeURIComponent(albumName)}&attribute=albumTerm&entity=album&limit=10`
+    const searchRes = await fetch(
+      `https://api.deezer.com/search/artist?q=${encodeURIComponent(artistName)}&limit=5`
     );
-    if (!res.ok) return null;
-    const data: ItunesSearchResponse = await res.json();
-    const results = data.results ?? [];
+    if (!searchRes.ok) return [];
+    const searchData: DeezerArtistSearchResponse = await searchRes.json();
 
-    const wantedArtist = normalizeForMatch(artistName);
-    const match = results.find((r) => {
-      if (!r.artistName) return false;
-      const gotArtist = normalizeForMatch(r.artistName);
-      return gotArtist.includes(wantedArtist) || wantedArtist.includes(gotArtist);
-    });
+    const wanted = normalizeForMatch(artistName);
+    const candidates = searchData.data ?? [];
+    const match =
+      candidates.find((a) => a.name && normalizeForMatch(a.name) === wanted) ?? candidates[0];
+    if (!match?.id) return [];
 
-    const artwork = match?.artworkUrl100;
-    return artwork ? artwork.replace("100x100", "600x600") : null;
+    const albumsRes = await fetch(`https://api.deezer.com/artist/${match.id}/albums?limit=30`);
+    if (!albumsRes.ok) return [];
+    const albumsData: DeezerArtistAlbumsResponse = await albumsRes.json();
+    const rawAlbums = albumsData.data ?? [];
+
+    const realAlbums = rawAlbums.filter((a) => a.record_type === "album");
+    const pool = realAlbums.length >= 3 ? realAlbums : rawAlbums;
+
+    return pool
+      .filter((a) => a.title)
+      .sort((a, b) => (b.release_date ?? "").localeCompare(a.release_date ?? ""))
+      .slice(0, ALBUM_COUNT)
+      .map((a) => ({
+        name: a.title as string,
+        playcount: null,
+        url: a.link ?? "",
+        artworkUrl: a.cover_xl ?? a.cover_big ?? a.cover_medium ?? null,
+      }));
   } catch {
-    return null;
+    return [];
   }
 }
 
@@ -97,24 +117,7 @@ export async function refreshMusicStats(artistId: string, artistName: string) {
       url: t.url ?? "",
     }));
 
-  const albumsRes = await fetch(
-    `https://ws.audioscrobbler.com/2.0/?method=artist.gettopalbums&artist=${encodeURIComponent(artistName)}&api_key=${apiKey}&format=json&limit=${ALBUM_COUNT}`
-  );
-  if (!albumsRes.ok) throw new Error(`Last.fm artist.gettopalbums returned ${albumsRes.status}`);
-  const albumsData: LastfmTopAlbumsResponse = await albumsRes.json();
-  const rawAlbums = albumsData.topalbums?.album;
-  const albumList = (Array.isArray(rawAlbums) ? rawAlbums : rawAlbums ? [rawAlbums] : [])
-    .filter((a) => a.name)
-    .slice(0, ALBUM_COUNT);
-
-  const topAlbums: MusicAlbum[] = await Promise.all(
-    albumList.map(async (a) => ({
-      name: a.name as string,
-      playcount: a.playcount ? Number(a.playcount) : null,
-      url: a.url ?? "",
-      artworkUrl: await fetchAlbumArtwork(artistName, a.name as string),
-    }))
-  );
+  const topAlbums = await fetchDeezerAlbums(artistName);
 
   const supabase = createServiceRoleClient();
   const { error } = await supabase.from("music_stats").upsert({
