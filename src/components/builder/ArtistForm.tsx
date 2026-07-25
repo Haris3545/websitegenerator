@@ -5,6 +5,7 @@ import { useRouter, unstable_rethrow } from "next/navigation";
 import { ColorField } from "@/components/builder/ColorField";
 import { FontPicker } from "@/components/builder/FontPicker";
 import { MediaUploadField } from "@/components/builder/MediaUploadField";
+import { AudienceUploadField } from "@/components/builder/AudienceUploadField";
 import { TabsChecklist } from "@/components/builder/TabsChecklist";
 import { ThemeEditor } from "@/components/builder/ThemeEditor";
 import {
@@ -333,6 +334,13 @@ export function ArtistForm({
             </button>
             {secretsSaved && <p className="text-xs text-green-600">Saved.</p>}
           </div>
+        </div>
+      )}
+
+      {artist && (
+        <div className="rounded border border-neutral-200 p-4">
+          <h2 className="mb-1 text-sm font-semibold">Audience research</h2>
+          <AudienceUploadField artistId={artist.id} />
         </div>
       )}
 

@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { parseAestheticPrompt } from "@/lib/aesthetic";
 import { encryptSecret } from "@/lib/crypto";
 import { publishArtistSite, unpublishArtistSite, type PublishResult, type UnpublishResult } from "@/lib/publish";
+import { parseAudienceFile, storeAudienceUpload } from "@/lib/audience";
 import { ALL_TAB_KEYS } from "@/lib/tabs";
 import type { TabKey } from "@/lib/database.types";
 import type { ThemeOverrides } from "@/lib/theme";
@@ -127,4 +128,26 @@ export async function unpublishArtist(artistId: string): Promise<UnpublishResult
   const result = await unpublishArtistSite(artistId);
   if (result.ok) revalidatePath(`/builder/artists/${artistId}`);
   return result;
+}
+
+/** Parses and stores an uploaded GWI-style audience research export (CSV or
+ * XLSX). Column matching is fuzzy — see src/lib/audience.ts — since export
+ * formats vary; returns a clear error naming the headers it actually found
+ * when it can't locate a statement/segment column. */
+export async function uploadAudienceResearch(
+  artistId: string,
+  formData: FormData
+): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  const file = formData.get("file");
+  if (!(file instanceof File)) return { ok: false, error: "No file received." };
+
+  const buffer = await file.arrayBuffer();
+  const parsed = await parseAudienceFile(buffer, file.name);
+  if (!parsed.ok) return { ok: false, error: parsed.error };
+
+  const stored = await storeAudienceUpload(artistId, file.name, parsed.rows);
+  if (!stored.ok) return stored;
+
+  revalidatePath(`/builder/artists/${artistId}`);
+  return { ok: true, count: stored.count };
 }

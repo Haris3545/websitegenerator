@@ -19,4 +19,12 @@ export const ALL_TAB_KEYS = TABS.map((t) => t.key);
 
 /** Tabs with real functionality behind them; everything else is still a
  * "coming soon" placeholder that respects the enabled/disabled toggle. */
-export const LIVE_TABS: TabKey[] = ["dashboard", "media", "strategy", "tactics", "ideas", "research"];
+export const LIVE_TABS: TabKey[] = [
+  "dashboard",
+  "media",
+  "strategy",
+  "tactics",
+  "ideas",
+  "research",
+  "audience",
+];
