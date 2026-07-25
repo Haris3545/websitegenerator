@@ -63,7 +63,6 @@ export interface Database {
           accent_color: string;
           font_family: string;
           background_image_url: string | null;
-          landing_video_url: string | null;
           aesthetic_prompt: string;
           aesthetic_params: AestheticParams;
           tagline: string;
@@ -89,7 +88,6 @@ export interface Database {
           accent_color?: string;
           font_family?: string;
           background_image_url?: string | null;
-          landing_video_url?: string | null;
           aesthetic_prompt?: string;
           aesthetic_params?: AestheticParams;
           tagline?: string;

@@ -52,7 +52,6 @@ export function ArtistForm({
     accent_color: artist?.accent_color ?? "#eab308",
     font_family: artist?.font_family ?? "Inter",
     background_image_url: artist?.background_image_url ?? null,
-    landing_video_url: artist?.landing_video_url ?? null,
     gate_background_url: artist?.gate_background_url ?? null,
     youtube_channel_id: artist?.youtube_channel_id ?? null,
     aesthetic_prompt: artist?.aesthetic_prompt ?? "",
@@ -237,16 +236,9 @@ export function ArtistForm({
             value={form.background_image_url}
             onChange={(v) => update("background_image_url", v)}
           />
-          <MediaUploadField
-            label="Landing page media"
-            slotName="landing"
-            artistSlug={form.slug}
-            value={form.landing_video_url}
-            onChange={(v) => update("landing_video_url", v)}
-          />
           <p className="-mt-4 text-xs text-neutral-900">
-            The site&apos;s background uses the video, looping and muted, whenever one is set —
-            the image is only the fallback when there&apos;s no video.
+            Shown behind every page of the dashboard (not the password page — that&apos;s set
+            separately below). An image or a looping muted video, either works.
           </p>
           <MediaUploadField
             label="Password page background"

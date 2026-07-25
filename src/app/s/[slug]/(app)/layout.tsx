@@ -42,6 +42,7 @@ export default async function ArtistSiteLayout({
   const { grain_intensity = 0, tint_opacity = 0, blur = 0, vignette = 0 } =
     artist.aesthetic_params ?? {};
   const theme = withThemeDefaults(artist.theme_overrides);
+  const isBackgroundVideo = /\.(mp4|webm|mov|m4v)(\?|$)/i.test(artist.background_image_url ?? "");
 
   return (
     <EditModeProvider>
@@ -60,22 +61,22 @@ export default async function ArtistSiteLayout({
       <link rel="stylesheet" href={googleFontsCssUrl(artist.font_family)} />
 
       <div className="fixed inset-0 -z-20" style={{ backgroundColor: artist.secondary_color }}>
-        {artist.landing_video_url ? (
-          <video
-            src={artist.landing_video_url}
-            autoPlay
-            muted
-            loop
-            playsInline
-            className="h-full w-full object-cover"
-            style={{
-              filter: `blur(${blur * 12}px) contrast(${theme.bg_contrast}) saturate(${theme.bg_saturate})`,
-              objectPosition: `${theme.bg_position_x}% ${theme.bg_position_y}%`,
-              transform: `scale(${theme.bg_zoom})`,
-            }}
-          />
-        ) : (
-          artist.background_image_url && (
+        {artist.background_image_url &&
+          (isBackgroundVideo ? (
+            <video
+              src={artist.background_image_url}
+              autoPlay
+              muted
+              loop
+              playsInline
+              className="h-full w-full object-cover"
+              style={{
+                filter: `blur(${blur * 12}px) contrast(${theme.bg_contrast}) saturate(${theme.bg_saturate})`,
+                objectPosition: `${theme.bg_position_x}% ${theme.bg_position_y}%`,
+                transform: `scale(${theme.bg_zoom})`,
+              }}
+            />
+          ) : (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={artist.background_image_url}
@@ -87,8 +88,7 @@ export default async function ArtistSiteLayout({
                 transform: `scale(${theme.bg_zoom})`,
               }}
             />
-          )
-        )}
+          ))}
         {/* Fixed dark scrim: always on (strength set via the builder's visual
             editor), independent of the aesthetic tint, so text stays readable
             and the photo reads as punchy rather than washed out. */}

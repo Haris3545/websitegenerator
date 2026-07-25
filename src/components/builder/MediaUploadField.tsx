@@ -16,8 +16,9 @@ export function MediaUploadField({
   onChange,
 }: {
   label: string;
-  /** Storage filename stem for this slot, e.g. "background" or "landing" —
-   * kept distinct per slot even though both now accept either media kind. */
+  /** Storage filename stem for this slot, e.g. "background" or
+   * "gate-background" — kept distinct per slot even though both now accept
+   * either media kind. */
   slotName: string;
   artistSlug: string;
   value: string | null;
