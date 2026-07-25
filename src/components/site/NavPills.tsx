@@ -56,7 +56,7 @@ export function NavPills({
         return (
           <div
             key={key}
-            className="relative"
+            className={draggableTab ? "relative select-none" : "relative"}
             draggable={draggableTab}
             onDragStart={() => draggableTab && setDragKey(key)}
             onDragOver={(e) => draggableTab && e.preventDefault()}

@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getSiteArtist } from "@/lib/getSiteArtist";
 import { refreshSocialListeningForArtist, refreshSocialListeningIfStale } from "@/lib/socialListening";
 import { CommentMap } from "@/components/site/CommentMap";
+import { TabHeading } from "@/components/site/TabHeading";
 import { SiteFooter } from "@/components/site/SiteFooter";
 
 export default async function SocialListeningPage({
@@ -53,13 +54,13 @@ export default async function SocialListeningPage({
 
   return (
     <div>
-      <div className="mb-1 flex items-center gap-2">
-        <div className="h-4 w-1 bg-[var(--accent)]" />
-        <h2 className="text-lg font-bold uppercase">Social listening</h2>
-        <span className="text-sm text-white/40">
-          Reddit and YouTube comments about {artist.name}, grouped by theme
-        </span>
-      </div>
+      <TabHeading
+        artistId={artist.id}
+        contentOverrides={artist.content_overrides}
+        tabKey="social_listening"
+        title="Social listening"
+        subtitle={`Reddit and YouTube comments about ${artist.name}, grouped by theme`}
+      />
 
       {!categories.length ? (
         <div className="mt-4 rounded-lg border border-dashed border-white/20 p-8 text-center text-white/50">

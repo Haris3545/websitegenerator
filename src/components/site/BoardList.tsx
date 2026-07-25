@@ -63,20 +63,20 @@ export function BoardList({
           onChange={(e) => setTitle(e.target.value)}
           placeholder={`New ${singular} title`}
           required
-          className="rounded border border-white/20 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-white/40"
+          className="rounded border border-white/20 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-white/40 transition-colors focus:border-[var(--accent)] focus:outline-none"
         />
         <textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
           placeholder="Notes (optional)"
           rows={2}
-          className="rounded border border-white/20 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-white/40"
+          className="rounded border border-white/20 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-white/40 transition-colors focus:border-[var(--accent)] focus:outline-none"
         />
         {error && <p className="text-xs text-red-400">{error}</p>}
         <button
           type="submit"
           disabled={isPending}
-          className="self-start rounded-full bg-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-black disabled:opacity-50"
+          className="self-start rounded-full bg-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-black transition-all duration-150 ease-out hover:-translate-y-0.5 hover:brightness-110 disabled:pointer-events-none disabled:opacity-50"
         >
           {isPending ? "Adding..." : `+ New ${singular}`}
         </button>
@@ -96,7 +96,7 @@ export function BoardList({
           {items.map((item) => (
             <div
               key={item.id}
-              className="p-4 shadow-lg shadow-black/30 backdrop-blur-md"
+              className="p-4 shadow-lg shadow-black/30 backdrop-blur-md transition-all duration-150 ease-out hover:-translate-y-0.5 hover:brightness-110"
               style={cardStyle}
             >
               <div className="flex items-start justify-between gap-2">
@@ -106,7 +106,7 @@ export function BoardList({
                 <button
                   type="button"
                   onClick={() => handleDelete(item.id)}
-                  className="shrink-0 text-xs opacity-40 hover:text-red-400 hover:opacity-100"
+                  className="shrink-0 text-xs opacity-40 transition-opacity hover:text-red-400 hover:opacity-100"
                   style={textStyle}
                 >
                   Delete

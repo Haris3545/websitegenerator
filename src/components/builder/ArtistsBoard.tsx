@@ -307,7 +307,7 @@ export function ArtistsBoard({
                 setDragId(null);
               }}
               onClick={() => setMenuFor((m) => (m === artist.id ? null : artist.id))}
-              className={`flex w-24 cursor-pointer flex-col items-center gap-1.5 rounded-lg p-2 text-center transition-colors ${
+              className={`flex w-24 cursor-pointer select-none flex-col items-center gap-1.5 rounded-lg p-2 text-center transition-colors ${
                 dropTarget === artist.id ? "bg-builder-accent/10 ring-2 ring-builder-accent" : "hover:bg-black/[0.03] dark:hover:bg-white/5"
               }`}
             >

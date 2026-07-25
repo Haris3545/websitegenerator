@@ -4,6 +4,7 @@ import { getSiteArtist } from "@/lib/getSiteArtist";
 import { refreshEventsForArtist, refreshEventsIfStale } from "@/lib/events";
 import { EventList } from "@/components/site/EventList";
 import { TourGlobe, type TourGlobePoint } from "@/components/site/TourGlobe";
+import { TabHeading } from "@/components/site/TabHeading";
 import { SiteFooter } from "@/components/site/SiteFooter";
 
 export default async function LocationsPage({ params }: { params: Promise<{ slug: string }> }) {
@@ -44,11 +45,13 @@ export default async function LocationsPage({ params }: { params: Promise<{ slug
 
   return (
     <div>
-      <div className="mb-1 flex items-center gap-2">
-        <div className="h-4 w-1 bg-[var(--accent)]" />
-        <h2 className="text-lg font-bold uppercase">Locations</h2>
-        <span className="text-sm text-white/40">Upcoming tour dates by city</span>
-      </div>
+      <TabHeading
+        artistId={artist.id}
+        contentOverrides={artist.content_overrides}
+        tabKey="locations"
+        title="Locations"
+        subtitle="Upcoming tour dates by city"
+      />
 
       {!events?.length ? (
         <p className="mt-4 rounded-lg border border-dashed border-white/20 p-8 text-center text-white/50">

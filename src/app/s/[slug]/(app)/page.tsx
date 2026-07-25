@@ -10,6 +10,8 @@ import { ArticleCard } from "@/components/site/ArticleCard";
 import { InsightCard } from "@/components/site/InsightCard";
 import { WikipediaTrendsSection } from "@/components/site/WikipediaTrends";
 import { DashboardKpiGrid, type KpiEntry } from "@/components/site/DashboardKpiGrid";
+import { DashboardSections, type DashboardSectionEntry } from "@/components/site/DashboardSections";
+import { TabHeading } from "@/components/site/TabHeading";
 import { Editable } from "@/components/site/Editable";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { TABS_BY_KEY, LIVE_TABS, orderedEnabledTabs } from "@/lib/tabs";
@@ -212,33 +214,14 @@ export default async function DashboardPage({
     };
   });
 
-  return (
-    <div>
-      <div className="mb-1 flex items-center gap-2">
-        <div className="h-4 w-1 bg-[var(--accent)]" />
-        <h2 className="text-lg font-bold uppercase">Dashboard</h2>
-        <Editable
-          artistId={artist.id}
-          contentKey="dashboard.subtitle"
-          value={resolveContent(
-            artist.content_overrides,
-            "dashboard.subtitle",
-            "Summary of current activity"
-          )}
-          as="span"
-          className="text-sm text-white/40"
-        />
-      </div>
+  const availableSections: Record<string, DashboardSectionEntry> = {};
 
-      <div className="mt-6">
-        <DashboardKpiGrid
-          key={otherTabs.map((t) => t.key).join(",")}
-          artistId={artist.id}
-          entries={kpiEntries}
-        />
-      </div>
-
-      {!!insightsRow?.insights?.length && (
+  if (insightsRow?.insights?.length) {
+    availableSections.insights = {
+      key: "insights",
+      label: "What we've noticed",
+      summary: `${insightsRow.insights.length} insight${insightsRow.insights.length === 1 ? "" : "s"} on recent activity`,
+      content: (
         <div className="mt-8">
           <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase text-white/70">
             <span className="h-3 w-1 bg-[var(--accent)]" />
@@ -250,15 +233,31 @@ export default async function DashboardPage({
             ))}
           </div>
         </div>
-      )}
+      ),
+    };
+  }
 
-      {!!wikipediaTrends.articles.length && (
+  if (wikipediaTrends.articles.length) {
+    availableSections.wikipedia = {
+      key: "wikipedia",
+      label: "Wikipedia pageviews",
+      summary: wikipediaTrends.topMover
+        ? `${wikipediaTrends.articles.length} articles tracked · top mover: ${wikipediaTrends.topMover.title}`
+        : `${wikipediaTrends.articles.length} articles tracked`,
+      content: (
         <div className="mt-8">
           <WikipediaTrendsSection trends={wikipediaTrends} artistName={artist.name} />
         </div>
-      )}
+      ),
+    };
+  }
 
-      {!!latestArticles?.length && (
+  if (latestArticles?.length) {
+    availableSections.coverage = {
+      key: "coverage",
+      label: "Most relevant coverage",
+      summary: `${latestArticles.length} article${latestArticles.length === 1 ? "" : "s"}`,
+      content: (
         <div className="mt-8">
           <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase text-white/70">
             <span className="h-3 w-1 bg-[var(--accent)]" />
@@ -278,6 +277,50 @@ export default async function DashboardPage({
               <ArticleCard key={article.id} article={article} />
             ))}
           </div>
+        </div>
+      ),
+    };
+  }
+
+  // Preserves drag-reordering (see DashboardSections) while tolerating
+  // sections that don't exist yet in an older artist's stored order, and
+  // dropping any section whose underlying data isn't available right now.
+  const storedOrder = artist.dashboard_section_order?.length
+    ? artist.dashboard_section_order
+    : ["insights", "wikipedia", "coverage"];
+  const orderedSectionKeys = [
+    ...storedOrder,
+    ...Object.keys(availableSections).filter((k) => !storedOrder.includes(k)),
+  ];
+  const dashboardSections = orderedSectionKeys
+    .map((key) => availableSections[key])
+    .filter((s): s is DashboardSectionEntry => !!s);
+
+  return (
+    <div>
+      <TabHeading
+        artistId={artist.id}
+        contentOverrides={artist.content_overrides}
+        tabKey="dashboard"
+        title="Dashboard"
+        subtitle="Summary of current activity"
+      />
+
+      <div className="mt-6">
+        <DashboardKpiGrid
+          key={otherTabs.map((t) => t.key).join(",")}
+          artistId={artist.id}
+          entries={kpiEntries}
+        />
+      </div>
+
+      {!!dashboardSections.length && (
+        <div className="mt-8">
+          <DashboardSections
+            key={dashboardSections.map((s) => s.key).join(",")}
+            artistId={artist.id}
+            sections={dashboardSections}
+          />
         </div>
       )}
 

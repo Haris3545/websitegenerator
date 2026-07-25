@@ -3,73 +3,92 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import type { SocialComment, SocialCommentCategory } from "@/lib/database.types";
 
 const STALE_AFTER_MS = 6 * 60 * 60 * 1000; // 6 hours — heavier than a simple mentions fetch
-const REDDIT_USER_AGENT = "websitegenerator:cultural-intelligence:v1.0 (by /u/vccp-media)";
 const MAX_COMMENTS = 150;
 
-type RedditSearchResponse = {
-  data?: {
-    children?: { data?: { title?: string; permalink?: string } }[];
-  };
+const geminiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+const REDDIT_COMMENTS_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    comments: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          text: { type: Type.STRING },
+          author: { type: Type.STRING },
+          subreddit: { type: Type.STRING },
+          context: { type: Type.STRING },
+          url: { type: Type.STRING },
+        },
+        required: ["text"],
+      },
+    },
+  },
+  required: ["comments"],
 };
 
-type RedditCommentListing = {
-  data?: {
-    children?: {
-      kind?: string;
-      data?: { author?: string; body?: string; score?: number; created_utc?: number; permalink?: string };
-    }[];
-  };
+type ExtractedRedditComment = {
+  text?: string;
+  author?: string;
+  subreddit?: string;
+  context?: string;
+  url?: string;
 };
 
-async function fetchRedditPostComments(postPermalink: string, postTitle: string): Promise<SocialComment[]> {
-  try {
-    const res = await fetch(`https://www.reddit.com${postPermalink}.json?limit=10&depth=1&raw_json=1`, {
-      headers: { "User-Agent": REDDIT_USER_AGENT },
-    });
-    if (!res.ok) return [];
-    const data: RedditCommentListing[] = await res.json();
-    const comments = data[1]?.data?.children ?? [];
+/** Reddit's own public JSON search endpoint reliably gets blocked when
+ * called from a cloud/serverless IP — a known, common anti-scraping
+ * measure that has nothing to do with our request being malformed (see
+ * refreshSocialListeningForArtist's last_error handling, which surfaced
+ * exactly this). This sidesteps it entirely by having Gemini do the
+ * searching (Google Search grounding, the same pattern events.ts already
+ * uses for tour dates) rather than us fetching reddit.com directly — same
+ * two-step shape: a free-text research pass, then structured extraction
+ * from that. Comments are only as reliable as the model's search-grounded
+ * reporting, so this is explicitly told to quote real text it found
+ * evidence for rather than summarize or invent. */
+async function fetchRedditCommentsViaGemini(artistName: string): Promise<SocialComment[]> {
+  const searchRes = await geminiClient.models.generateContent({
+    model: "gemini-2.5-flash-lite",
+    contents:
+      `Search Reddit for real discussion threads and comments about the musical artist "${artistName}". ` +
+      "Find actual comments people have genuinely posted — quote them verbatim, don't summarize or " +
+      "paraphrase — along with who posted each one, which subreddit it's from, and what the post/" +
+      "thread was about. Only report comments you have real search evidence for; if you can't find " +
+      "genuine Reddit comments, say so plainly rather than inventing any.",
+    config: { tools: [{ googleSearch: {} }] },
+  });
+  const digest = searchRes.text ?? "";
+  if (!digest.trim()) return [];
 
-    return comments
-      .filter(
-        (c): c is { kind: string; data: NonNullable<(typeof comments)[number]["data"]> } =>
-          c.kind === "t1" && !!c.data?.body && c.data.body !== "[deleted]" && c.data.body !== "[removed]"
-      )
-      .slice(0, 8)
-      .map((c) => ({
+  const extractRes = await geminiClient.models.generateContent({
+    model: "gemini-2.5-flash-lite",
+    contents:
+      "Extract individual Reddit comments from this research into structured data. Each entry needs " +
+      "the comment's actual quoted text; skip anything that reads like a summary rather than a real " +
+      `quote, and skip duplicates.\n\nResearch:\n${digest}`,
+    config: { responseMimeType: "application/json", responseSchema: REDDIT_COMMENTS_SCHEMA },
+  });
+
+  const parsed = JSON.parse(extractRes.text ?? "{}");
+  const extracted: ExtractedRedditComment[] = Array.isArray(parsed.comments) ? parsed.comments : [];
+
+  return extracted
+    .filter((c): c is ExtractedRedditComment & { text: string } => !!c.text?.trim())
+    .slice(0, 30)
+    .map((c) => {
+      const author = c.author ? (c.author.startsWith("u/") ? c.author : `u/${c.author}`) : "unknown";
+      const subreddit = c.subreddit ? `r/${c.subreddit.replace(/^r\//, "")}` : null;
+      return {
         platform: "reddit" as const,
-        author: c.data.author ? `u/${c.data.author}` : "unknown",
-        text: (c.data.body ?? "").slice(0, 500),
-        score: c.data.score ?? null,
-        url: c.data.permalink ? `https://reddit.com${c.data.permalink}` : `https://reddit.com${postPermalink}`,
-        context: postTitle,
-        publishedAt: c.data.created_utc ? new Date(c.data.created_utc * 1000).toISOString() : null,
-      }));
-  } catch {
-    return [];
-  }
-}
-
-/** Finds Reddit posts mentioning the artist (via Reddit's public search —
- * no app/OAuth needed, see below), then pulls the actual top-level
- * comments from each, rather than treating the posts themselves as the
- * "mentions" — a post title says a lot less than what people are actually
- * saying underneath it. */
-async function fetchRedditComments(artistName: string): Promise<SocialComment[]> {
-  const searchRes = await fetch(
-    `https://www.reddit.com/search.json?q=${encodeURIComponent(`"${artistName}"`)}&sort=comments&limit=10&raw_json=1`,
-    { headers: { "User-Agent": REDDIT_USER_AGENT } }
-  );
-  if (!searchRes.ok) throw new Error(`Reddit search returned ${searchRes.status}`);
-  const searchData: RedditSearchResponse = await searchRes.json();
-
-  const posts = (searchData.data?.children ?? [])
-    .map((c) => c.data)
-    .filter((p): p is NonNullable<typeof p> & { permalink: string } => !!p?.permalink)
-    .slice(0, 8);
-
-  const batches = await Promise.all(posts.map((p) => fetchRedditPostComments(p.permalink, p.title ?? "")));
-  return batches.flat();
+        author,
+        text: c.text!.slice(0, 500),
+        score: null,
+        url: c.url || `https://www.reddit.com/search/?q=${encodeURIComponent(artistName)}`,
+        context: [subreddit, c.context].filter(Boolean).join(" — ") || "Reddit",
+        publishedAt: null,
+      };
+    });
 }
 
 type YoutubeSearchResponse = {
@@ -155,8 +174,6 @@ async function fetchYoutubeComments(artistId: string, artistName: string): Promi
   return batches.flat();
 }
 
-const geminiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
 const CATEGORY_SCHEMA = {
   type: Type.OBJECT,
   properties: {
@@ -234,15 +251,12 @@ async function categorizeComments(
 /** Best-effort per platform — a Reddit failure shouldn't drop YouTube
  * results and vice versa. YouTube contributes zero rows rather than
  * erroring when YOUTUBE_API_KEY isn't set. When both come back empty, this
- * records WHY in last_error — Reddit's public search endpoint has no API
- * key to misconfigure, but it's known to occasionally 403/429 requests
- * coming from cloud/datacenter IP ranges (which is what a Vercel serverless
- * function is), so "no comments" can be a real platform-side block rather
- * than a genuine lack of mentions — worth surfacing rather than leaving the
- * UI's empty state looking identical either way. */
+ * records WHY in last_error — worth surfacing rather than leaving the UI's
+ * empty state looking identical whether it's a real platform issue or a
+ * genuinely quiet search. */
 export async function refreshSocialListeningForArtist(artistId: string, artistName: string) {
   const results = await Promise.allSettled([
-    fetchRedditComments(artistName),
+    fetchRedditCommentsViaGemini(artistName),
     fetchYoutubeComments(artistId, artistName),
   ]);
 
@@ -256,7 +270,9 @@ export async function refreshSocialListeningForArtist(artistId: string, artistNa
   if (!comments.length) {
     const reasons: string[] = [];
     if (redditResult.status === "rejected") {
-      reasons.push(`Reddit: ${redditResult.reason instanceof Error ? redditResult.reason.message : "fetch failed"}`);
+      reasons.push(
+        `Reddit search: ${redditResult.reason instanceof Error ? redditResult.reason.message : "search failed"}`
+      );
     }
     if (!process.env.YOUTUBE_API_KEY) {
       reasons.push("YouTube: YOUTUBE_API_KEY isn't set");

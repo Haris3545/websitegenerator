@@ -105,6 +105,7 @@ export interface Database {
           gate_background_url: string | null;
           youtube_channel_id: string | null;
           enabled_tabs: TabKey[];
+          dashboard_section_order: string[];
           folder_id: string | null;
           sort_order: number;
           created_at: string;
@@ -132,6 +133,7 @@ export interface Database {
           gate_background_url?: string | null;
           youtube_channel_id?: string | null;
           enabled_tabs?: TabKey[];
+          dashboard_section_order?: string[];
           folder_id?: string | null;
           sort_order?: number;
           created_at?: string;

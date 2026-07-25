@@ -49,7 +49,7 @@ export function SiteFooter({
             type="button"
             disabled={!csvRows?.length}
             onClick={() => csvRows && downloadCsv(csvRows, csvFilename ?? "export.csv")}
-            className="rounded border border-white/30 px-3 py-1.5 text-xs font-medium text-white/80 hover:border-white/60 disabled:opacity-30"
+            className="rounded border border-white/30 px-3 py-1.5 text-xs font-medium text-white/80 transition-all duration-150 ease-out hover:-translate-y-0.5 hover:border-white/60 disabled:pointer-events-none disabled:opacity-30"
           >
             Download as CSV
           </button>
@@ -73,7 +73,7 @@ export function SiteFooter({
             type="button"
             disabled={isPending}
             onClick={() => startTransition(() => refreshEverything(slug))}
-            className="rounded bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-50"
+            className="rounded bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-black transition-all duration-150 ease-out hover:-translate-y-0.5 hover:brightness-110 disabled:pointer-events-none disabled:opacity-50"
           >
             {isPending ? "Refreshing..." : "Refresh Everything"}
           </button>
@@ -86,14 +86,14 @@ export function SiteFooter({
           <>
             <Link
               href={`/builder/artists/${artistId}`}
-              className="rounded-full border border-white/20 px-4 py-1.5 text-xs font-medium text-white/70 hover:border-white/40 hover:text-white"
+              className="rounded-full border border-white/20 px-4 py-1.5 text-xs font-medium text-white/70 transition-all duration-150 ease-out hover:-translate-y-0.5 hover:border-white/40 hover:text-white"
             >
               Edit this site
             </Link>
             <button
               type="button"
               onClick={toggle}
-              className={`rounded-full border px-4 py-1.5 text-xs font-medium transition ${
+              className={`rounded-full border px-4 py-1.5 text-xs font-medium transition-all duration-150 ease-out hover:-translate-y-0.5 ${
                 editMode
                   ? "border-[var(--accent)] bg-[var(--accent)] text-black"
                   : "border-white/20 text-white/70 hover:border-white/40 hover:text-white"
@@ -106,7 +106,7 @@ export function SiteFooter({
         <button
           type="button"
           onClick={() => startTransition(() => logOutOfArtistSite(slug))}
-          className="rounded-full border border-white/20 px-4 py-1.5 text-xs font-medium text-white/70 hover:border-white/40 hover:text-white"
+          className="rounded-full border border-white/20 px-4 py-1.5 text-xs font-medium text-white/70 transition-all duration-150 ease-out hover:-translate-y-0.5 hover:border-white/40 hover:text-white"
         >
           Log out
         </button>

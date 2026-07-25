@@ -20,6 +20,7 @@ export async function SiteBoardTab({
 }) {
   const artist = await getSiteArtist(slug);
   const tab = TABS.find((t) => t.key === tabKey)!;
+  const titleKey = `board.${tabKey}.title`;
   const contentKey = `board.${tabKey}.subtitle`;
 
   const supabase = createServiceRoleClient();
@@ -36,7 +37,13 @@ export async function SiteBoardTab({
         <div>
           <div className="flex items-center gap-2">
             <div className="h-4 w-1 bg-[var(--accent)]" />
-            <h2 className="text-lg font-bold uppercase">{tab.label}</h2>
+            <Editable
+              artistId={artist.id}
+              contentKey={titleKey}
+              value={resolveContent(artist.content_overrides, titleKey, tab.label)}
+              as="h2"
+              className="text-lg font-bold uppercase"
+            />
           </div>
           <Editable
             artistId={artist.id}

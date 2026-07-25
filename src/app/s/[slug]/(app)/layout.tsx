@@ -10,6 +10,7 @@ import { NewsTicker } from "@/components/site/NewsTicker";
 import { NavPills } from "@/components/site/NavPills";
 import { PageTransition } from "@/components/site/PageTransition";
 import { EditModeProvider } from "@/components/site/EditModeContext";
+import { AestheticPanel } from "@/components/site/AestheticPanel";
 
 // "Refresh Everything" (a Server Action invoked from a page under this
 // layout) fans out to several external APIs plus multiple Gemini calls —
@@ -67,6 +68,7 @@ export default async function ArtistSiteLayout({
   return (
     <EditModeProvider editingAllowed={!process.env.PINNED_ARTIST_SLUG}>
     <div
+      id="site-root"
       className="relative min-h-screen text-white"
       style={
         {
@@ -166,6 +168,16 @@ export default async function ArtistSiteLayout({
       <main className="px-6 pb-16 sm:px-10">
         <PageTransition>{children}</PageTransition>
       </main>
+
+      <AestheticPanel
+        artistId={artist.id}
+        initial={{
+          primary_color: artist.primary_color,
+          accent_color: artist.accent_color,
+          font_family: artist.font_family,
+          theme_overrides: artist.theme_overrides,
+        }}
+      />
     </div>
     </EditModeProvider>
   );

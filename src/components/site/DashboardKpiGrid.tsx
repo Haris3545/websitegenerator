@@ -67,7 +67,7 @@ export function DashboardKpiGrid({
             moveTo(entry.tabKey);
             setDragKey(null);
           }}
-          className={editMode ? "relative cursor-grab active:cursor-grabbing" : "relative"}
+          className={editMode ? "relative cursor-grab select-none active:cursor-grabbing" : "relative"}
         >
           {editMode && (
             <button

@@ -6,6 +6,7 @@ import { refreshSentimentNow, refreshSentimentIfStale } from "@/lib/sentiment";
 import { resolveContent } from "@/lib/contentOverrides";
 import { MediaList } from "@/components/site/MediaList";
 import { DashboardOverview } from "@/components/site/DashboardOverview";
+import { TabHeading } from "@/components/site/TabHeading";
 import { Editable } from "@/components/site/Editable";
 import { SiteFooter } from "@/components/site/SiteFooter";
 
@@ -47,21 +48,13 @@ export default async function MediaPage({ params }: { params: Promise<{ slug: st
 
   return (
     <div>
-      <div className="mb-1 flex items-center gap-2">
-        <div className="h-4 w-1 bg-[var(--accent)]" />
-        <h2 className="text-lg font-bold uppercase">Media</h2>
-        <Editable
-          artistId={artist.id}
-          contentKey="media.subtitle"
-          value={resolveContent(
-            artist.content_overrides,
-            "media.subtitle",
-            "Chronological press coverage"
-          )}
-          as="span"
-          className="text-sm text-white/40"
-        />
-      </div>
+      <TabHeading
+        artistId={artist.id}
+        contentOverrides={artist.content_overrides}
+        tabKey="media"
+        title="Media"
+        subtitle="Chronological press coverage"
+      />
 
       <div className="mt-4">
         <DashboardOverview

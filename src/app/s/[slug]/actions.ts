@@ -15,6 +15,7 @@ import { refreshWikipediaTrendsNow } from "@/lib/wikipedia";
 import { computeArtistPassword, artistAccessCookieName } from "@/lib/artistAccess";
 import { artistCacheTag } from "@/lib/getSiteArtist";
 import { ALL_TAB_KEYS } from "@/lib/tabs";
+import type { ThemeOverrides } from "@/lib/theme";
 import type { SentimentFilter, BoardItem, TabKey } from "@/lib/database.types";
 
 /** These six steps are independent of each other — running them
@@ -142,6 +143,48 @@ export async function updateTabOrder(artistId: string, orderedTabs: TabKey[]) {
   const { data: artist } = await supabase.from("artists").select("slug").eq("id", artistId).maybeSingle();
 
   await supabase.from("artists").update({ enabled_tabs }).eq("id", artistId);
+  if (artist?.slug) updateTag(artistCacheTag(artist.slug));
+  revalidatePath(`/s/[slug]`, "layout");
+}
+
+/** Same drag-reorder-then-persist shape as updateTabOrder, but for the
+ * Dashboard's own content sections ("What we've noticed", Wikipedia
+ * pageviews, "Most relevant coverage") rather than the tab bar/KPI cards. */
+export async function updateDashboardSectionOrder(artistId: string, order: string[]) {
+  const supabase = createServiceRoleClient();
+  const { data: artist } = await supabase.from("artists").select("slug").eq("id", artistId).maybeSingle();
+
+  await supabase.from("artists").update({ dashboard_section_order: order }).eq("id", artistId);
+  if (artist?.slug) updateTag(artistCacheTag(artist.slug));
+  revalidatePath(`/s/[slug]`, "layout");
+}
+
+/** Persists the quick aesthetic tweaks made from the on-site edit-mode panel
+ * (see AestheticPanel) — colours, font, and the card look knobs the builder's
+ * own ThemeEditor also exposes. Deeper background-image adjustments (pan/
+ * zoom/contrast) stay in the builder's dedicated editor, where there's room
+ * for a real preview to drag against. */
+export async function updateArtistAesthetics(
+  artistId: string,
+  aesthetics: {
+    primary_color: string;
+    accent_color: string;
+    font_family: string;
+    theme_overrides: ThemeOverrides;
+  }
+) {
+  const supabase = createServiceRoleClient();
+  const { data: artist } = await supabase.from("artists").select("slug").eq("id", artistId).maybeSingle();
+
+  await supabase
+    .from("artists")
+    .update({
+      primary_color: aesthetics.primary_color,
+      accent_color: aesthetics.accent_color,
+      font_family: aesthetics.font_family,
+      theme_overrides: aesthetics.theme_overrides,
+    })
+    .eq("id", artistId);
   if (artist?.slug) updateTag(artistCacheTag(artist.slug));
   revalidatePath(`/s/[slug]`, "layout");
 }

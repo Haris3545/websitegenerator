@@ -19,7 +19,7 @@ export function AudienceTable({ statements }: { statements: Statement[] }) {
   }, [statements, activeSegment]);
 
   function pill(active: boolean) {
-    return `rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+    return `rounded-full border px-3 py-1.5 text-xs font-medium transition-all duration-150 ease-out hover:-translate-y-0.5 ${
       active
         ? "border-[var(--accent)] bg-[var(--accent)] text-black"
         : "border-[var(--accent)]/50 text-[var(--accent)] hover:border-[var(--accent)]"
@@ -66,7 +66,10 @@ export function AudienceTable({ statements }: { statements: Statement[] }) {
           </thead>
           <tbody>
             {rows.map((s) => (
-              <tr key={s.id} className="border-b border-white/5 last:border-0">
+              <tr
+                key={s.id}
+                className="border-b border-white/5 transition-colors last:border-0 hover:bg-white/[0.03]"
+              >
                 <td className="p-3 text-white">{s.statement}</td>
                 <td className="p-3 text-white/60">{s.segment}</td>
                 <td className="p-3 text-right text-white/70">{s.universe ?? "—"}</td>
