@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ColorField } from "@/components/builder/ColorField";
 import { FontPicker } from "@/components/builder/FontPicker";
@@ -25,6 +25,31 @@ function slugify(name: string) {
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
+}
+
+const inputClass =
+  "rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-white placeholder-white/30 focus:border-violet-400 focus:outline-none";
+const labelClass = "text-xs font-medium uppercase tracking-wide text-white/50";
+const sectionClass = "flex flex-col gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-5";
+
+function Section({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={sectionClass}>
+      <div>
+        <h2 className="text-sm font-semibold text-white">{title}</h2>
+        {description && <p className="mt-0.5 text-xs text-white/40">{description}</p>}
+      </div>
+      {children}
+    </div>
+  );
 }
 
 export function ArtistForm({ artist }: { artist?: Artist }) {
@@ -77,8 +102,77 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
       : null
   );
 
+  // Explicit "Save progress" + silent autosave both funnel through here, so
+  // a brand-new artist can be saved at any point in the form, not just at
+  // the final submit at the bottom. Refs (not state) hold the current id
+  // and form so this reads the truly latest values regardless of how many
+  // renders happened since it was scheduled — using stale closed-over state
+  // here is exactly what would risk inserting a duplicate row on a second
+  // quick save.
+  const idRef = useRef(artist?.id);
+  const [savedArtistId, setSavedArtistId] = useState(artist?.id);
+  const formRef = useRef(form);
+  const savingRef = useRef(false);
+  const pendingSaveRef = useRef(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "dirty" | "saving" | "saved" | "error">(
+    "idle"
+  );
+  const isFirstRender = useRef(true);
+
+  useEffect(() => {
+    formRef.current = form;
+  }, [form]);
+
+  const saveProgress = useCallback(async () => {
+    if (savingRef.current) {
+      pendingSaveRef.current = true;
+      return;
+    }
+    do {
+      pendingSaveRef.current = false;
+      const current = formRef.current;
+      if (!current.name.trim() || !current.slug.trim()) break;
+
+      savingRef.current = true;
+      setSaveStatus("saving");
+      const result = await upsertArtist({ ...current, id: idRef.current });
+      savingRef.current = false;
+
+      if (!result.ok) {
+        setSaveStatus("error");
+        setFormError(result.error);
+        break;
+      }
+      setFormError(null);
+      setSaveStatus("saved");
+      const wasNew = !idRef.current;
+      idRef.current = result.id;
+      setSavedArtistId(result.id);
+      if (wasNew) router.replace(`/builder/artists/${result.id}`);
+    } while (pendingSaveRef.current);
+  }, [router]);
+
+  // Debounced autosave: after a pause in typing (with no setState in the
+  // effect body itself — the "dirty" status is set synchronously inside
+  // update() below, the one true event-handler entry point for every field
+  // change), fire a silent save. Skips its very first run so simply opening
+  // an existing artist's edit page doesn't trigger an immediate needless
+  // save.
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    if (!form.name.trim() || !form.slug.trim()) return;
+    const timer = setTimeout(() => {
+      void saveProgress();
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [form, saveProgress]);
+
   function update<K extends keyof ArtistFormInput>(key: K, value: ArtistFormInput[K]) {
     setForm((f) => ({ ...f, [key]: value }));
+    setSaveStatus("dirty");
   }
 
   function handleNameChange(name: string) {
@@ -87,10 +181,10 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
   }
 
   async function handlePublish() {
-    if (!artist) return;
+    if (!idRef.current) return;
     setIsPublishing(true);
     setPublishError(null);
-    const result = await publishArtist(artist.id);
+    const result = await publishArtist(idRef.current);
     setIsPublishing(false);
     if (result.ok) {
       setPublished({ repoUrl: result.repoUrl, siteUrl: result.siteUrl });
@@ -100,7 +194,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
   }
 
   async function handleUnpublish() {
-    if (!artist) return;
+    if (!idRef.current) return;
     if (
       !window.confirm(
         "This permanently deletes the standalone GitHub repo and Vercel project for this artist. Continue?"
@@ -110,7 +204,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
     }
     setIsUnpublishing(true);
     setPublishError(null);
-    const result = await unpublishArtist(artist.id);
+    const result = await unpublishArtist(idRef.current);
     setIsUnpublishing(false);
     if (result.ok) {
       setPublished(null);
@@ -122,7 +216,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
-    const isNew = !artist;
+    const isNew = !idRef.current;
     // Opened synchronously, within the click itself, so the browser trusts
     // it as a real user-initiated tab rather than blocking it as a popup —
     // by the time creation actually finishes below, we're well past the
@@ -130,12 +224,14 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
     const newSiteTab = isNew ? window.open("about:blank", "_blank") : null;
 
     startTransition(async () => {
-      const result = await upsertArtist(form);
+      const result = await upsertArtist({ ...form, id: idRef.current });
       if (!result.ok) {
         setFormError(result.error);
         newSiteTab?.close();
         return;
       }
+      idRef.current = result.id;
+      setSavedArtistId(result.id);
 
       // A brand-new artist doesn't have a row to attach an audience upload
       // to until upsertArtist just created one — run that deferred step
@@ -159,55 +255,83 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
     });
   }
 
+  const saveStatusText: Record<typeof saveStatus, string> = {
+    idle: artist ? "Up to date" : "Not saved yet",
+    dirty: "Unsaved changes",
+    saving: "Saving…",
+    saved: "All changes saved",
+    error: "Couldn't save",
+  };
+  const saveStatusColor: Record<typeof saveStatus, string> = {
+    idle: "text-white/40",
+    dirty: "text-amber-400",
+    saving: "text-white/50",
+    saved: "text-emerald-400",
+    error: "text-red-400",
+  };
+
   return (
     <form onSubmit={handleSubmit} className="flex max-w-2xl flex-col gap-6">
-      <label className="flex flex-col gap-1 text-sm">
-        Artist name
-        <input
-          required
-          value={form.name}
-          onChange={(e) => handleNameChange(e.target.value)}
-          className="rounded border border-neutral-300 px-3 py-2"
-        />
-      </label>
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+        <p className={`text-xs font-medium ${saveStatusColor[saveStatus]}`}>{saveStatusText[saveStatus]}</p>
+        <button
+          type="button"
+          onClick={() => void saveProgress()}
+          disabled={saveStatus === "saving" || !form.name.trim() || !form.slug.trim()}
+          className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-medium text-white/80 hover:bg-white/5 disabled:opacity-40"
+        >
+          Save progress
+        </button>
+      </div>
 
-      <label className="flex flex-col gap-1 text-sm">
-        Slug (site URL: /s/&lt;slug&gt;)
-        <input
-          required
-          value={form.slug}
-          onChange={(e) => {
-            setSlugTouched(true);
-            update("slug", slugify(e.target.value));
-          }}
-          className="rounded border border-neutral-300 px-3 py-2 font-mono"
-        />
-      </label>
+      <Section title="Basics">
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className={labelClass}>Artist name</span>
+          <input
+            required
+            value={form.name}
+            onChange={(e) => handleNameChange(e.target.value)}
+            className={inputClass}
+          />
+        </label>
 
-      <label className="flex flex-col gap-1 text-sm">
-        Project title
-        <input
-          value={form.project_title}
-          onChange={(e) => update("project_title", e.target.value)}
-          className="rounded border border-neutral-300 px-3 py-2"
-        />
-        <span className="text-xs text-neutral-900">
-          The big title shown top-left on the site (e.g. &quot;The Recording Studio&quot;). The
-          artist&apos;s name is shown separately, top-right.
-        </span>
-      </label>
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className={labelClass}>Slug (site URL: /s/&lt;slug&gt;)</span>
+          <input
+            required
+            value={form.slug}
+            onChange={(e) => {
+              setSlugTouched(true);
+              update("slug", slugify(e.target.value));
+            }}
+            className={`${inputClass} font-mono`}
+          />
+        </label>
 
-      <label className="flex flex-col gap-1 text-sm">
-        Tagline
-        <input
-          value={form.tagline}
-          onChange={(e) => update("tagline", e.target.value)}
-          className="rounded border border-neutral-300 px-3 py-2"
-        />
-      </label>
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className={labelClass}>Project title</span>
+          <input
+            value={form.project_title}
+            onChange={(e) => update("project_title", e.target.value)}
+            className={inputClass}
+          />
+          <span className="text-xs text-white/40">
+            The big title shown top-left on the site (e.g. &quot;The Recording Studio&quot;). The
+            artist&apos;s name is shown separately, top-right.
+          </span>
+        </label>
 
-      <div className="flex flex-col gap-1 text-sm">
-        <span>YouTube channel</span>
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className={labelClass}>Tagline</span>
+          <input
+            value={form.tagline}
+            onChange={(e) => update("tagline", e.target.value)}
+            className={inputClass}
+          />
+        </label>
+      </Section>
+
+      <Section title="YouTube channel" description="Powers the YouTube tab.">
         <div className="flex gap-2">
           <input
             value={youtubeUrlInput}
@@ -216,7 +340,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
               setYoutubeLookup(null);
             }}
             placeholder="Paste the channel's URL, or a link to one of their videos"
-            className="flex-1 rounded border border-neutral-300 px-3 py-2 text-sm"
+            className={`flex-1 text-sm ${inputClass}`}
           />
           <button
             type="button"
@@ -232,115 +356,101 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
                 }
               })
             }
-            className="rounded border border-neutral-300 px-3 py-2 text-sm font-medium disabled:opacity-50"
+            className="rounded-lg border border-white/15 px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/5 disabled:opacity-40"
           >
             {isLookingUpYoutube ? "Looking up..." : "Find channel"}
           </button>
         </div>
         {youtubeLookup?.status === "success" && (
-          <p className="text-xs text-green-700">
+          <p className="text-xs text-emerald-400">
             ✓ Found: {youtubeLookup.channelTitle || form.youtube_channel_id}
           </p>
         )}
         {youtubeLookup?.status === "error" && (
-          <p className="text-xs text-red-600">{youtubeLookup.error}</p>
+          <p className="text-xs text-red-400">{youtubeLookup.error}</p>
         )}
         {!youtubeLookup && form.youtube_channel_id && (
-          <p className="text-xs text-neutral-900">Currently linked: {form.youtube_channel_id}</p>
+          <p className="text-xs text-white/40">Currently linked: {form.youtube_channel_id}</p>
         )}
-        <span className="text-xs text-neutral-900">
-          Powers the YouTube tab — no need to hunt for a channel ID, just paste any link from the
-          channel.
-        </span>
-      </div>
+      </Section>
 
-      <div className="flex gap-6">
-        <ColorField
-          label="Primary"
-          value={form.primary_color}
-          onChange={(v) => update("primary_color", v)}
-        />
-        <ColorField
-          label="Secondary"
-          value={form.secondary_color}
-          onChange={(v) => update("secondary_color", v)}
-        />
-        <ColorField
-          label="Accent"
-          value={form.accent_color}
-          onChange={(v) => update("accent_color", v)}
-        />
-      </div>
-
-      <FontPicker value={form.font_family} onChange={(v) => update("font_family", v)} />
-
-      {form.slug ? (
-        <>
-          <MediaUploadField
-            label="Background"
-            slotName="background"
-            artistSlug={form.slug}
-            value={form.background_image_url}
-            onChange={(v) => update("background_image_url", v)}
+      <Section title="Branding">
+        <div className="flex gap-6">
+          <ColorField label="Primary" value={form.primary_color} onChange={(v) => update("primary_color", v)} />
+          <ColorField
+            label="Secondary"
+            value={form.secondary_color}
+            onChange={(v) => update("secondary_color", v)}
           />
-          <p className="-mt-4 text-xs text-neutral-900">
-            Shown behind every page of the dashboard (not the password page — that&apos;s set
-            separately below). An image or a looping muted video, either works.
-          </p>
-          <MediaUploadField
-            label="Password page background"
-            slotName="gate-background"
-            artistSlug={form.slug}
-            value={form.gate_background_url}
-            onChange={(v) => update("gate_background_url", v)}
-          />
-        </>
-      ) : (
-        <p className="text-sm text-neutral-900">Enter a name/slug to enable media uploads.</p>
-      )}
+          <ColorField label="Accent" value={form.accent_color} onChange={(v) => update("accent_color", v)} />
+        </div>
+        <FontPicker value={form.font_family} onChange={(v) => update("font_family", v)} />
+      </Section>
 
-      <label className="flex flex-col gap-1 text-sm">
-        Aesthetic tailoring
+      <Section title="Media">
+        {form.slug ? (
+          <>
+            <MediaUploadField
+              label="Background"
+              slotName="background"
+              artistSlug={form.slug}
+              value={form.background_image_url}
+              onChange={(v) => update("background_image_url", v)}
+            />
+            <p className="-mt-2 text-xs text-white/40">
+              Shown behind every page of the dashboard (not the password page — that&apos;s set
+              separately below). An image or a looping muted video, either works.
+            </p>
+            <MediaUploadField
+              label="Password page background"
+              slotName="gate-background"
+              artistSlug={form.slug}
+              value={form.gate_background_url}
+              onChange={(v) => update("gate_background_url", v)}
+            />
+          </>
+        ) : (
+          <p className="text-sm text-white/40">Enter a name/slug to enable media uploads.</p>
+        )}
+      </Section>
+
+      <Section
+        title="Aesthetic tailoring"
+        description='Describe grain, tint, blur, or vignette adjustments in your own words — parsed into CSS on save.'
+      >
         <textarea
           rows={3}
           placeholder='e.g. "film grain overlay, 30%, slight vignette"'
           value={form.aesthetic_prompt}
           onChange={(e) => update("aesthetic_prompt", e.target.value)}
-          className="rounded border border-neutral-300 px-3 py-2"
+          className={inputClass}
         />
-        <span className="text-xs text-neutral-900">
-          Describe grain, tint, blur, or vignette adjustments in your own words — parsed into CSS
-          on save.
-        </span>
-      </label>
+      </Section>
 
-      <ThemeEditor
-        value={form.theme_overrides}
-        onChange={(theme_overrides) => update("theme_overrides", theme_overrides)}
-        primaryColor={form.primary_color}
-        accentColor={form.accent_color}
-        fontFamily={form.font_family}
-        backgroundImageUrl={form.background_image_url}
-        projectTitle={form.project_title}
-        tagline={form.tagline}
-        artistName={form.name}
-      />
-
-      <TabsChecklist
-        value={form.enabled_tabs}
-        onChange={(tabs) => update("enabled_tabs", tabs)}
-      />
-
-      <div className="rounded border border-neutral-200 p-4">
-        <h2 className="mb-1 text-sm font-semibold">Audience research</h2>
-        <AudienceUploadField
-          artistId={artist?.id ?? null}
-          onFileSelected={setAudienceFile}
+      <Section title="Fine-tuned theme">
+        <ThemeEditor
+          value={form.theme_overrides}
+          onChange={(theme_overrides) => update("theme_overrides", theme_overrides)}
+          primaryColor={form.primary_color}
+          accentColor={form.accent_color}
+          fontFamily={form.font_family}
+          backgroundImageUrl={form.background_image_url}
+          projectTitle={form.project_title}
+          tagline={form.tagline}
+          artistName={form.name}
         />
-      </div>
+      </Section>
+
+      <Section title="Tabs">
+        <TabsChecklist value={form.enabled_tabs} onChange={(tabs) => update("enabled_tabs", tabs)} />
+      </Section>
+
+      <Section title="Audience research">
+        <AudienceUploadField artistId={savedArtistId ?? null} onFileSelected={setAudienceFile} />
+      </Section>
 
       {formError && (
-        <p className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-400">
           {formError}
         </p>
       )}
@@ -348,47 +458,33 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
       <button
         type="submit"
         disabled={isPending}
-        className="self-start rounded bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        className="self-start rounded-lg bg-violet-500 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-400 disabled:opacity-50"
       >
         {isPending ? "Saving..." : artist ? "Save changes" : "Create artist"}
       </button>
 
       {artist && (
-        <div className="rounded border border-neutral-200 p-4">
-          <h2 className="mb-1 text-sm font-semibold">Publish standalone site</h2>
-          <p className="mb-3 text-xs text-neutral-900">
-            Creates a real, independent GitHub repo and Vercel deployment just for this artist —
-            it stays live on its own, still reading from the same data. This can only be done
-            once per artist.
-          </p>
-
+        <Section
+          title="Publish standalone site"
+          description="Creates a real, independent GitHub repo and Vercel deployment just for this artist — it stays live on its own, still reading from the same data. This can only be done once per artist."
+        >
           {published ? (
             <div className="flex flex-col gap-1 text-sm">
-              <p className="text-green-700">Published.</p>
-              <a
-                href={published.repoUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-neutral-900 underline"
-              >
+              <p className="text-emerald-400">Published.</p>
+              <a href={published.repoUrl} target="_blank" rel="noreferrer" className="text-violet-400 underline">
                 {published.repoUrl}
               </a>
-              <a
-                href={published.siteUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-neutral-900 underline"
-              >
+              <a href={published.siteUrl} target="_blank" rel="noreferrer" className="text-violet-400 underline">
                 {published.siteUrl}
               </a>
-              <p className="mt-1 text-xs text-neutral-900">
+              <p className="mt-1 text-xs text-white/40">
                 The Vercel deployment can take a minute or two to finish building the first time.
               </p>
               <button
                 type="button"
                 disabled={isUnpublishing}
                 onClick={handleUnpublish}
-                className="mt-2 self-start rounded border border-red-300 px-3 py-2 text-sm font-medium text-red-700 disabled:opacity-50"
+                className="mt-2 self-start rounded-lg border border-red-500/30 px-3 py-2 text-sm font-medium text-red-400 hover:bg-red-500/10 disabled:opacity-50"
               >
                 {isUnpublishing ? "Deleting..." : "Delete standalone site"}
               </button>
@@ -398,18 +494,18 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
               type="button"
               disabled={isPublishing}
               onClick={handlePublish}
-              className="self-start rounded border border-neutral-300 px-3 py-2 text-sm font-medium disabled:opacity-50"
+              className="self-start rounded-lg border border-white/15 px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/5 disabled:opacity-50"
             >
               {isPublishing ? "Publishing..." : "Publish to GitHub + Vercel"}
             </button>
           )}
 
           {publishError && (
-            <p className="mt-2 rounded border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700">
+            <p className="mt-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">
               {publishError}
             </p>
           )}
-        </div>
+        </Section>
       )}
     </form>
   );

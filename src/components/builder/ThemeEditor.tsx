@@ -96,7 +96,7 @@ export function ThemeEditor({
     <div className="flex flex-col gap-4 text-sm" style={{ "--accent-ring": accentColor } as CSSProperties}>
       <div>
         <p className="font-medium">Fine-tune the look, by hand</p>
-        <p className="text-xs text-neutral-900">
+        <p className="text-xs text-white/40">
           Click a part of the preview below to select it, then adjust it with the controls that
           appear underneath.
         </p>
@@ -176,15 +176,15 @@ export function ThemeEditor({
         </div>
       </div>
 
-      <div className="rounded border border-neutral-200 p-4">
+      <div className="rounded-lg border border-white/15 bg-white/5 p-4">
         {selected === null && (
-          <p className="text-neutral-900">Click the background, the title, or a card above.</p>
+          <p className="text-white/50">Click the background, the title, or a card above.</p>
         )}
 
         {selected === "background" && (
           <div className="flex flex-col gap-3">
             <p className="font-medium">Background photo/video</p>
-            <p className="text-xs text-neutral-900">
+            <p className="text-xs text-white/40">
               Drag directly on the preview to reposition it. The zoom slider below resizes it.
             </p>
             <Slider
@@ -231,6 +231,7 @@ export function ThemeEditor({
                 type="checkbox"
                 checked={t.header_bold}
                 onChange={(e) => set("header_bold", e.target.checked)}
+                className="accent-violet-500"
               />
               Bold
             </label>
@@ -239,6 +240,7 @@ export function ThemeEditor({
                 type="checkbox"
                 checked={t.header_italic}
                 onChange={(e) => set("header_italic", e.target.checked)}
+                className="accent-violet-500"
               />
               Italic
             </label>
@@ -306,7 +308,7 @@ function Slider({
     <label className="flex flex-col gap-1">
       <span className="flex justify-between">
         <span>{label}</span>
-        <span className="font-mono text-xs text-neutral-900">
+        <span className="font-mono text-xs text-white/40">
           {value}
           {displayUnit}
         </span>
@@ -318,6 +320,7 @@ function Slider({
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
+        className="accent-violet-500"
       />
     </label>
   );

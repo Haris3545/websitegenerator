@@ -158,6 +158,87 @@ async function revalidateArtistCacheById(artistId: string) {
   if (data?.slug) updateTag(artistCacheTag(data.slug));
 }
 
+export async function createFolder(name: string): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const trimmed = name.trim();
+  if (!trimmed) return { ok: false, error: "Folder name can't be empty." };
+
+  const supabase = await createClient();
+  const { count } = await supabase.from("artist_folders").select("id", { count: "exact", head: true });
+  const { data, error } = await supabase
+    .from("artist_folders")
+    .insert({ name: trimmed, position: count ?? 0 })
+    .select("id")
+    .single();
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/builder/artists");
+  return { ok: true, id: data.id };
+}
+
+export async function renameFolder(id: string, name: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const trimmed = name.trim();
+  if (!trimmed) return { ok: false, error: "Folder name can't be empty." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("artist_folders").update({ name: trimmed }).eq("id", id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/builder/artists");
+  return { ok: true };
+}
+
+/** Deleting a folder never deletes the artists in it — they just fall back
+ * to "no folder" (the FK is ON DELETE SET NULL), matching how a folder is
+ * purely an organizational label, not a container that owns its contents. */
+export async function deleteFolder(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("artist_folders").delete().eq("id", id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/builder/artists");
+  return { ok: true };
+}
+
+export async function reorderFolders(orderedIds: string[]): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const results = await Promise.all(
+    orderedIds.map((id, position) => supabase.from("artist_folders").update({ position }).eq("id", id))
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) return { ok: false, error: failed.error.message };
+
+  revalidatePath("/builder/artists");
+  return { ok: true };
+}
+
+/** Moves an artist card to a folder (or back to "no folder" with
+ * folderId=null) and restamps sort_order for every artist in the
+ * destination list, matching wherever it was dropped. */
+export async function moveArtist(
+  artistId: string,
+  folderId: string | null,
+  orderedArtistIdsInDestination: string[]
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await createClient();
+
+  const { error: moveError } = await supabase
+    .from("artists")
+    .update({ folder_id: folderId })
+    .eq("id", artistId);
+  if (moveError) return { ok: false, error: moveError.message };
+
+  const results = await Promise.all(
+    orderedArtistIdsInDestination.map((id, sort_order) =>
+      supabase.from("artists").update({ sort_order }).eq("id", id)
+    )
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) return { ok: false, error: failed.error.message };
+
+  revalidatePath("/builder/artists");
+  return { ok: true };
+}
+
 /** Parses and stores an uploaded GWI-style audience research export (CSV or
  * XLSX). Column matching is fuzzy — see src/lib/audience.ts — since export
  * formats vary; returns a clear error naming the headers it actually found

@@ -15,7 +15,7 @@ export default async function EditArtistPage({
 
   return (
     <div>
-      <h1 className="mb-6 text-xl font-semibold">Edit {artist.name}</h1>
+      <h1 className="mb-6 text-xl font-semibold tracking-tight">Edit {artist.name}</h1>
       <ArtistForm artist={artist} />
     </div>
   );

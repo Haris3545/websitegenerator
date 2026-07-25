@@ -27,20 +27,20 @@ export function FontPicker({
   }, [fonts, query]);
 
   return (
-    <div className="flex flex-col gap-1 text-sm">
-      <span>Font</span>
+    <div className="flex flex-col gap-1.5 text-sm">
+      <span className="text-xs font-medium uppercase tracking-wide text-white/50">Font</span>
       <input
         type="text"
         placeholder="Search fonts..."
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        className="rounded border border-neutral-300 px-2 py-1"
+        className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-white placeholder-white/30 focus:border-violet-400 focus:outline-none"
       />
       <select
         size={6}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded border border-neutral-300"
+        className="rounded-lg border border-white/15 bg-white/5 text-white [&>option]:bg-neutral-900"
       >
         {filtered.map((font) => (
           <option key={font} value={font}>
@@ -49,7 +49,7 @@ export function FontPicker({
         ))}
       </select>
       <link rel="stylesheet" href={googleFontsCssUrl(value)} />
-      <p style={{ fontFamily: value }} className="mt-1 text-base">
+      <p style={{ fontFamily: value }} className="mt-1 text-base text-white/80">
         {value} — The quick brown fox jumps over the lazy dog
       </p>
     </div>

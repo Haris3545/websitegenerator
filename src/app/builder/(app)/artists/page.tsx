@@ -1,53 +1,38 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { DeleteArtistButton } from "@/components/builder/DeleteArtistButton";
+import { ArtistsBoard } from "@/components/builder/ArtistsBoard";
 
 export default async function ArtistsPage() {
   const supabase = await createClient();
-  const { data: artists } = await supabase
-    .from("artists")
-    .select("id, name, slug, updated_at")
-    .order("updated_at", { ascending: false });
+  const [{ data: artists }, { data: folders }] = await Promise.all([
+    supabase
+      .from("artists")
+      .select("id, name, slug, updated_at, folder_id, sort_order")
+      .order("sort_order", { ascending: true }),
+    supabase.from("artist_folders").select("id, name, position").order("position", { ascending: true }),
+  ]);
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Artists</h1>
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Artists</h1>
+          <p className="text-sm text-white/40">Drag cards between folders to organize.</p>
+        </div>
         <Link
           href="/builder/artists/new"
-          className="rounded bg-neutral-900 px-3 py-2 text-sm font-medium text-white"
+          className="rounded-lg bg-violet-500 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-400"
         >
           + New artist
         </Link>
       </div>
 
       {!artists?.length ? (
-        <p className="text-sm text-neutral-900">
+        <p className="rounded-xl border border-dashed border-white/10 p-8 text-center text-sm text-white/40">
           No artist dashboards yet. Create the first one to get started.
         </p>
       ) : (
-        <ul className="divide-y divide-neutral-200 rounded border border-neutral-200 bg-white">
-          {artists.map((artist) => (
-            <li key={artist.id} className="flex items-center justify-between px-4 py-3">
-              <div>
-                <p className="font-medium">{artist.name}</p>
-                <p className="text-sm text-neutral-900">/s/{artist.slug}</p>
-              </div>
-              <div className="flex gap-3 text-sm">
-                <Link href={`/s/${artist.slug}`} className="text-neutral-900 hover:underline">
-                  View site
-                </Link>
-                <Link
-                  href={`/builder/artists/${artist.id}`}
-                  className="font-medium text-neutral-900 hover:underline"
-                >
-                  Edit
-                </Link>
-                <DeleteArtistButton artistId={artist.id} artistName={artist.name} />
-              </div>
-            </li>
-          ))}
-        </ul>
+        <ArtistsBoard initialArtists={artists} initialFolders={folders ?? []} />
       )}
     </div>
   );

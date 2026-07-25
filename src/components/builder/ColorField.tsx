@@ -35,13 +35,13 @@ export function ColorField({
   }, [open]);
 
   return (
-    <div ref={wrapperRef} className="relative flex flex-col gap-1 text-sm">
-      <span>{label}</span>
+    <div ref={wrapperRef} className="relative flex flex-col gap-1.5 text-sm">
+      <span className="text-xs font-medium uppercase tracking-wide text-white/50">{label}</span>
       <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          className="h-8 w-8 rounded border border-neutral-300"
+          className="h-8 w-8 rounded-lg border border-white/15 shadow-inner"
           style={{ backgroundColor: value }}
           aria-label={`Pick ${label}`}
         />
@@ -49,7 +49,7 @@ export function ColorField({
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-28 rounded border border-neutral-300 px-2 py-1 font-mono text-xs"
+          className="w-28 rounded-lg border border-white/15 bg-white/5 px-2 py-1.5 font-mono text-xs text-white focus:border-violet-400 focus:outline-none"
         />
       </div>
       {open && (

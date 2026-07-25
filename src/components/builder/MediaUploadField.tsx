@@ -77,13 +77,19 @@ export function MediaUploadField({
 
   return (
     <div className="flex flex-col gap-2 text-sm">
-      <span>{label}</span>
+      <span className="text-xs font-medium uppercase tracking-wide text-white/50">{label}</span>
       {value &&
         (isVideoUrl ? (
-          <video src={value} className="h-32 w-full rounded object-cover" muted loop autoPlay />
+          <video
+            src={value}
+            className="h-32 w-full rounded-lg border border-white/10 object-cover"
+            muted
+            loop
+            autoPlay
+          />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={value} alt="" className="h-32 w-full rounded object-cover" />
+          <img src={value} alt="" className="h-32 w-full rounded-lg border border-white/10 object-cover" />
         ))}
       <input
         ref={inputRef}
@@ -101,12 +107,12 @@ export function MediaUploadField({
         type="button"
         disabled={uploading}
         onClick={() => inputRef.current?.click()}
-        className="self-start rounded border border-neutral-300 px-3 py-2 text-sm font-medium disabled:opacity-50"
+        className="self-start rounded-lg border border-white/15 px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/5 disabled:opacity-50"
       >
         {uploading ? "Uploading..." : value ? "Replace file" : "Choose file"}
       </button>
-      {error && <p className="text-red-600">{error}</p>}
-      <p className="text-xs text-neutral-900">
+      {error && <p className="text-red-400">{error}</p>}
+      <p className="text-xs text-white/40">
         Accepts an image or a video. Images are auto-compressed to fit {IMAGE_MAX_DIMENSION}px /
         ~2MB. Videos are capped at {VIDEO_MAX_MB}MB (compress heavy files before uploading —
         client-side transcoding isn&apos;t wired up).

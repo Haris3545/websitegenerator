@@ -98,6 +98,8 @@ export interface Database {
           gate_background_url: string | null;
           youtube_channel_id: string | null;
           enabled_tabs: TabKey[];
+          folder_id: string | null;
+          sort_order: number;
           created_at: string;
           updated_at: string;
         };
@@ -123,10 +125,18 @@ export interface Database {
           gate_background_url?: string | null;
           youtube_channel_id?: string | null;
           enabled_tabs?: TabKey[];
+          folder_id?: string | null;
+          sort_order?: number;
           created_at?: string;
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["artists"]["Insert"]>;
+        Relationships: [];
+      };
+      artist_folders: {
+        Row: { id: string; name: string; position: number; created_at: string };
+        Insert: { id?: string; name: string; position?: number; created_at?: string };
+        Update: Partial<Database["public"]["Tables"]["artist_folders"]["Insert"]>;
         Relationships: [];
       };
       artist_secrets: {
@@ -399,6 +409,7 @@ export interface Database {
 }
 
 export type Artist = Database["public"]["Tables"]["artists"]["Row"];
+export type ArtistFolder = Database["public"]["Tables"]["artist_folders"]["Row"];
 export type MediaArticle = Database["public"]["Tables"]["media_articles"]["Row"];
 export type BoardItem = Database["public"]["Tables"]["board_items"]["Row"];
 export type ArtistEvent = Database["public"]["Tables"]["artist_events"]["Row"];

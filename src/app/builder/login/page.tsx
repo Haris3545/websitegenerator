@@ -42,37 +42,45 @@ function LoginForm() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-4">
-      <h1 className="mb-1 text-2xl font-semibold">Builder login</h1>
-      <p className="mb-6 text-sm text-neutral-900">
-        Internal admin access for the dashboard generator.
-      </p>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <label className="flex flex-col gap-1 text-sm">
-          Email
+    <div className="mx-auto flex min-h-screen max-w-sm flex-col justify-center bg-neutral-950 px-4 text-white">
+      <div className="mb-6 flex items-center gap-2">
+        <span className="h-2 w-2 rounded-full bg-violet-500" />
+        <h1 className="text-2xl font-semibold tracking-tight">Builder login</h1>
+      </div>
+      <p className="mb-6 text-sm text-white/50">Internal admin access for the dashboard generator.</p>
+      <form
+        onSubmit={handleSubmit}
+        className="flex flex-col gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-6"
+      >
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className="text-xs font-medium uppercase tracking-wide text-white/50">Email</span>
           <input
             type="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="rounded border border-neutral-300 px-3 py-2"
+            className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-white focus:border-violet-400 focus:outline-none"
           />
         </label>
-        <label className="flex flex-col gap-1 text-sm">
-          Password
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className="text-xs font-medium uppercase tracking-wide text-white/50">Password</span>
           <input
             type="password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="rounded border border-neutral-300 px-3 py-2"
+            className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-white focus:border-violet-400 focus:outline-none"
           />
         </label>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && (
+          <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-400">
+            {error}
+          </p>
+        )}
         <button
           type="submit"
           disabled={loading}
-          className="rounded bg-neutral-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="rounded-lg bg-violet-500 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-400 disabled:opacity-50"
         >
           {loading ? "Signing in..." : "Sign in"}
         </button>
