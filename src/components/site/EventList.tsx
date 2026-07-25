@@ -52,13 +52,18 @@ export function EventList({
                       </p>
                     )}
                   </div>
-                  <span className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/70">
-                    {new Date(event.event_date).toLocaleDateString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                      year: groupBy === "city" ? "numeric" : undefined,
-                    })}
-                  </span>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-white/70">
+                      {new Date(event.event_date).toLocaleDateString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                        year: groupBy === "city" ? "numeric" : undefined,
+                      })}
+                    </span>
+                    <span className="text-[10px] uppercase tracking-wide text-white/30">
+                      {event.source === "web" ? "found via web search" : event.source}
+                    </span>
+                  </div>
                 </div>
               </a>
             ))}

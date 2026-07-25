@@ -230,6 +230,8 @@ export interface Database {
           country: string;
           url: string | null;
           source: string;
+          latitude: number | null;
+          longitude: number | null;
           fetched_at: string;
         };
         Insert: {
@@ -241,6 +243,8 @@ export interface Database {
           country?: string;
           url?: string | null;
           source?: string;
+          latitude?: number | null;
+          longitude?: number | null;
           fetched_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["artist_events"]["Insert"]>;

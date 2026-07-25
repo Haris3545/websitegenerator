@@ -29,8 +29,9 @@ export default async function CalendarPage({ params }: { params: Promise<{ slug:
 
       {!events?.length ? (
         <p className="mt-4 rounded-lg border border-dashed border-white/20 p-8 text-center text-white/50">
-          No upcoming dates cached yet — ask whoever manages this app to set
-          TICKETMASTER_API_KEY, then hit &quot;Refresh Everything&quot; below.
+          No upcoming dates cached yet — hit &quot;Refresh Everything&quot; below. If nothing shows
+          up after that, ask whoever manages this app to set TICKETMASTER_API_KEY for broader
+          coverage.
         </p>
       ) : (
         <div className="mt-4">
