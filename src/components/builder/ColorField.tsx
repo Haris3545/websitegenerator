@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { HexColorPicker } from "react-colorful";
 
 export function ColorField({
@@ -13,9 +13,29 @@ export function ColorField({
   onChange: (hex: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Closes on a click anywhere outside, or Escape — standard popover
+  // behavior so it doesn't just sit open until you happen to click the
+  // swatch again.
+  useEffect(() => {
+    if (!open) return;
+    function handlePointerDown(e: PointerEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
 
   return (
-    <div className="relative flex flex-col gap-1 text-sm">
+    <div ref={wrapperRef} className="relative flex flex-col gap-1 text-sm">
       <span>{label}</span>
       <div className="flex items-center gap-2">
         <button
@@ -33,7 +53,10 @@ export function ColorField({
         />
       </div>
       {open && (
-        <div className="absolute top-full z-10 mt-1">
+        // Releasing the pointer after dragging to a shade closes the
+        // picker right away, rather than leaving it open until a
+        // separate outside click.
+        <div className="absolute top-full z-10 mt-1" onPointerUp={() => setOpen(false)}>
           <HexColorPicker color={value} onChange={onChange} />
         </div>
       )}

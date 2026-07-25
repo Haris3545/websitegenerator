@@ -86,7 +86,7 @@ export function SiteFooter({
           href={`/builder/artists/${artistId}`}
           className="rounded-full border border-white/20 px-4 py-1.5 text-xs font-medium text-white/70 hover:border-white/40 hover:text-white"
         >
-          Back to dashboard
+          Edit this site
         </Link>
         <button
           type="button"

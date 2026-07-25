@@ -1,13 +1,14 @@
 import { after } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getSiteArtist } from "@/lib/getSiteArtist";
-import { refreshSentimentIfStale } from "@/lib/sentiment";
+import { refreshSentimentNow, refreshSentimentIfStale } from "@/lib/sentiment";
 import { resolveContent } from "@/lib/contentOverrides";
 import { KpiCard } from "@/components/site/KpiCard";
 import { ArticleCard } from "@/components/site/ArticleCard";
 import { Editable } from "@/components/site/Editable";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { TABS, LIVE_TABS } from "@/lib/tabs";
+import type { TabKey } from "@/lib/database.types";
 
 export default async function DashboardPage({
   params,
@@ -17,11 +18,34 @@ export default async function DashboardPage({
   const { slug } = await params;
   const supabase = createServiceRoleClient();
 
-  const artist = await getSiteArtist(slug);
+  let artist = await getSiteArtist(slug);
 
-  after(() => refreshSentimentIfStale(artist.id, artist.name));
+  if (!artist.sentiment_summary?.computed_at) {
+    // Nothing computed yet (a brand-new artist) — worth the wait so the
+    // very first visit isn't just a wall of "no data yet" placeholders.
+    try {
+      await refreshSentimentNow(artist.id, artist.name);
+      artist = await getSiteArtist(slug);
+    } catch (err) {
+      console.error(`Initial sentiment analysis failed for ${slug}:`, err);
+    }
+  } else {
+    after(() => refreshSentimentIfStale(artist.id, artist.name));
+  }
 
-  const [{ count: mediaCount }, { data: latestArticles }] = await Promise.all([
+  const [
+    { count: mediaCount },
+    { data: latestArticles },
+    { count: eventsCount },
+    { data: youtubeStats },
+    { count: socialCount },
+    { data: musicStats },
+    { count: audienceCount },
+    { count: strategyCount },
+    { count: tacticsCount },
+    { count: ideasCount },
+    { count: researchCount },
+  ] = await Promise.all([
     supabase.from("media_articles").select("id", { count: "exact", head: true }).eq("artist_id", artist.id),
     supabase
       .from("media_articles")
@@ -29,6 +53,35 @@ export default async function DashboardPage({
       .eq("artist_id", artist.id)
       .order("published_at", { ascending: false })
       .limit(5),
+    supabase
+      .from("artist_events")
+      .select("id", { count: "exact", head: true })
+      .eq("artist_id", artist.id)
+      .gte("event_date", new Date().toISOString()),
+    supabase.from("youtube_stats").select("*").eq("artist_id", artist.id).maybeSingle(),
+    supabase.from("social_mentions").select("id", { count: "exact", head: true }).eq("artist_id", artist.id),
+    supabase.from("music_stats").select("*").eq("artist_id", artist.id).maybeSingle(),
+    supabase.from("audience_statements").select("id", { count: "exact", head: true }).eq("artist_id", artist.id),
+    supabase
+      .from("board_items")
+      .select("id", { count: "exact", head: true })
+      .eq("artist_id", artist.id)
+      .eq("board_key", "strategy"),
+    supabase
+      .from("board_items")
+      .select("id", { count: "exact", head: true })
+      .eq("artist_id", artist.id)
+      .eq("board_key", "tactics"),
+    supabase
+      .from("board_items")
+      .select("id", { count: "exact", head: true })
+      .eq("artist_id", artist.id)
+      .eq("board_key", "ideas"),
+    supabase
+      .from("board_items")
+      .select("id", { count: "exact", head: true })
+      .eq("artist_id", artist.id)
+      .eq("board_key", "research"),
   ]);
 
   const otherTabs = TABS.filter(
@@ -40,6 +93,55 @@ export default async function DashboardPage({
   const mediaCaption = hasSentiment
     ? `mentioning ${artist.name} · ${positive_pct}% positive, ${neutral_pct}% neutral, ${negative_pct}% negative`
     : `articles mentioning ${artist.name}`;
+
+  const boardCount: Partial<Record<TabKey, number | null>> = {
+    strategy: strategyCount,
+    tactics: tacticsCount,
+    ideas: ideasCount,
+    research: researchCount,
+  };
+
+  function kpiFor(tabKey: TabKey) {
+    switch (tabKey) {
+      case "media":
+        return { value: String(mediaCount ?? 0), caption: mediaCaption };
+      case "locations":
+      case "calendar":
+        return {
+          value: String(eventsCount ?? 0),
+          caption: eventsCount ? "upcoming dates" : "no dates yet",
+        };
+      case "youtube":
+        return {
+          value: youtubeStats?.subscriber_count?.toLocaleString() ?? "—",
+          caption: youtubeStats ? "subscribers" : "no channel linked yet",
+        };
+      case "social_listening":
+        return {
+          value: String(socialCount ?? 0),
+          caption: socialCount ? "mentions found" : "no mentions yet",
+        };
+      case "music":
+        return {
+          value: musicStats?.listeners?.toLocaleString() ?? "—",
+          caption: musicStats ? "Last.fm listeners" : "no data yet",
+        };
+      case "audience":
+        return {
+          value: String(audienceCount ?? 0),
+          caption: audienceCount ? "statements imported" : "no research uploaded yet",
+        };
+      case "strategy":
+      case "tactics":
+      case "ideas":
+      case "research": {
+        const count = boardCount[tabKey] ?? 0;
+        return { value: String(count), caption: count ? "cards" : "no cards yet" };
+      }
+      default:
+        return null;
+    }
+  }
 
   return (
     <div>
@@ -60,27 +162,18 @@ export default async function DashboardPage({
       </div>
 
       <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-        {otherTabs.map((tab) =>
-          tab.key === "media" ? (
-            <KpiCard
-              key={tab.key}
-              label="Media"
-              value={String(mediaCount ?? 0)}
-              caption={mediaCaption}
-              color="var(--accent)"
-            />
-          ) : (
+        {otherTabs.map((tab) => {
+          const kpi = kpiFor(tab.key);
+          return (
             <KpiCard
               key={tab.key}
               label={tab.label}
-              value="—"
-              caption={
-                LIVE_TABS.includes(tab.key) ? "no data yet" : "live in a later phase"
-              }
-              color="var(--primary)"
+              value={kpi?.value ?? "—"}
+              caption={kpi?.caption ?? (LIVE_TABS.includes(tab.key) ? "no data yet" : "live in a later phase")}
+              color={tab.key === "media" ? "var(--accent)" : "var(--primary)"}
             />
-          )
-        )}
+          );
+        })}
       </div>
 
       {!!latestArticles?.length && (

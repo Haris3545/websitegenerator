@@ -122,11 +122,18 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
+    const isNew = !artist;
+    // Opened synchronously, within the click itself, so the browser trusts
+    // it as a real user-initiated tab rather than blocking it as a popup —
+    // by the time creation actually finishes below, we're well past the
+    // point where window.open would still count as user-triggered.
+    const newSiteTab = isNew ? window.open("about:blank", "_blank") : null;
+
     startTransition(async () => {
-      const isNew = !artist;
       const result = await upsertArtist(form);
       if (!result.ok) {
         setFormError(result.error);
+        newSiteTab?.close();
         return;
       }
 
@@ -147,6 +154,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
         }
       }
 
+      if (newSiteTab) newSiteTab.location.href = `/s/${form.slug}`;
       router.push(isNew ? `/builder/artists/${result.id}` : "/builder/artists");
     });
   }

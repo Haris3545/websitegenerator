@@ -100,11 +100,38 @@ export async function upsertArtist(
   }
 }
 
-export async function deleteArtist(id: string) {
-  const supabase = await createClient();
-  const { error } = await supabase.from("artists").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+/** Deletes an artist entirely — the dashboard, all its cached data (media,
+ * events, board items, etc. all cascade via FK on delete), and, if it was
+ * published, the standalone GitHub repo + Vercel project too (those aren't
+ * covered by the database cascade, so they'd otherwise be left running
+ * indefinitely). */
+export async function deleteArtist(id: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const supabase = await createClient();
+
+    const { data: artist } = await supabase
+      .from("artists")
+      .select("published_repo_url, slug")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (artist?.published_repo_url) {
+      const result = await unpublishArtistSite(id);
+      if (!result.ok) {
+        return { ok: false, error: `Couldn't remove the published site first: ${result.error}` };
+      }
+    }
+
+    const { error } = await supabase.from("artists").delete().eq("id", id);
+    if (error) return { ok: false, error: error.message };
+
+    if (artist?.slug) updateTag(artistCacheTag(artist.slug));
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to delete this artist." };
+  }
+
   revalidatePath("/builder/artists");
+  return { ok: true };
 }
 
 export async function publishArtist(artistId: string): Promise<PublishResult> {

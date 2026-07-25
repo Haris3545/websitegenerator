@@ -1,7 +1,7 @@
 import { after } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getSiteArtist } from "@/lib/getSiteArtist";
-import { refreshMusicIfStale } from "@/lib/music";
+import { refreshMusicStats, refreshMusicIfStale } from "@/lib/music";
 import { KpiCard } from "@/components/site/KpiCard";
 import { SiteFooter } from "@/components/site/SiteFooter";
 
@@ -9,14 +9,27 @@ export default async function MusicPage({ params }: { params: Promise<{ slug: st
   const { slug } = await params;
   const artist = await getSiteArtist(slug);
 
-  after(() => refreshMusicIfStale(artist.id, artist.name));
-
   const supabase = createServiceRoleClient();
-  const { data: stats } = await supabase
+  let { data: stats } = await supabase
     .from("music_stats")
     .select("*")
     .eq("artist_id", artist.id)
     .maybeSingle();
+
+  if (!stats) {
+    try {
+      await refreshMusicStats(artist.id, artist.name);
+      ({ data: stats } = await supabase
+        .from("music_stats")
+        .select("*")
+        .eq("artist_id", artist.id)
+        .maybeSingle());
+    } catch (err) {
+      console.error(`Initial music fetch failed for ${slug}:`, err);
+    }
+  } else {
+    after(() => refreshMusicIfStale(artist.id, artist.name));
+  }
 
   return (
     <div>
@@ -28,8 +41,8 @@ export default async function MusicPage({ params }: { params: Promise<{ slug: st
 
       {!stats ? (
         <p className="mt-4 rounded-lg border border-dashed border-white/20 p-8 text-center text-white/50">
-          No stats cached yet — add a Last.fm API key under this artist&apos;s API keys in the
-          builder, then hit &quot;Refresh Everything&quot; below.
+          No stats cached yet — hit &quot;Refresh Everything&quot; below. If nothing shows up, ask
+          whoever manages this app to set LASTFM_API_KEY.
         </p>
       ) : (
         <>

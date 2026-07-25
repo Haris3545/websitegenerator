@@ -1,7 +1,7 @@
 import { after } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getSiteArtist } from "@/lib/getSiteArtist";
-import { refreshSocialListeningIfStale } from "@/lib/socialListening";
+import { refreshSocialListeningForArtist, refreshSocialListeningIfStale } from "@/lib/socialListening";
 import { SiteFooter } from "@/components/site/SiteFooter";
 
 const PLATFORM_LABEL: Record<string, string> = { reddit: "Reddit", youtube: "YouTube" };
@@ -14,15 +14,29 @@ export default async function SocialListeningPage({
   const { slug } = await params;
   const artist = await getSiteArtist(slug);
 
-  after(() => refreshSocialListeningIfStale(artist.id, artist.name));
-
   const supabase = createServiceRoleClient();
-  const { data: mentions } = await supabase
+  let { data: mentions } = await supabase
     .from("social_mentions")
     .select("*")
     .eq("artist_id", artist.id)
     .order("published_at", { ascending: false })
     .limit(40);
+
+  if (!mentions?.length) {
+    try {
+      await refreshSocialListeningForArtist(artist.id, artist.name);
+      ({ data: mentions } = await supabase
+        .from("social_mentions")
+        .select("*")
+        .eq("artist_id", artist.id)
+        .order("published_at", { ascending: false })
+        .limit(40));
+    } catch (err) {
+      console.error(`Initial social listening fetch failed for ${slug}:`, err);
+    }
+  } else {
+    after(() => refreshSocialListeningIfStale(artist.id, artist.name));
+  }
 
   return (
     <div>
@@ -36,9 +50,8 @@ export default async function SocialListeningPage({
 
       {!mentions?.length ? (
         <p className="mt-4 rounded-lg border border-dashed border-white/20 p-8 text-center text-white/50">
-          No mentions cached yet — add a Reddit client ID/secret and/or a YouTube Data API key
-          under this artist&apos;s API keys in the builder, then hit &quot;Refresh Everything&quot;
-          below.
+          No mentions found yet — hit &quot;Refresh Everything&quot; below. YouTube mentions need
+          YOUTUBE_API_KEY set; Reddit needs no setup at all.
         </p>
       ) : (
         <div className="mt-4 flex flex-col gap-3">

@@ -1,7 +1,8 @@
 import { after } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getSiteArtist } from "@/lib/getSiteArtist";
-import { refreshSentimentIfStale } from "@/lib/sentiment";
+import { refreshMediaForArtist } from "@/lib/media";
+import { refreshSentimentNow, refreshSentimentIfStale } from "@/lib/sentiment";
 import { resolveContent } from "@/lib/contentOverrides";
 import { MediaList } from "@/components/site/MediaList";
 import { DashboardOverview } from "@/components/site/DashboardOverview";
@@ -12,15 +13,37 @@ export default async function MediaPage({ params }: { params: Promise<{ slug: st
   const { slug } = await params;
   const supabase = createServiceRoleClient();
 
-  const artist = await getSiteArtist(slug);
+  let artist = await getSiteArtist(slug);
 
-  after(() => refreshSentimentIfStale(artist.id, artist.name));
+  if (!artist.sentiment_summary?.computed_at) {
+    try {
+      await refreshSentimentNow(artist.id, artist.name);
+      artist = await getSiteArtist(slug);
+    } catch (err) {
+      console.error(`Initial sentiment analysis failed for ${slug}:`, err);
+    }
+  } else {
+    after(() => refreshSentimentIfStale(artist.id, artist.name));
+  }
 
-  const { data: articles } = await supabase
+  let { data: articles } = await supabase
     .from("media_articles")
     .select("*")
     .eq("artist_id", artist.id)
     .order("published_at", { ascending: false });
+
+  if (!articles?.length) {
+    try {
+      await refreshMediaForArtist(artist.id, artist.name);
+      ({ data: articles } = await supabase
+        .from("media_articles")
+        .select("*")
+        .eq("artist_id", artist.id)
+        .order("published_at", { ascending: false }));
+    } catch (err) {
+      console.error(`Initial media fetch failed for ${slug}:`, err);
+    }
+  }
 
   return (
     <div>

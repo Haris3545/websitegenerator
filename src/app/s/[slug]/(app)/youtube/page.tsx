@@ -1,7 +1,7 @@
 import { after } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getSiteArtist } from "@/lib/getSiteArtist";
-import { refreshYoutubeIfStale } from "@/lib/youtube";
+import { refreshYoutubeStats, refreshYoutubeIfStale } from "@/lib/youtube";
 import { KpiCard } from "@/components/site/KpiCard";
 import { SiteFooter } from "@/components/site/SiteFooter";
 
@@ -9,14 +9,27 @@ export default async function YoutubePage({ params }: { params: Promise<{ slug: 
   const { slug } = await params;
   const artist = await getSiteArtist(slug);
 
-  after(() => refreshYoutubeIfStale(artist.id, artist.youtube_channel_id));
-
   const supabase = createServiceRoleClient();
-  const { data: stats } = await supabase
+  let { data: stats } = await supabase
     .from("youtube_stats")
     .select("*")
     .eq("artist_id", artist.id)
     .maybeSingle();
+
+  if (!stats && artist.youtube_channel_id) {
+    try {
+      await refreshYoutubeStats(artist.id, artist.youtube_channel_id);
+      ({ data: stats } = await supabase
+        .from("youtube_stats")
+        .select("*")
+        .eq("artist_id", artist.id)
+        .maybeSingle());
+    } catch (err) {
+      console.error(`Initial YouTube fetch failed for ${slug}:`, err);
+    }
+  } else if (artist.youtube_channel_id) {
+    after(() => refreshYoutubeIfStale(artist.id, artist.youtube_channel_id));
+  }
 
   const videos = stats?.recent_videos ?? [];
 

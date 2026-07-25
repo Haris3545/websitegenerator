@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { DeleteArtistButton } from "@/components/builder/DeleteArtistButton";
 
 export default async function ArtistsPage() {
   const supabase = await createClient();
@@ -42,6 +43,7 @@ export default async function ArtistsPage() {
                 >
                   Edit
                 </Link>
+                <DeleteArtistButton artistId={artist.id} artistName={artist.name} />
               </div>
             </li>
           ))}

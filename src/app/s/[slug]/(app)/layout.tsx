@@ -1,7 +1,7 @@
 import { after } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getSiteArtist } from "@/lib/getSiteArtist";
-import { refreshMediaIfStale } from "@/lib/media";
+import { refreshMediaForArtist, refreshMediaIfStale } from "@/lib/media";
 import { resolveContent } from "@/lib/contentOverrides";
 import { googleFontsCssUrl } from "@/lib/fonts";
 import { withThemeDefaults, themeToCssVars } from "@/lib/theme";
@@ -27,17 +27,31 @@ export default async function ArtistSiteLayout({
   // the same fetch instead of querying the artist row a second time.
   const artist = await getSiteArtist(slug);
 
-  // Don't block the page on a live Google News fetch — the cron job (see
-  // vercel.json) keeps this warm on a schedule; here we just kick a refresh
-  // in the background if it's stale, after the response has already gone out.
-  after(() => refreshMediaIfStale(artist.id, artist.name));
-
-  const { data: tickerArticles } = await supabase
+  let { data: tickerArticles } = await supabase
     .from("media_articles")
     .select("*")
     .eq("artist_id", artist.id)
     .order("published_at", { ascending: false })
     .limit(6);
+
+  if (!tickerArticles?.length) {
+    // Nothing cached at all yet (a brand-new artist) — worth the wait so
+    // the very first visit isn't just empty. Once anything's cached, stay
+    // fast: refresh staleness in the background instead (see below).
+    try {
+      await refreshMediaForArtist(artist.id, artist.name);
+      ({ data: tickerArticles } = await supabase
+        .from("media_articles")
+        .select("*")
+        .eq("artist_id", artist.id)
+        .order("published_at", { ascending: false })
+        .limit(6));
+    } catch (err) {
+      console.error(`Initial media fetch failed for ${slug}:`, err);
+    }
+  } else {
+    after(() => refreshMediaIfStale(artist.id, artist.name));
+  }
 
   const { grain_intensity = 0, tint_opacity = 0, blur = 0, vignette = 0 } =
     artist.aesthetic_params ?? {};
