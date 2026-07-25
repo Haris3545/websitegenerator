@@ -211,6 +211,32 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["board_items"]["Insert"]>;
         Relationships: [];
       };
+      artist_events: {
+        Row: {
+          id: string;
+          artist_id: string;
+          event_date: string;
+          venue: string;
+          city: string;
+          country: string;
+          url: string | null;
+          source: string;
+          fetched_at: string;
+        };
+        Insert: {
+          id?: string;
+          artist_id: string;
+          event_date: string;
+          venue: string;
+          city?: string;
+          country?: string;
+          url?: string | null;
+          source?: string;
+          fetched_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["artist_events"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -222,3 +248,4 @@ export interface Database {
 export type Artist = Database["public"]["Tables"]["artists"]["Row"];
 export type MediaArticle = Database["public"]["Tables"]["media_articles"]["Row"];
 export type BoardItem = Database["public"]["Tables"]["board_items"]["Row"];
+export type ArtistEvent = Database["public"]["Tables"]["artist_events"]["Row"];

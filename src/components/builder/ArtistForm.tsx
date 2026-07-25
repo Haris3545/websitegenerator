@@ -31,6 +31,7 @@ const SECRET_FIELDS = [
   { key: "reddit_client_id", label: "Reddit client ID" },
   { key: "reddit_client_secret", label: "Reddit client secret" },
   { key: "lastfm_api_key", label: "Last.fm API key" },
+  { key: "bandsintown_app_id", label: "Bandsintown app_id (for Locations/Calendar)" },
 ] as const;
 
 export function ArtistForm({

@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { refreshMediaForArtist } from "@/lib/media";
 import { refreshSentimentNow } from "@/lib/sentiment";
+import { refreshEventsForArtist } from "@/lib/events";
 import { computeArtistPassword, artistAccessCookieName } from "@/lib/artistAccess";
 import type { SentimentFilter, BoardItem } from "@/lib/database.types";
 
@@ -21,6 +22,13 @@ export async function refreshEverything(slug: string) {
 
   await refreshMediaForArtist(artist.id, artist.name);
   await refreshSentimentNow(artist.id, artist.name);
+  try {
+    // Best-effort — not every artist has a Bandsintown app_id configured,
+    // and that shouldn't block the rest of the refresh.
+    await refreshEventsForArtist(artist.id, artist.name);
+  } catch (err) {
+    console.error(`refreshEverything: events refresh failed for ${slug}:`, err);
+  }
   revalidatePath(`/s/${slug}`, "layout");
 }
 
