@@ -27,8 +27,8 @@ export async function refreshEverything(slug: string) {
   await refreshMediaForArtist(artist.id, artist.name);
   await refreshSentimentNow(artist.id, artist.name);
   try {
-    // Best-effort — not every artist has a Bandsintown app_id configured,
-    // and that shouldn't block the rest of the refresh.
+    // Best-effort — TICKETMASTER_API_KEY might not be set yet, and that
+    // shouldn't block the rest of the refresh.
     await refreshEventsForArtist(artist.id, artist.name);
   } catch (err) {
     console.error(`refreshEverything: events refresh failed for ${slug}:`, err);

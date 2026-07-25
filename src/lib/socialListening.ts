@@ -5,8 +5,6 @@ const STALE_AFTER_MS = 60 * 60 * 1000; // 1 hour
 
 type MentionRow = Omit<SocialMention, "id" | "fetched_at"> & { fetched_at: string };
 
-type RedditTokenResponse = { access_token?: string };
-
 type RedditSearchResponse = {
   data?: {
     children?: {
@@ -37,32 +35,15 @@ type YoutubeSearchResponse = {
 
 const REDDIT_USER_AGENT = "websitegenerator:cultural-intelligence:v1.0 (by /u/vccp-media)";
 
+/** Reddit's public search results (the ".json" suffix Reddit's own web UI
+ * uses) work without any signed-in app or OAuth credentials — this is a
+ * low-volume, read-only, hourly-cached lookup, well within what that
+ * endpoint tolerates. Trades a small amount of robustness (no official
+ * app registered) for zero setup. */
 async function fetchRedditMentions(artistId: string, artistName: string): Promise<MentionRow[]> {
-  const clientId = process.env.REDDIT_CLIENT_ID;
-  const clientSecret = process.env.REDDIT_CLIENT_SECRET;
-  if (!clientId || !clientSecret) return [];
-
-  const tokenRes = await fetch("https://www.reddit.com/api/v1/access_token", {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-      "User-Agent": REDDIT_USER_AGENT,
-    },
-    body: "grant_type=client_credentials",
-  });
-  if (!tokenRes.ok) throw new Error(`Reddit auth returned ${tokenRes.status}`);
-  const tokenData: RedditTokenResponse = await tokenRes.json();
-  if (!tokenData.access_token) throw new Error("Reddit auth returned no access token.");
-
   const searchRes = await fetch(
-    `https://oauth.reddit.com/search?q=${encodeURIComponent(`"${artistName}"`)}&sort=new&limit=25`,
-    {
-      headers: {
-        Authorization: `Bearer ${tokenData.access_token}`,
-        "User-Agent": REDDIT_USER_AGENT,
-      },
-    }
+    `https://www.reddit.com/search.json?q=${encodeURIComponent(`"${artistName}"`)}&sort=new&limit=25&raw_json=1`,
+    { headers: { "User-Agent": REDDIT_USER_AGENT } }
   );
   if (!searchRes.ok) throw new Error(`Reddit search returned ${searchRes.status}`);
   const searchData: RedditSearchResponse = await searchRes.json();
@@ -109,10 +90,8 @@ async function fetchYoutubeMentions(artistId: string, artistName: string): Promi
 }
 
 /** Best-effort per platform — a Reddit failure shouldn't drop YouTube
- * results and vice versa. Whichever secrets aren't set (see
- * fetchRedditMentions/fetchYoutubeMentions) contribute zero rows rather
- * than erroring, since it's normal for an artist to only have one of the
- * two configured. */
+ * results and vice versa. YouTube contributes zero rows rather than
+ * erroring when YOUTUBE_API_KEY isn't set (see fetchYoutubeMentions). */
 export async function refreshSocialListeningForArtist(artistId: string, artistName: string) {
   const results = await Promise.allSettled([
     fetchRedditMentions(artistId, artistName),

@@ -2,57 +2,65 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 
 const STALE_AFTER_MS = 12 * 60 * 60 * 1000; // 12 hours
 
-type BandsintownVenue = {
+type TicketmasterVenue = {
   name?: string;
-  city?: string;
-  country?: string;
+  city?: { name?: string };
+  country?: { name?: string };
 };
 
-type BandsintownEvent = {
-  datetime?: string;
+type TicketmasterEvent = {
   url?: string;
-  venue?: BandsintownVenue;
+  dates?: { start?: { localDate?: string; dateTime?: string } };
+  _embedded?: { venues?: TicketmasterVenue[] };
 };
 
-/** Fetches upcoming tour dates from Bandsintown's public events API and
- * caches them. Bandsintown ties access to one registered app_id rather than
- * per-artist credentials, so this is a single shared key (BANDSINTOWN_APP_ID)
- * set once for the whole app, not something each artist configures. */
+type TicketmasterEventsResponse = {
+  _embedded?: { events?: TicketmasterEvent[] };
+};
+
+/** Fetches upcoming tour dates from Ticketmaster's Discovery API and caches
+ * them. Ticketmaster's key is free, instant, and self-serve (no approval
+ * wait like Bandsintown's app_id) — the tradeoff is it skews toward
+ * bigger/ticketed venues rather than Bandsintown's broader indie-friendly
+ * listings. */
 export async function refreshEventsForArtist(artistId: string, artistName: string) {
-  const appId = process.env.BANDSINTOWN_APP_ID;
-  if (!appId) {
+  const apiKey = process.env.TICKETMASTER_API_KEY;
+  if (!apiKey) {
     throw new Error(
-      "BANDSINTOWN_APP_ID isn't set — ask whoever manages this app's Vercel project to add it."
+      "TICKETMASTER_API_KEY isn't set — ask whoever manages this app's Vercel project to add it."
     );
   }
 
   const url =
-    `https://rest.bandsintown.com/artists/${encodeURIComponent(artistName)}/events` +
-    `?app_id=${encodeURIComponent(appId)}&date=upcoming`;
+    `https://app.ticketmaster.com/discovery/v2/events.json` +
+    `?apikey=${encodeURIComponent(apiKey)}&keyword=${encodeURIComponent(artistName)}&sort=date,asc&size=50`;
 
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Bandsintown returned ${res.status}`);
+  if (!res.ok) throw new Error(`Ticketmaster returned ${res.status}`);
 
-  const data: unknown = await res.json();
-  if (!Array.isArray(data)) {
-    // Bandsintown returns a JSON object (not an array) for an unrecognized
-    // artist or an invalid app_id, rather than an HTTP error.
-    return 0;
-  }
+  const data: TicketmasterEventsResponse = await res.json();
+  const events = data._embedded?.events ?? [];
 
   const supabase = createServiceRoleClient();
-  const rows = (data as BandsintownEvent[])
-    .filter((e) => e.datetime && e.venue?.name)
-    .map((e) => ({
-      artist_id: artistId,
-      event_date: e.datetime as string,
-      venue: e.venue!.name as string,
-      city: e.venue?.city ?? "",
-      country: e.venue?.country ?? "",
-      url: e.url ?? null,
-      source: "bandsintown",
-      fetched_at: new Date().toISOString(),
-    }));
+  const rows = events
+    .map((e) => {
+      const venue = e._embedded?.venues?.[0];
+      const dateTime =
+        e.dates?.start?.dateTime ??
+        (e.dates?.start?.localDate ? `${e.dates.start.localDate}T00:00:00Z` : null);
+      if (!dateTime || !venue?.name) return null;
+      return {
+        artist_id: artistId,
+        event_date: dateTime,
+        venue: venue.name,
+        city: venue.city?.name ?? "",
+        country: venue.country?.name ?? "",
+        url: e.url ?? null,
+        source: "ticketmaster",
+        fetched_at: new Date().toISOString(),
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => row !== null);
 
   if (rows.length) {
     const { error } = await supabase
