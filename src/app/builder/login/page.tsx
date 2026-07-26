@@ -71,18 +71,18 @@ function LoginForm() {
   return (
     <div className="flex min-h-screen justify-center bg-white text-neutral-900 dark:bg-neutral-950 dark:text-white">
       <div className="flex w-full max-w-sm flex-col justify-center px-4">
-        <div className="mb-8 flex flex-col items-center text-center">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/vccp-media-logo.png" alt="" className="h-16 w-16 dark:invert" />
-          <p className="mt-3 text-lg font-semibold tracking-tight">VCCP Media</p>
-          <p className="text-xs font-medium uppercase tracking-wider text-neutral-500 dark:text-white/40">
-            Cultural Intelligence Designer
+        <div className="mb-6 flex flex-col items-center text-center">
+          <div className="flex items-center gap-2.5">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/vccp-media-logo.png" alt="" className="h-9 w-9 dark:invert" />
+            <p className="text-sm font-semibold uppercase tracking-wider text-neutral-700 dark:text-white/80">
+              Cultural Intelligence Designer
+            </p>
+          </div>
+          <p className="mt-3 text-xs text-neutral-400 dark:text-white/30">
+            Internal admin access for the dashboard generator.
           </p>
         </div>
-        <h1 className="mb-1 text-center text-sm font-medium text-neutral-500 dark:text-white/50">Builder login</h1>
-        <p className="mb-6 text-center text-xs text-neutral-400 dark:text-white/30">
-          Internal admin access for the dashboard generator.
-        </p>
         <form
           onSubmit={handleSubmit}
           className="flex flex-col gap-4 rounded-xl border border-neutral-200 bg-neutral-50 p-6 dark:border-white/10 dark:bg-white/[0.03]"

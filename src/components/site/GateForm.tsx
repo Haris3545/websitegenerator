@@ -41,6 +41,13 @@ export function GateForm({
 
   const isVideo = /\.(mp4|webm|mov|m4v)(\?|$)/i.test(backgroundUrl ?? "");
   const invertLogo = isDarkColor(backgroundColor);
+  // Two simultaneously autoplaying <video> elements compete for browsers'
+  // (particularly mobile Safari's) limited concurrent-autoplay budget —
+  // with both present, the background video was frequently the one that
+  // lost and never started. When the artist has their own background
+  // video, that one wins and the brand mark falls back to the static logo
+  // instead of the animation.
+  const showAnimatedLogo = !(backgroundUrl && isVideo);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -85,16 +92,25 @@ export function GateForm({
       <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/70" />
 
       <div className="relative z-10 flex w-full max-w-4xl flex-col items-center px-4 text-center">
-        {/* Plays once and holds its final frame (no `loop`) — inverted
-            against a dark gate background so the mark reads as light on
-            dark rather than disappearing into it. */}
-        <video
-          src="/vccp-media-logo-animation.mp4"
-          autoPlay
-          muted
-          playsInline
-          className={`h-20 w-20 object-contain sm:h-24 sm:w-24 ${invertLogo ? "invert" : ""}`}
-        />
+        {showAnimatedLogo ? (
+          // Plays once and holds its final frame (no `loop`) — inverted
+          // against a dark gate background so the mark reads as light on
+          // dark rather than disappearing into it.
+          <video
+            src="/vccp-media-logo-animation.mp4"
+            autoPlay
+            muted
+            playsInline
+            className={`mt-6 h-20 w-20 object-contain sm:h-24 sm:w-24 ${invertLogo ? "invert" : ""}`}
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src="/vccp-media-logo.png"
+            alt=""
+            className={`mt-6 h-20 w-20 object-contain sm:h-24 sm:w-24 ${invertLogo ? "invert" : ""}`}
+          />
+        )}
         <p className="mt-6 text-xs font-semibold uppercase tracking-[0.35em] text-white/70">{tagline}</p>
         <h1 className="mt-3 text-4xl font-bold uppercase leading-none tracking-tight sm:text-6xl lg:text-7xl">
           {projectTitle}

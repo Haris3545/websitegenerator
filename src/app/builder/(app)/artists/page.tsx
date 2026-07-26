@@ -5,7 +5,7 @@ import { BrandedEmptyState } from "@/components/BrandedEmptyState";
 
 export default async function ArtistsPage() {
   const supabase = await createClient();
-  const [{ data: artists }, { data: folders }] = await Promise.all([
+  const [{ data: artists, error: artistsError }, { data: folders }] = await Promise.all([
     supabase
       .from("artists")
       .select("id, name, slug, updated_at, folder_id, sort_order, primary_color, gate_screenshot_url")
@@ -30,7 +30,15 @@ export default async function ArtistsPage() {
         </Link>
       </div>
 
-      {!artists?.length ? (
+      {artistsError ? (
+        <div className="rounded-xl border border-dashed border-red-400 bg-red-50 p-8 text-center text-sm text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
+          <p>
+            Database error reading artists — this is very likely a missing column a migration adds. Run{" "}
+            <code>migrations/026_gate_screenshot.sql</code> in Supabase, then reload this page.
+          </p>
+          <p className="mt-2 text-xs opacity-70">{artistsError.message}</p>
+        </div>
+      ) : !artists?.length ? (
         <BrandedEmptyState variant="builder" message="No artist dashboards yet. Create the first one to get started." />
       ) : (
         <ArtistsBoard initialArtists={artists} initialFolders={folders ?? []} />
