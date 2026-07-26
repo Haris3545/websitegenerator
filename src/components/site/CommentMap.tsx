@@ -53,12 +53,14 @@ function ancestorCategoryName(node: Node): string {
 // How visible each depth is at a given zoom level k — the "only see the
 // breakdown once you zoom in" behavior: everything starts folded into one
 // soft "Commentary" blob (depth 0), which fades out as categories fade in,
-// then subcategories, then individual comment bubbles last, each stage
-// only reachable by zooming further than the one before it.
+// then subcategories, then individual comment bubbles last. Categories keep
+// a small opacity floor even at the default view (rather than 0) so
+// they're still visible enough to click directly — clicking one zooms in —
+// without needing to scroll first.
 function stageOpacity(depth: number, k: number): number {
   if (depth === 0) return clamp(1 - (k - 1) / 1.2, 0, 1);
-  if (depth === 1) return clamp((k - 1) / 1.2, 0, 1);
-  if (depth === 2) return clamp((k - 3) / 3, 0, 1);
+  if (depth === 1) return clamp(0.28 + (k - 1) / 1.4, 0.28, 1);
+  if (depth === 2) return clamp((k - 2.2) / 3, 0, 1);
   return clamp((k - 6) / 6, 0, 1);
 }
 
@@ -239,7 +241,10 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
     if (!rect) return;
     const dx = ((e.clientX - ds.startX) / rect.width) * VIEW_SIZE;
     const dy = ((e.clientY - ds.startY) / rect.height) * VIEW_SIZE;
-    if (!ds.moved && (Math.abs(dx) > 2 || Math.abs(dy) > 2)) ds.moved = true;
+    if (!ds.moved && (Math.abs(dx) > 2 || Math.abs(dy) > 2)) {
+      ds.moved = true;
+      setTooltip(null);
+    }
     if (!ds.moved) return;
     transformRef.current = { ...transformRef.current, x: ds.startTx + dx, y: ds.startTy + dy };
     applyTransform(false);
@@ -249,10 +254,16 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
     dragState.current = null;
   }
 
-  function handleNodeClick(node: Node) {
+  function handleNodeClick(node: Node, clickX: number, clickY: number) {
     if (dragState.current?.moved) return;
     if (node.data.kind === "comment" && node.data.comment) {
       setSelected(node.data.comment);
+    } else if (node.depth === 0) {
+      // The root "Commentary" blob itself isn't a meaningful zoom target —
+      // fitting it to the view is a no-op since it's already what's shown.
+      // Zoom in a step centered on wherever was clicked instead, so a click
+      // anywhere on it is always useful rather than a dead click.
+      zoomToward(clickX, clickY, 2.2, true);
     } else {
       focusOn(node);
     }
@@ -280,7 +291,8 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
         <svg
           ref={svgRef}
           viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`}
-          className="h-full w-full cursor-grab active:cursor-grabbing"
+          className="h-full w-full cursor-grab touch-none active:cursor-grabbing"
+          style={{ touchAction: "none" }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
@@ -324,10 +336,17 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
                   className="cursor-pointer"
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleNodeClick(node);
+                    const { x: cx, y: cy } = toViewBox(e.clientX, e.clientY);
+                    handleNodeClick(node, cx, cy);
                   }}
-                  onPointerEnter={(e) => setTooltip({ node, clientX: e.clientX, clientY: e.clientY })}
-                  onPointerMove={(e) => setTooltip((t) => (t && t.node === node ? { node, clientX: e.clientX, clientY: e.clientY } : t))}
+                  onPointerEnter={(e) => {
+                    if (dragState.current) return;
+                    setTooltip({ node, clientX: e.clientX, clientY: e.clientY });
+                  }}
+                  onPointerMove={(e) => {
+                    if (dragState.current) return;
+                    setTooltip((t) => (t && t.node === node ? { node, clientX: e.clientX, clientY: e.clientY } : t));
+                  }}
                   onPointerLeave={() => setTooltip((t) => (t?.node === node ? null : t))}
                 />
               );

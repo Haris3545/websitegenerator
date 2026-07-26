@@ -181,11 +181,12 @@ export async function refreshConversationThemesForArtist(
 
   const themes = scoreConversationThemes(snippets, releaseTheme);
 
-  await supabase.from("conversation_themes").upsert({
+  const { error } = await supabase.from("conversation_themes").upsert({
     artist_id: artistId,
     themes,
     computed_at: new Date().toISOString(),
   });
+  if (error) throw new Error(`conversation_themes upsert failed: ${error.message}`);
 
   return themes;
 }

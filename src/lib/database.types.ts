@@ -108,6 +108,7 @@ export interface Database {
           youtube_channel_id: string | null;
           enabled_tabs: TabKey[];
           dashboard_section_order: string[];
+          youtube_section_order: string[];
           folder_id: string | null;
           sort_order: number;
           created_at: string;
@@ -136,6 +137,7 @@ export interface Database {
           youtube_channel_id?: string | null;
           enabled_tabs?: TabKey[];
           dashboard_section_order?: string[];
+          youtube_section_order?: string[];
           folder_id?: string | null;
           sort_order?: number;
           created_at?: string;

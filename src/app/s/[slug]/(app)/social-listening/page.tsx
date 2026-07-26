@@ -15,16 +15,16 @@ export default async function SocialListeningPage({
   const artist = await getSiteArtist(slug);
 
   const supabase = createServiceRoleClient();
-  let { data: row } = await supabase
+  let { data: row, error: rowError } = await supabase
     .from("conversation_themes")
     .select("themes, computed_at")
     .eq("artist_id", artist.id)
     .maybeSingle();
 
-  if (!row?.computed_at) {
+  if (!row?.computed_at && !rowError) {
     try {
       await refreshConversationThemesForArtist(artist.id, artist.project_title);
-      ({ data: row } = await supabase
+      ({ data: row, error: rowError } = await supabase
         .from("conversation_themes")
         .select("themes, computed_at")
         .eq("artist_id", artist.id)
@@ -32,7 +32,7 @@ export default async function SocialListeningPage({
     } catch (err) {
       console.error(`Initial conversation themes fetch failed for ${slug}:`, err);
     }
-  } else {
+  } else if (!rowError) {
     after(() => refreshConversationThemesIfStale(artist.id, artist.project_title));
   }
 
@@ -49,7 +49,16 @@ export default async function SocialListeningPage({
         subtitle={`Recurring themes in how people talk about ${artist.name} — Wikipedia, YouTube, and press coverage combined`}
       />
 
-      {!themes.length ? (
+      {rowError ? (
+        <div className="mt-4 rounded-lg border border-dashed border-red-400/40 p-8 text-center text-red-300/80">
+          <p>
+            Database error reading conversation_themes — this table probably doesn&apos;t exist yet. Run{" "}
+            <code className="text-red-200">migrations/024_conversation_themes.sql</code> in Supabase, then
+            refresh this page.
+          </p>
+          <p className="mt-3 text-xs text-red-300/60">{rowError.message}</p>
+        </div>
+      ) : !themes.length ? (
         <p className="mt-4 rounded-lg border border-dashed border-white/20 p-8 text-center text-white/50">
           No themes found yet — hit &quot;Refresh Everything&quot; below.
         </p>

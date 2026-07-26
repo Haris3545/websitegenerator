@@ -6,7 +6,10 @@ import { usePathname } from "next/navigation";
 import { TABS_BY_KEY, orderedEnabledTabs } from "@/lib/tabs";
 import { useEditMode } from "@/components/site/EditModeContext";
 import { updateTabOrder } from "@/app/s/[slug]/actions";
+import { useDragReorder } from "@/hooks/useDragReorder";
 import type { TabKey } from "@/lib/database.types";
+
+const END = "__end__";
 
 export function NavPills({
   slug,
@@ -23,7 +26,6 @@ export function NavPills({
   const [, startTransition] = useTransition();
 
   const [tabs, setTabs] = useState<TabKey[]>(() => orderedEnabledTabs(enabledTabs));
-  const [dragKey, setDragKey] = useState<TabKey | null>(null);
 
   function persist(next: TabKey[]) {
     setTabs(next);
@@ -32,13 +34,14 @@ export function NavPills({
     });
   }
 
-  function moveTo(beforeKey: TabKey | null) {
-    if (!dragKey || dragKey === beforeKey) return;
-    const rest = tabs.filter((k) => k !== dragKey);
-    const insertAt = beforeKey ? rest.indexOf(beforeKey) : rest.length;
-    rest.splice(insertAt < 0 ? rest.length : insertAt, 0, dragKey);
-    persist(rest);
-  }
+  const { draggingKey, handlePointerDown, handlePointerMove, handlePointerUp, handlePointerCancel, consumeWasDragging } =
+    useDragReorder((dragKey, overKey) => {
+      if (!overKey || overKey === dragKey) return;
+      const rest = tabs.filter((k) => k !== dragKey);
+      const insertAt = overKey === END ? rest.length : rest.indexOf(overKey as TabKey);
+      rest.splice(insertAt < 0 ? rest.length : insertAt, 0, dragKey as TabKey);
+      persist(rest);
+    });
 
   function remove(key: TabKey) {
     persist(tabs.filter((k) => k !== key));
@@ -56,20 +59,18 @@ export function NavPills({
         return (
           <div
             key={key}
-            className={draggableTab ? "relative select-none" : "relative"}
-            draggable={draggableTab}
-            onDragStart={() => draggableTab && setDragKey(key)}
-            onDragOver={(e) => draggableTab && e.preventDefault()}
-            onDrop={(e) => {
-              if (!draggableTab) return;
-              e.preventDefault();
-              moveTo(key);
-              setDragKey(null);
-            }}
+            data-reorder-key={key}
+            className={draggableTab ? "relative touch-none select-none" : "relative"}
+            style={draggableTab ? { touchAction: "none" } : undefined}
+            onPointerDown={draggableTab ? (e) => handlePointerDown(e, key) : undefined}
+            onPointerMove={draggableTab ? handlePointerMove : undefined}
+            onPointerUp={draggableTab ? handlePointerUp : undefined}
+            onPointerCancel={draggableTab ? handlePointerCancel : undefined}
           >
             {draggableTab && (
               <button
                 type="button"
+                onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.preventDefault();
                   remove(key);
@@ -83,9 +84,12 @@ export function NavPills({
             <Link
               href={href}
               draggable={false}
+              onClick={(e) => {
+                if (draggableTab && consumeWasDragging()) e.preventDefault();
+              }}
               className={`block rounded-lg px-4 py-1.5 text-sm font-medium transition-all duration-150 ease-out hover:-translate-y-0.5 ${
-                editMode && key !== "dashboard" ? "cursor-grab active:cursor-grabbing" : ""
-              } ${
+                draggableTab ? "cursor-grab active:cursor-grabbing" : ""
+              } ${draggingKey === key ? "opacity-40" : ""} ${
                 active
                   ? "bg-[var(--accent)] text-black"
                   : "border border-white/30 text-white/90 hover:border-white/60 hover:bg-white/5"
@@ -98,13 +102,7 @@ export function NavPills({
       })}
       {editMode && (
         <div
-          onDragOver={(e) => dragKey && e.preventDefault()}
-          onDrop={(e) => {
-            if (!dragKey) return;
-            e.preventDefault();
-            moveTo(null);
-            setDragKey(null);
-          }}
+          data-reorder-key={END}
           className="flex items-center rounded-lg border border-dashed border-white/20 px-3 text-xs text-white/30"
         >
           drag to reorder · × to remove

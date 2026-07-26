@@ -168,6 +168,18 @@ export async function updateDashboardSectionOrder(artistId: string, order: strin
   revalidatePath(`/s/[slug]`, "layout");
 }
 
+/** Same shape again, but for the YouTube tab's own sections ("Comment
+ * themes", "Channel stats") — lets a visitor drag "Comment themes" to the
+ * top themselves instead of it being a fixed order. */
+export async function updateYoutubeSectionOrder(artistId: string, order: string[]) {
+  const supabase = createServiceRoleClient();
+  const { data: artist } = await supabase.from("artists").select("slug").eq("id", artistId).maybeSingle();
+
+  await supabase.from("artists").update({ youtube_section_order: order }).eq("id", artistId);
+  if (artist?.slug) updateTag(artistCacheTag(artist.slug));
+  revalidatePath(`/s/[slug]`, "layout");
+}
+
 /** Persists the quick aesthetic tweaks made from the on-site edit-mode panel
  * (see AestheticPanel) — colours, font, and the card look knobs the builder's
  * own ThemeEditor also exposes. Deeper background-image adjustments (pan/

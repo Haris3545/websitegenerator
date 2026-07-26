@@ -50,7 +50,7 @@ export function NewsTicker({
 
   if (!articles.length) {
     return (
-      <div className="relative mt-3 overflow-hidden border-y border-white/10 bg-black/30 py-2">
+      <div className="relative mt-3 overflow-hidden py-2">
         <Editable
           artistId={artistId}
           contentKey="ticker.empty_state"
@@ -67,7 +67,7 @@ export function NewsTicker({
 
   return (
     <div
-      className="relative mt-3 overflow-hidden border-y border-white/10 bg-black/30 py-2"
+      className="relative mt-3 overflow-hidden py-2"
       style={{
         maskImage:
           "linear-gradient(to right, transparent, black 48px, black calc(100% - 48px), transparent)",
