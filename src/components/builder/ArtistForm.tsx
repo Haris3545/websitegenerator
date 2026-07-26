@@ -118,7 +118,13 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
     if (!artist?.published_repo_url || !artist?.published_site_url) return "idle";
     return artist.published_deployment_id ? "queued" : "unknown";
   });
-  const [deployStartedAt] = useState(() => Date.now());
+  // A plain one-time initializer here meant this never moved again after
+  // the component first mounted — unpublishing and republishing without a
+  // full page reload (the same ArtistForm instance stays mounted the whole
+  // time) kept ticking up from whenever the page originally loaded instead
+  // of restarting from the new publish click, which is what made the
+  // elapsed-time readout look like it "didn't reset."
+  const [deployStartedAt, setDeployStartedAt] = useState(() => Date.now());
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   // Explicit "Save progress" + silent autosave both funnel through here, so
@@ -208,6 +214,8 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
     if (result.ok) {
       setPublished({ repoUrl: result.repoUrl, siteUrl: result.siteUrl });
       setDeployStatus(result.deploymentId ? "queued" : "unknown");
+      setDeployStartedAt(Date.now());
+      setElapsedSeconds(0);
     } else {
       setPublishError(result.error);
     }
@@ -261,6 +269,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
     setIsUnpublishing(false);
     if (result.ok) {
       setPublished(null);
+      setDeployStatus("idle");
     } else {
       setPublishError(result.error);
     }
