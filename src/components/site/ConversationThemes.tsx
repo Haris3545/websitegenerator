@@ -39,7 +39,7 @@ export function ConversationThemes({ themes }: { themes: ConversationTheme[] }) 
                 type="button"
                 onClick={() => setExpanded(isOpen ? null : theme.name)}
                 disabled={!theme.examples.length}
-                className="grid grid-cols-[minmax(7rem,auto)_1fr_3.5rem] items-center gap-3 rounded py-1.5 text-left transition-colors hover:bg-white/5 disabled:pointer-events-none"
+                className="grid grid-cols-[8rem_1fr_3.5rem] items-center gap-3 rounded py-1.5 text-left transition-colors hover:bg-white/5 disabled:pointer-events-none"
               >
                 <span className="truncate text-sm font-semibold" style={{ color }}>
                   {theme.name}

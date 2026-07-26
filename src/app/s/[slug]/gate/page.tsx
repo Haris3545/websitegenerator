@@ -9,7 +9,7 @@ export default async function GatePage({ params }: { params: Promise<{ slug: str
   const { data: artist } = await supabase
     .from("artists")
     .select(
-      "id, secondary_color, accent_color, gate_background_url, gate_screenshot_url, project_title, tagline, font_family"
+      "id, secondary_color, accent_color, gate_background_url, gate_screenshot_url, project_title, tagline, font_family, aesthetic_params"
     )
     .eq("slug", slug)
     .maybeSingle();
@@ -31,6 +31,8 @@ export default async function GatePage({ params }: { params: Promise<{ slug: str
       projectTitle={artist?.project_title ?? "The Recording Studio"}
       tagline={artist?.tagline ?? "VCCP Cultural Intelligence"}
       fontFamily={artist?.font_family ?? "Inter"}
+      grainIntensity={artist?.aesthetic_params?.grain_intensity ?? 0}
+      grainMonochrome={artist?.aesthetic_params?.grain_monochrome ?? false}
     />
   );
 }

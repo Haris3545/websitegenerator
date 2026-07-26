@@ -55,10 +55,11 @@ export function ColorField({
         />
       </div>
       {open && (
-        // Releasing the pointer after dragging to a shade closes the
-        // picker right away, rather than leaving it open until a
-        // separate outside click.
-        <div className="absolute top-full z-10 mt-1" onPointerUp={() => setOpen(false)}>
+        // Stays open until an outside click or Escape (see the effect
+        // above) — closing on every pointerup here meant the popover slammed
+        // shut after the very first drag release, before you could also
+        // touch the hue strip or fine-tune further.
+        <div className="absolute top-full z-10 mt-1">
           <HexColorPicker color={value} onChange={onChange} />
         </div>
       )}

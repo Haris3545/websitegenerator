@@ -153,21 +153,26 @@ function tokenize(text: string): string[] {
  * stopword ("of the", "the new") since those read as sentence fragments
  * rather than an actual recurring phrase. Words need >=2 occurrences to
  * appear at all — a corpus this size will otherwise be dominated by
- * one-off words that just happened to show up in a single comment. */
-export function extractWordCloud(snippets: string[], max = 50): WordCloudEntry[] {
+ * one-off words that just happened to show up in a single comment. The
+ * artist's own name is excluded too — of course it's the most frequent
+ * thing in a corpus that's entirely about them, but that tells you nothing
+ * the way an actual recurring word or phrase does. */
+export function extractWordCloud(snippets: string[], artistName: string, max = 50): WordCloudEntry[] {
+  const nameTokens = new Set(tokenize(artistName));
   const unigramCounts = new Map<string, number>();
   const phraseCounts = new Map<string, number>();
 
   for (const snippet of snippets) {
     const tokens = tokenize(snippet);
     for (const token of tokens) {
-      if (STOPWORDS.has(token)) continue;
+      if (STOPWORDS.has(token) || nameTokens.has(token)) continue;
       unigramCounts.set(token, (unigramCounts.get(token) ?? 0) + 1);
     }
     for (let n = 2; n <= 3; n++) {
       for (let i = 0; i + n <= tokens.length; i++) {
         const gram = tokens.slice(i, i + n);
         if (STOPWORDS.has(gram[0]) || STOPWORDS.has(gram[gram.length - 1])) continue;
+        if (gram.some((word) => nameTokens.has(word))) continue;
         const phrase = gram.join(" ");
         phraseCounts.set(phrase, (phraseCounts.get(phrase) ?? 0) + 1);
       }
@@ -214,7 +219,8 @@ async function fetchWikipediaExtract(title: string): Promise<string> {
  * Depends on those tables already being populated, so this should run
  * after the refreshes that fill them (see refreshEverything). */
 export async function refreshConversationThemesForArtist(
-  artistId: string
+  artistId: string,
+  artistName: string
 ): Promise<{ themes: ConversationTheme[]; wordCloud: WordCloudEntry[] }> {
   const supabase = createServiceRoleClient();
 
@@ -240,7 +246,7 @@ export async function refreshConversationThemesForArtist(
   const snippets = [...wikiExtracts, ...commentTexts, ...articleTexts, ...geniusTexts].filter(Boolean);
 
   const themes = scoreConversationThemes(snippets);
-  const wordCloud = extractWordCloud(snippets);
+  const wordCloud = extractWordCloud(snippets, artistName);
 
   const { error } = await supabase.from("conversation_themes").upsert({
     artist_id: artistId,
@@ -253,7 +259,7 @@ export async function refreshConversationThemesForArtist(
   return { themes, wordCloud };
 }
 
-export async function refreshConversationThemesIfStale(artistId: string) {
+export async function refreshConversationThemesIfStale(artistId: string, artistName: string) {
   const supabase = createServiceRoleClient();
   const { data } = await supabase
     .from("conversation_themes")
@@ -266,7 +272,7 @@ export async function refreshConversationThemesIfStale(artistId: string) {
   if (!isStale) return;
 
   try {
-    await refreshConversationThemesForArtist(artistId);
+    await refreshConversationThemesForArtist(artistId, artistName);
   } catch (err) {
     console.error(`refreshConversationThemesIfStale failed for artist ${artistId}:`, err);
   }

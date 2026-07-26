@@ -52,7 +52,7 @@ export function NewsTicker({
     return (
       <div
         className="relative mt-3 overflow-hidden py-2"
-        style={{ borderTop: "1px solid var(--accent)", borderBottom: "1px solid var(--accent)" }}
+        style={{ borderTop: "0.5px solid var(--accent)", borderBottom: "0.5px solid var(--accent)" }}
       >
         <Editable
           artistId={artistId}
@@ -72,8 +72,8 @@ export function NewsTicker({
     <div
       className="relative mt-3 overflow-hidden py-2"
       style={{
-        borderTop: "1px solid var(--accent)",
-        borderBottom: "1px solid var(--accent)",
+        borderTop: "0.5px solid var(--accent)",
+        borderBottom: "0.5px solid var(--accent)",
         maskImage:
           "linear-gradient(to right, transparent, black 48px, black calc(100% - 48px), transparent)",
         WebkitMaskImage:

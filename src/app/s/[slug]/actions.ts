@@ -5,15 +5,12 @@ import { redirect } from "next/navigation";
 import { revalidatePath, updateTag } from "next/cache";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { refreshMediaForArtist } from "@/lib/media";
-import { refreshSentimentNow } from "@/lib/sentiment";
-import { refreshEventsForArtist } from "@/lib/events";
+import { refreshTicketmasterEventsOnly } from "@/lib/events";
 import { refreshYoutubeStats } from "@/lib/youtube";
 import { refreshSocialListeningForArtist } from "@/lib/socialListening";
 import { refreshMusicStats } from "@/lib/music";
-import { refreshInsightsNow } from "@/lib/insights";
 import { refreshWikipediaTrendsNow } from "@/lib/wikipedia";
 import { refreshGeniusAnnotations } from "@/lib/genius";
-import { refreshSearchTrendsNow } from "@/lib/googleTrends";
 import { refreshConversationThemesForArtist } from "@/lib/conversationThemes";
 import { computeArtistPassword, artistAccessCookieName } from "@/lib/artistAccess";
 import { artistCacheTag } from "@/lib/getSiteArtist";
@@ -21,19 +18,19 @@ import { ALL_TAB_KEYS } from "@/lib/tabs";
 import type { ThemeOverrides } from "@/lib/theme";
 import type { AestheticParams, SentimentFilter, BoardItem, TabKey } from "@/lib/database.types";
 
-/** These six steps are independent of each other — running them
- * sequentially (as this used to) meant the total wall-clock time was their
- * SUM, which easily blew past Vercel's default serverless function timeout
- * once insights/sentiment/events/social-listening were all making their own
- * Gemini calls: four+ sequential LLM round trips reliably crossed 10s+ and
- * the whole action (and the page navigation waiting on it) would get killed
- * mid-flight, which is what actually produced the "page crashed" / 404
- * behavior — not a bug in any single step. Running them concurrently caps
- * the time at the SLOWEST single step instead. Only insights depends on
- * everything else having finished (it reads across all the refreshed data),
- * so it alone still has to run last. */
+/** Deliberately excludes anything that calls Gemini (sentiment analysis,
+ * dashboard insights, the web-search half of tour-date discovery) and the
+ * SerpApi-backed search trends — both have tight external quotas (Gemini's
+ * free daily tier; SerpApi's 250 searches/month), so a button anyone can
+ * click repeatedly across every artist must never be what burns through
+ * them. Those three still refresh on their own schedule when someone
+ * actually visits the tab that shows them (see each tab's own
+ * refresh*IfStale call) — this button only covers sources with no such
+ * quota risk. Running them concurrently (rather than the old sequential
+ * approach) caps the wall-clock time at the slowest single step instead of
+ * their sum, which is what used to blow past Vercel's serverless timeout. */
 const STEP_LABELS = [
-  "media", "sentiment", "events", "youtube", "social listening", "music", "genius", "search trends",
+  "media", "ticketmaster events", "youtube", "social listening", "music", "genius",
 ] as const;
 
 export async function refreshEverything(slug: string) {
@@ -48,15 +45,13 @@ export async function refreshEverything(slug: string) {
 
   const results = await Promise.allSettled([
     refreshMediaForArtist(artist.id, artist.name),
-    refreshSentimentNow(artist.id, artist.name),
-    refreshEventsForArtist(artist.id, artist.name),
+    refreshTicketmasterEventsOnly(artist.id, artist.name),
     artist.youtube_channel_id
       ? refreshYoutubeStats(artist.id, artist.youtube_channel_id)
       : Promise.resolve(),
     refreshSocialListeningForArtist(artist.id, artist.name),
     refreshMusicStats(artist.id, artist.name),
     refreshGeniusAnnotations(artist.id, artist.name),
-    refreshSearchTrendsNow(artist.id, artist.name),
   ]);
 
   results.forEach((result, i) => {
@@ -65,29 +60,25 @@ export async function refreshEverything(slug: string) {
     }
   });
 
-  // Both of these read across data refreshed above (insights reads
-  // everything; Wikipedia trends reads the just-refreshed album list), but
-  // not across each other, so they run alongside one another rather than
-  // adding another fully sequential step.
+  // Wikipedia trends reads the just-refreshed album list, so it has to run
+  // after music_stats above rather than in the same batch.
   const { data: musicRow } = await supabase
     .from("music_stats")
     .select("top_albums")
     .eq("artist_id", artist.id)
     .maybeSingle();
 
-  await Promise.allSettled([
-    refreshInsightsNow(artist.id, artist.name).catch((err) =>
-      console.error(`refreshEverything: insights refresh failed for ${slug}:`, err)
-    ),
-    refreshWikipediaTrendsNow(artist.id, artist.name, (musicRow?.top_albums ?? []).map((a) => a.name)).catch(
-      (err) => console.error(`refreshEverything: Wikipedia trends refresh failed for ${slug}:`, err)
-    ),
-  ]);
-
-  // Reads across Wikipedia trends and social_comment_map, both only just
-  // refreshed above, so it has to run after — never in parallel with them.
   try {
-    await refreshConversationThemesForArtist(artist.id);
+    await refreshWikipediaTrendsNow(artist.id, artist.name, (musicRow?.top_albums ?? []).map((a) => a.name));
+  } catch (err) {
+    console.error(`refreshEverything: Wikipedia trends refresh failed for ${slug}:`, err);
+  }
+
+  // Reads across Wikipedia trends, social_comment_map, and Genius
+  // annotations, all only just refreshed above, so it has to run after —
+  // never in parallel with them. Not Gemini-based (see conversationThemes.ts).
+  try {
+    await refreshConversationThemesForArtist(artist.id, artist.name);
   } catch (err) {
     console.error(`refreshEverything: conversation themes refresh failed for ${slug}:`, err);
   }

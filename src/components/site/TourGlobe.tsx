@@ -85,7 +85,7 @@ export function TourGlobe({ points }: { points: TourGlobePoint[] }) {
           ref={globeRef}
           width={width}
           height={GLOBE_HEIGHT}
-          globeImageUrl="/globe/earth-dark.jpg"
+          globeImageUrl="/globe/earth-vivid.jpg"
           backgroundColor="rgba(0,0,0,0)"
           showAtmosphere
           atmosphereColor={accentColor}

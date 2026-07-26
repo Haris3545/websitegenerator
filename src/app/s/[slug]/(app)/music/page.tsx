@@ -101,6 +101,10 @@ export default async function MusicPage({ params }: { params: Promise<{ slug: st
               color="var(--primary)"
             />
           </div>
+          <p className="mt-2 text-xs text-white/40">
+            A &quot;scrobble&quot; is Last.fm&apos;s term for one confirmed play of a track — every time
+            someone listens all the way through on a connected app or service, it counts as one.
+          </p>
 
           {!!stats.top_tags.length && (
             <div className="mt-8 flex flex-wrap gap-2">

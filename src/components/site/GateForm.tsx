@@ -3,6 +3,17 @@
 import { useState, useTransition } from "react";
 import { verifyArtistAccess } from "@/app/s/[slug]/actions";
 import { googleFontsCssUrl } from "@/lib/fonts";
+import { grainTexture } from "@/lib/grainTexture";
+
+// Sized down for longer titles so they stay on one line rather than
+// wrapping — same length-tiered approach KpiCard.tsx uses for values.
+function titleSizeClass(title: string): string {
+  const len = title.length;
+  if (len > 28) return "text-2xl sm:text-4xl lg:text-5xl";
+  if (len > 20) return "text-3xl sm:text-5xl lg:text-6xl";
+  if (len > 14) return "text-4xl sm:text-6xl lg:text-7xl";
+  return "text-5xl sm:text-7xl lg:text-8xl";
+}
 
 export function GateForm({
   slug,
@@ -12,6 +23,8 @@ export function GateForm({
   projectTitle,
   tagline,
   fontFamily,
+  grainIntensity = 0,
+  grainMonochrome = false,
 }: {
   slug: string;
   backgroundUrl: string | null;
@@ -20,6 +33,8 @@ export function GateForm({
   projectTitle: string;
   tagline: string;
   fontFamily: string;
+  grainIntensity?: number;
+  grainMonochrome?: boolean;
 }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -68,10 +83,22 @@ export function GateForm({
         ))}
       {backgroundUrl && <div className="absolute inset-0 bg-black/55" />}
       <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/70" />
+      {grainIntensity > 0 && (
+        <div
+          className="animate-grain absolute inset-0 mix-blend-overlay"
+          style={{
+            opacity: grainIntensity,
+            backgroundImage: grainTexture(grainMonochrome),
+            backgroundSize: "90px 90px",
+          }}
+        />
+      )}
 
       <div className="relative z-10 flex w-full max-w-4xl flex-col items-center px-4 text-center">
-        <p className="text-xs font-semibold uppercase tracking-[0.35em] text-white/70">{tagline}</p>
-        <h1 className="mt-3 text-4xl font-bold uppercase leading-none tracking-tight sm:text-6xl lg:text-7xl">
+        <p className="text-sm font-semibold uppercase tracking-[0.35em] text-white/70 sm:text-base">{tagline}</p>
+        <h1
+          className={`mt-4 w-full overflow-hidden text-ellipsis whitespace-nowrap font-bold uppercase leading-none tracking-tight ${titleSizeClass(projectTitle)}`}
+        >
           {projectTitle}
         </h1>
         <div className="mt-6 h-px w-24" style={{ backgroundColor: accentColor }} />

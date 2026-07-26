@@ -25,7 +25,7 @@ export default async function SocialListeningPage({
 
   if (!row?.computed_at && !rowError) {
     try {
-      await refreshConversationThemesForArtist(artist.id);
+      await refreshConversationThemesForArtist(artist.id, artist.name);
       ({ data: row, error: rowError } = await supabase
         .from("conversation_themes")
         .select("themes, word_cloud, computed_at")
@@ -35,7 +35,7 @@ export default async function SocialListeningPage({
       console.error(`Initial conversation themes fetch failed for ${slug}:`, err);
     }
   } else if (!rowError) {
-    after(() => refreshConversationThemesIfStale(artist.id));
+    after(() => refreshConversationThemesIfStale(artist.id, artist.name));
   }
 
   const themes = row?.themes ?? [];

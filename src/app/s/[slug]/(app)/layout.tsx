@@ -64,6 +64,7 @@ export default async function ArtistSiteLayout({
   const {
     grain_intensity = 0,
     grain_monochrome = false,
+    tint_color = artist.primary_color,
     tint_opacity = 0,
     blur = 0,
     vignette = 0,
@@ -83,6 +84,7 @@ export default async function ArtistSiteLayout({
           "--secondary": artist.secondary_color,
           "--accent": artist.accent_color,
           "--bg-blur": `${blur * 12}px`,
+          "--bg-tint-color": tint_color,
           "--bg-tint-opacity": tint_opacity * 0.65,
           "--bg-vignette": vignette,
           "--bg-grain-opacity": grain_intensity,
@@ -164,7 +166,7 @@ export default async function ArtistSiteLayout({
             AestheticPanel sliders can preview them live without a re-render. */}
         <div
           className="absolute inset-0"
-          style={{ backgroundColor: artist.primary_color, opacity: "var(--bg-tint-opacity, 0)" }}
+          style={{ backgroundColor: "var(--bg-tint-color)", opacity: "var(--bg-tint-opacity, 0)" }}
         />
         <div
           className="absolute inset-0"
@@ -178,7 +180,12 @@ export default async function ArtistSiteLayout({
           style={{
             opacity: "var(--bg-grain-opacity, 0)",
             backgroundImage: "var(--bg-grain-image)",
-            backgroundSize: "160% 160%",
+            // A small, fixed tile size (rather than a %-of-container size,
+            // which stretched the noise texture into big blobs on any
+            // reasonably tall page) so the grain always reads as fine
+            // speckle, independent of the intensity slider — that slider
+            // only ever controls opacity above.
+            backgroundSize: "90px 90px",
           }}
         />
       </div>

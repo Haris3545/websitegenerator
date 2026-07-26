@@ -31,12 +31,27 @@ export function KpiCard({
         border: "1px solid rgba(255,255,255,var(--card-border-opacity, 0.15))",
       }}
     >
-      <p
-        className="truncate text-xs uppercase tracking-wide opacity-60"
-        style={{ color: "var(--card-text-color, #fff)" }}
-      >
-        {label}
-      </p>
+      <div className="flex items-start justify-between gap-2">
+        <p
+          className="truncate text-xs uppercase tracking-wide opacity-60"
+          style={{ color: "var(--card-text-color, #fff)" }}
+        >
+          {label}
+        </p>
+        {trend && (
+          <span
+            className={`shrink-0 text-xs font-semibold ${
+              trend.startsWith("+")
+                ? "text-emerald-400"
+                : trend.startsWith("−") || trend.startsWith("-")
+                  ? "text-rose-400"
+                  : "opacity-60"
+            }`}
+          >
+            {trend}
+          </span>
+        )}
+      </div>
       <p
         className={`mt-1 truncate font-bold leading-tight ${valueSizeClass(value)}`}
         style={{ color }}
@@ -47,15 +62,6 @@ export function KpiCard({
       <p className="mt-1 truncate text-xs opacity-50" style={{ color: "var(--card-text-color, #fff)" }}>
         {caption}
       </p>
-      {trend && (
-        <p
-          className={`mt-1 truncate text-xs font-medium ${
-            trend.startsWith("+") ? "text-emerald-400" : trend.startsWith("−") || trend.startsWith("-") ? "text-rose-400" : "opacity-60"
-          }`}
-        >
-          {trend}
-        </p>
-      )}
     </div>
   );
 }

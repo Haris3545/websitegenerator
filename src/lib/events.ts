@@ -206,6 +206,24 @@ export async function refreshEventsForArtist(artistId: string, artistName: strin
   return rows.length;
 }
 
+/** Ticketmaster only, no Gemini call — used by "Refresh Everything" so that
+ * button never burns Gemini quota. The web-search layer above still gets
+ * refreshed on its own schedule via refreshEventsIfStale, triggered when
+ * someone actually visits the Locations/Calendar tab. */
+export async function refreshTicketmasterEventsOnly(artistId: string, artistName: string) {
+  const rows = await fetchTicketmasterEvents(artistId, artistName);
+
+  if (rows.length) {
+    const supabase = createServiceRoleClient();
+    const { error } = await supabase
+      .from("artist_events")
+      .upsert(rows, { onConflict: "artist_id,event_date,venue" });
+    if (error) throw new Error(error.message);
+  }
+
+  return rows.length;
+}
+
 export async function refreshEventsIfStale(artistId: string, artistName: string) {
   const supabase = createServiceRoleClient();
   const { data } = await supabase

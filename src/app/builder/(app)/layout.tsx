@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { signOut } from "@/app/builder/actions";
 import { ThemeToggle } from "@/components/builder/ThemeToggle";
+import { BrandLogoAnimation } from "@/components/BrandLogoAnimation";
 
 export default function BuilderLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-white text-neutral-900 dark:bg-neutral-950 dark:text-white">
       <header className="sticky top-0 z-40 flex items-center justify-between border-b border-neutral-200 bg-white/80 px-6 py-3 backdrop-blur-md dark:border-white/10 dark:bg-neutral-950/80">
         <Link href="/builder/artists" className="flex items-center gap-2 font-semibold tracking-tight">
-          <span className="h-2 w-2 rounded-full bg-builder-accent" />
+          <BrandLogoAnimation className="h-6 w-6 dark:invert" />
           Dashboard Builder
         </Link>
         <form action={signOut}>

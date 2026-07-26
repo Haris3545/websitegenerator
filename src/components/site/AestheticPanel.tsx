@@ -12,6 +12,7 @@ import type { AestheticParams } from "@/lib/database.types";
 const DEFAULT_AESTHETIC_PARAMS: Required<AestheticParams> = {
   grain_intensity: 0,
   grain_monochrome: false,
+  tint_color: "#000000", // overridden with the artist's primary color at each usage site below
   tint_opacity: 0,
   blur: 0,
   vignette: 0,
@@ -99,8 +100,9 @@ export function AestheticPanel({ artistId, initial }: { artistId: string; initia
     root.style.setProperty("--header-font-weight", t.header_bold ? "700" : "400");
     root.style.setProperty("--header-font-style", t.header_italic ? "italic" : "normal");
 
-    const a = { ...DEFAULT_AESTHETIC_PARAMS, ...values.aesthetic_params };
+    const a = { ...DEFAULT_AESTHETIC_PARAMS, tint_color: values.primary_color, ...values.aesthetic_params };
     root.style.setProperty("--bg-blur", `${a.blur * 12}px`);
+    root.style.setProperty("--bg-tint-color", a.tint_color);
     root.style.setProperty("--bg-tint-opacity", String(a.tint_opacity * 0.65));
     root.style.setProperty("--bg-vignette", String(a.vignette));
     root.style.setProperty("--bg-grain-opacity", String(a.grain_intensity));
@@ -145,7 +147,7 @@ export function AestheticPanel({ artistId, initial }: { artistId: string; initia
     setValues((s) => ({ ...s, theme_overrides: { ...s.theme_overrides, [key]: v } }));
   }
 
-  const aesthetics = { ...DEFAULT_AESTHETIC_PARAMS, ...values.aesthetic_params };
+  const aesthetics = { ...DEFAULT_AESTHETIC_PARAMS, tint_color: values.primary_color, ...values.aesthetic_params };
   function setAesthetic<K extends keyof AestheticParams>(key: K, v: AestheticParams[K]) {
     setValues((s) => ({ ...s, aesthetic_params: { ...s.aesthetic_params, [key]: v } }));
   }
@@ -276,8 +278,13 @@ export function AestheticPanel({ artistId, initial }: { artistId: string; initia
             value={aesthetics.vignette}
             onChange={(v) => setAesthetic("vignette", v)}
           />
+          <ColorField
+            label="Tint colour"
+            value={aesthetics.tint_color}
+            onChange={(v) => setAesthetic("tint_color", v)}
+          />
           <Slider
-            label="Colour tint"
+            label="Tint amount"
             min={0}
             max={1}
             step={0.05}
