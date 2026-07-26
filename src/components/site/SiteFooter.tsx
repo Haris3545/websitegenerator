@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useTransition } from "react";
 import { refreshEverything, logOutOfArtistSite } from "@/app/s/[slug]/actions";
 import { useEditMode } from "@/components/site/EditModeContext";
+import { BrandLogoAnimation } from "@/components/BrandLogoAnimation";
 
 function toCsv(rows: Record<string, unknown>[]): string {
   if (!rows.length) return "";
@@ -73,9 +74,16 @@ export function SiteFooter({
             type="button"
             disabled={isPending}
             onClick={() => startTransition(() => refreshEverything(slug))}
-            className="rounded bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-black transition-all duration-150 ease-out hover:-translate-y-0.5 hover:brightness-110 disabled:pointer-events-none disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-black transition-all duration-150 ease-out hover:-translate-y-0.5 hover:brightness-110 disabled:pointer-events-none disabled:opacity-50"
           >
-            {isPending ? "Refreshing..." : "Refresh Everything"}
+            {isPending ? (
+              <>
+                <BrandLogoAnimation className="h-4 w-4" loop />
+                Refreshing
+              </>
+            ) : (
+              "Refresh Everything"
+            )}
           </button>
         </div>
         <p className="text-xs text-white/40">{tagline}</p>

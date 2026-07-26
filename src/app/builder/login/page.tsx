@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ThemeToggle } from "@/components/builder/ThemeToggle";
+import { BrandLogoAnimation } from "@/components/BrandLogoAnimation";
 
 export default function LoginPage() {
   return (
@@ -20,6 +21,15 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [transitioning, setTransitioning] = useState(false);
+  const navigatedRef = useRef(false);
+
+  function proceedToArtists() {
+    if (navigatedRef.current) return;
+    navigatedRef.current = true;
+    router.push(searchParams.get("next") ?? "/builder");
+    router.refresh();
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -38,8 +48,24 @@ function LoginForm() {
       return;
     }
 
-    router.push(searchParams.get("next") ?? "/builder");
-    router.refresh();
+    // A quick branded beat before landing on the artists list, rather than
+    // navigating the instant auth succeeds. onEnded drives the actual
+    // navigation; the timeout is just a safety net in case autoplay is
+    // blocked or the video fails to load, so a signed-in admin is never
+    // stuck looking at a frozen login form.
+    setTransitioning(true);
+    window.setTimeout(proceedToArtists, 2500);
+  }
+
+  if (transitioning) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-white dark:bg-neutral-950">
+        <BrandLogoAnimation className="h-20 w-20 dark:invert" onEnded={proceedToArtists} />
+        <p className="text-xs font-medium uppercase tracking-wider text-neutral-400 dark:text-white/30">
+          Signing you in…
+        </p>
+      </div>
+    );
   }
 
   return (

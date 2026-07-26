@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { AudienceTable } from "@/components/site/AudienceTable";
 import { TabHeading } from "@/components/site/TabHeading";
 import { SiteFooter } from "@/components/site/SiteFooter";
+import { BrandedEmptyState } from "@/components/BrandedEmptyState";
 
 export default async function AudiencePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -25,9 +26,9 @@ export default async function AudiencePage({ params }: { params: Promise<{ slug:
       />
 
       {!statements?.length ? (
-        <p className="mt-4 rounded-lg border border-dashed border-white/20 p-8 text-center text-white/50">
-          No audience research uploaded yet — upload a GWI (or similar) export in the builder.
-        </p>
+        <div className="mt-4">
+          <BrandedEmptyState message="No audience research uploaded yet — upload a GWI (or similar) export in the builder." />
+        </div>
       ) : (
         <div className="mt-4">
           <AudienceTable statements={statements} />

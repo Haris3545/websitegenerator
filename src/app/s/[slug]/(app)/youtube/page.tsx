@@ -10,6 +10,7 @@ import { YoutubeSections } from "@/components/site/YoutubeSections";
 import type { SectionEntry } from "@/components/site/ReorderableSections";
 import { TabHeading } from "@/components/site/TabHeading";
 import { SiteFooter } from "@/components/site/SiteFooter";
+import { BrandedEmptyState } from "@/components/BrandedEmptyState";
 
 export default async function YoutubePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -92,11 +93,7 @@ export default async function YoutubePage({ params }: { params: Promise<{ slug: 
               <p className="mt-3 text-xs text-red-300/60">{mapError.message}</p>
             </div>
           ) : !commentCategories.length ? (
-            <div className="rounded-lg border border-dashed border-white/20 p-8 text-center text-white/50">
-              <p>
-                No comments found yet — hit &quot;Refresh Everything&quot; below. Needs YOUTUBE_API_KEY set.
-              </p>
-            </div>
+            <BrandedEmptyState message={`No comments found yet — hit "Refresh Everything" below. Needs YOUTUBE_API_KEY set.`} />
           ) : (
             <CommentMap categories={commentCategories} />
           )}
@@ -112,14 +109,9 @@ export default async function YoutubePage({ params }: { params: Promise<{ slug: 
       content: (
         <div>
           {!artist.youtube_channel_id ? (
-            <p className="rounded-lg border border-dashed border-white/20 p-8 text-center text-white/50">
-              No YouTube channel ID set for this artist yet — add one, plus a YouTube Data API key,
-              in the builder.
-            </p>
+            <BrandedEmptyState message="No YouTube channel ID set for this artist yet — add one, plus a YouTube Data API key, in the builder." />
           ) : !stats ? (
-            <p className="rounded-lg border border-dashed border-white/20 p-8 text-center text-white/50">
-              No stats cached yet — hit &quot;Refresh Everything&quot; below.
-            </p>
+            <BrandedEmptyState message={`No stats cached yet — hit "Refresh Everything" below.`} />
           ) : (
             <>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">

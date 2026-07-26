@@ -5,6 +5,7 @@ import { refreshConversationThemesForArtist, refreshConversationThemesIfStale } 
 import { ConversationThemes } from "@/components/site/ConversationThemes";
 import { TabHeading } from "@/components/site/TabHeading";
 import { SiteFooter } from "@/components/site/SiteFooter";
+import { BrandedEmptyState } from "@/components/BrandedEmptyState";
 
 export default async function SocialListeningPage({
   params,
@@ -59,9 +60,9 @@ export default async function SocialListeningPage({
           <p className="mt-3 text-xs text-red-300/60">{rowError.message}</p>
         </div>
       ) : !themes.length ? (
-        <p className="mt-4 rounded-lg border border-dashed border-white/20 p-8 text-center text-white/50">
-          No themes found yet — hit &quot;Refresh Everything&quot; below.
-        </p>
+        <div className="mt-4">
+          <BrandedEmptyState message={`No themes found yet — hit "Refresh Everything" below.`} />
+        </div>
       ) : (
         <div className="mt-6">
           <ConversationThemes themes={themes} />

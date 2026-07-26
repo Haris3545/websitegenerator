@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { ArtistsBoard } from "@/components/builder/ArtistsBoard";
+import { BrandedEmptyState } from "@/components/BrandedEmptyState";
 
 export default async function ArtistsPage() {
   const supabase = await createClient();
@@ -30,9 +31,7 @@ export default async function ArtistsPage() {
       </div>
 
       {!artists?.length ? (
-        <p className="rounded-xl border border-dashed border-neutral-300 p-8 text-center text-sm text-neutral-500 dark:border-white/10 dark:text-white/40">
-          No artist dashboards yet. Create the first one to get started.
-        </p>
+        <BrandedEmptyState variant="builder" message="No artist dashboards yet. Create the first one to get started." />
       ) : (
         <ArtistsBoard initialArtists={artists} initialFolders={folders ?? []} />
       )}

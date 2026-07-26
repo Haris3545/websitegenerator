@@ -7,6 +7,7 @@ import { KpiCard } from "@/components/site/KpiCard";
 import { AlbumCoverFlow } from "@/components/site/AlbumCoverFlow";
 import { TabHeading } from "@/components/site/TabHeading";
 import { SiteFooter } from "@/components/site/SiteFooter";
+import { BrandedEmptyState } from "@/components/BrandedEmptyState";
 
 export default async function MusicPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -47,10 +48,16 @@ export default async function MusicPage({ params }: { params: Promise<{ slug: st
       />
 
       {!stats ? (
-        <p className="mt-4 rounded-lg border border-dashed border-white/20 p-8 text-center text-white/50">
-          No stats cached yet — hit &quot;Refresh Everything&quot; below. If nothing shows up, ask
-          whoever manages this app to set LASTFM_API_KEY.
-        </p>
+        <div className="mt-4">
+          <BrandedEmptyState
+            message={
+              <>
+                No stats cached yet — hit &quot;Refresh Everything&quot; below. If nothing shows up, ask
+                whoever manages this app to set LASTFM_API_KEY.
+              </>
+            }
+          />
+        </div>
       ) : (
         <>
           {!!stats.top_albums.length && (

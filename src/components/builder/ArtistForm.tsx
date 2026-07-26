@@ -18,6 +18,7 @@ import {
 } from "@/app/builder/actions";
 import type { Artist } from "@/lib/database.types";
 import { DEFAULT_THEME_OVERRIDES } from "@/lib/theme";
+import { BrandLogoAnimation } from "@/components/BrandLogoAnimation";
 
 function slugify(name: string) {
   return name
@@ -477,7 +478,10 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
         >
           {published ? (
             <div className="flex flex-col gap-1 text-sm">
-              <p className="text-emerald-600 dark:text-emerald-400">Published.</p>
+              <div className="flex items-center gap-2">
+                <BrandLogoAnimation className="h-8 w-8 dark:invert" />
+                <p className="text-emerald-600 dark:text-emerald-400">Published.</p>
+              </div>
               <a
                 href={published.repoUrl}
                 target="_blank"
