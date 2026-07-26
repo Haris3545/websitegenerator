@@ -33,30 +33,48 @@ export async function middleware(request: NextRequest) {
 
   let response = NextResponse.next({ request });
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
+  // A missing/misconfigured Supabase env var used to throw straight out of
+  // createServerClient (or the getUser() call below) with no try/catch
+  // anywhere above it — on Vercel that surfaces as a hard 500
+  // MIDDLEWARE_INVOCATION_FAILED for every single request, taking the whole
+  // site down rather than just builder auth. A fresh standalone deployment
+  // (see publish.ts) is the likeliest place for that to happen — env vars
+  // are attached to the Vercel project at creation time, but there's a
+  // window where a request can land before they're actually available to
+  // the running function. Falling back to "no user" here means a real env
+  // var problem still shows up (as being redirected to /builder/login and
+  // failing to sign in) instead of taking the entire site offline.
+  let user = null;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (supabaseUrl && supabaseAnonKey) {
+    try {
+      const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+          setAll(cookiesToSet) {
+            for (const { name, value } of cookiesToSet) {
+              request.cookies.set(name, value);
+            }
+            response = NextResponse.next({ request });
+            for (const { name, value, options } of cookiesToSet) {
+              response.cookies.set(name, value, options);
+            }
+          },
         },
-        setAll(cookiesToSet) {
-          for (const { name, value } of cookiesToSet) {
-            request.cookies.set(name, value);
-          }
-          response = NextResponse.next({ request });
-          for (const { name, value, options } of cookiesToSet) {
-            response.cookies.set(name, value, options);
-          }
-        },
-      },
+      });
+      const result = await supabase.auth.getUser();
+      user = result.data.user;
+    } catch (err) {
+      console.error("middleware: Supabase auth check failed:", err);
     }
-  );
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  } else {
+    console.error(
+      "middleware: NEXT_PUBLIC_SUPABASE_URL/NEXT_PUBLIC_SUPABASE_ANON_KEY not set — builder sign-in will not work until they are."
+    );
+  }
 
   const isBuilderRoute = path.startsWith("/builder");
   const isBuilderLogin = path === "/builder/login";

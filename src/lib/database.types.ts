@@ -117,6 +117,7 @@ export interface Database {
           content_overrides: Record<string, string>;
           published_repo_url: string | null;
           published_site_url: string | null;
+          published_deployment_id: string | null;
           published_at: string | null;
           gate_background_url: string | null;
           gate_screenshot_url: string | null;
@@ -147,6 +148,7 @@ export interface Database {
           content_overrides?: Record<string, string>;
           published_repo_url?: string | null;
           published_site_url?: string | null;
+          published_deployment_id?: string | null;
           published_at?: string | null;
           gate_background_url?: string | null;
           gate_screenshot_url?: string | null;

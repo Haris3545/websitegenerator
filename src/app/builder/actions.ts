@@ -5,7 +5,14 @@ import { redirect } from "next/navigation";
 import { revalidatePath, updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { parseAestheticPrompt } from "@/lib/aesthetic";
-import { publishArtistSite, unpublishArtistSite, type PublishResult, type UnpublishResult } from "@/lib/publish";
+import {
+  publishArtistSite,
+  unpublishArtistSite,
+  checkPublishStatus as checkPublishStatusLib,
+  type PublishResult,
+  type UnpublishResult,
+  type PublishStatus,
+} from "@/lib/publish";
 import { parseAudienceFile, storeAudienceUpload } from "@/lib/audience";
 import { resolveYoutubeChannel, type YoutubeChannelLookup } from "@/lib/youtube";
 import { captureGateScreenshot, gateVisualsChanged } from "@/lib/screenshot";
@@ -182,6 +189,10 @@ export async function publishArtist(artistId: string): Promise<PublishResult> {
     await revalidateArtistCacheById(artistId);
   }
   return result;
+}
+
+export async function checkPublishStatus(artistId: string): Promise<PublishStatus> {
+  return checkPublishStatusLib(artistId);
 }
 
 export async function unpublishArtist(artistId: string): Promise<UnpublishResult> {

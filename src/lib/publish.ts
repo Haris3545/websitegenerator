@@ -24,7 +24,7 @@ const ENV_VARS_TO_COPY = [
 ];
 
 export type PublishResult =
-  | { ok: true; repoUrl: string; siteUrl: string }
+  | { ok: true; repoUrl: string; siteUrl: string; deploymentId: string | null }
   | { ok: false; error: string };
 
 /** Publishes an artist to their own standalone GitHub repo + Vercel project:
@@ -47,7 +47,7 @@ export async function publishArtistSite(artistId: string): Promise<PublishResult
   const supabase = createServiceRoleClient();
   const { data: artist, error: fetchError } = await supabase
     .from("artists")
-    .select("slug, name, published_repo_url, published_site_url")
+    .select("slug, name, published_repo_url, published_site_url, published_deployment_id")
     .eq("id", artistId)
     .maybeSingle();
 
@@ -55,7 +55,12 @@ export async function publishArtistSite(artistId: string): Promise<PublishResult
   if (!artist) return { ok: false, error: "Artist not found." };
 
   if (artist.published_repo_url && artist.published_site_url) {
-    return { ok: true, repoUrl: artist.published_repo_url, siteUrl: artist.published_site_url };
+    return {
+      ok: true,
+      repoUrl: artist.published_repo_url,
+      siteUrl: artist.published_site_url,
+      deploymentId: artist.published_deployment_id,
+    };
   }
 
   const repoName = `${artist.slug}-dashboard`;
@@ -97,6 +102,8 @@ export async function publishArtistSite(artistId: string): Promise<PublishResult
   const repoData = await generateRes.json();
   const repoFullName: string = repoData.full_name;
   const repoUrl: string = repoData.html_url;
+  const repoId: number = repoData.id;
+  const defaultBranch: string = repoData.default_branch ?? "main";
 
   // 2. Create a Vercel project linked to the new repo, with env vars set at
   // creation time (setting them afterward would miss the first auto-deploy
@@ -142,16 +149,92 @@ export async function publishArtistSite(artistId: string): Promise<PublishResult
   const projectData = await createProjectRes.json();
   const siteUrl = `https://${projectData.name}.vercel.app`;
 
+  // 3. Generating a repo from a template doesn't emit a "push" event the
+  // way a real commit does, so Vercel's GitHub integration never learns
+  // there's a new commit to build — left alone, the project just sits
+  // there with zero deployments ("deployment not found") until someone
+  // manually triggers one from the Vercel dashboard. Triggering a
+  // deployment explicitly here is what actually makes Publish result in a
+  // live site with no manual step. A failure here doesn't fail the whole
+  // publish (the repo and project already exist for real) — deploymentId
+  // just stays null, and checkPublishStatus reports that as "unknown"
+  // rather than crashing on it.
+  let deploymentId: string | null = null;
+  const createDeploymentRes = await fetch(`${VERCEL_API}/v13/deployments`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${vercelToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name: repoName,
+      project: projectData.id,
+      target: "production",
+      gitSource: { type: "github", repoId, ref: defaultBranch },
+    }),
+  });
+
+  if (createDeploymentRes.ok) {
+    const deploymentData = await createDeploymentRes.json();
+    deploymentId = deploymentData.id ?? null;
+  } else {
+    const body = await createDeploymentRes.text();
+    console.error(`publishArtistSite: triggering the initial deployment failed for ${artist.slug}: ${body}`);
+  }
+
   await supabase
     .from("artists")
     .update({
       published_repo_url: repoUrl,
       published_site_url: siteUrl,
+      published_deployment_id: deploymentId,
       published_at: new Date().toISOString(),
     })
     .eq("id", artistId);
 
-  return { ok: true, repoUrl, siteUrl };
+  return { ok: true, repoUrl, siteUrl, deploymentId };
+}
+
+export type PublishStatus =
+  | { status: "queued" | "building" }
+  | { status: "ready" }
+  | { status: "error"; message: string }
+  | { status: "unknown" };
+
+/** Polls Vercel's own deployment status rather than assuming "Publish
+ * succeeded" means "the site is live" — the repo/project can exist for
+ * minutes before a build actually finishes (or fails). "unknown" covers
+ * both a never-recorded deployment id and a deleted/inaccessible one, so
+ * the builder UI can fall back to "check the Vercel dashboard" instead of
+ * hanging on a spinner forever. */
+export async function checkPublishStatus(artistId: string): Promise<PublishStatus> {
+  const vercelToken = process.env.VERCEL_API_TOKEN;
+  if (!vercelToken) return { status: "unknown" };
+
+  const supabase = createServiceRoleClient();
+  const { data: artist } = await supabase
+    .from("artists")
+    .select("published_deployment_id")
+    .eq("id", artistId)
+    .maybeSingle();
+
+  const deploymentId = artist?.published_deployment_id;
+  if (!deploymentId) return { status: "unknown" };
+
+  const res = await fetch(`${VERCEL_API}/v13/deployments/${deploymentId}`, {
+    headers: { Authorization: `Bearer ${vercelToken}` },
+  });
+  if (!res.ok) return { status: "unknown" };
+
+  const data = await res.json();
+  const readyState: string = data.readyState ?? "";
+
+  if (readyState === "READY") return { status: "ready" };
+  if (readyState === "ERROR" || readyState === "CANCELED") {
+    return { status: "error", message: data.errorMessage ?? `Deployment ${readyState.toLowerCase()}.` };
+  }
+  if (readyState === "BUILDING" || readyState === "INITIALIZING") return { status: "building" };
+  return { status: "queued" };
 }
 
 export type UnpublishResult = { ok: true } | { ok: false; error: string };
@@ -215,7 +298,12 @@ export async function unpublishArtistSite(artistId: string): Promise<UnpublishRe
 
   await supabase
     .from("artists")
-    .update({ published_repo_url: null, published_site_url: null, published_at: null })
+    .update({
+      published_repo_url: null,
+      published_site_url: null,
+      published_deployment_id: null,
+      published_at: null,
+    })
     .eq("id", artistId);
 
   return { ok: true };

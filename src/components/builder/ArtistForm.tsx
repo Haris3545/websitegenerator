@@ -14,6 +14,7 @@ import {
   lookupYoutubeChannel,
   publishArtist,
   unpublishArtist,
+  checkPublishStatus,
   type ArtistFormInput,
 } from "@/app/builder/actions";
 import type { Artist } from "@/lib/database.types";
@@ -105,6 +106,20 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
       ? { repoUrl: artist.published_repo_url, siteUrl: artist.published_site_url }
       : null
   );
+  // "queued"/"building" drive the progress bar below and get polled every
+  // few seconds; "ready" stops polling and shows the live link as
+  // confirmed-working rather than just assumed. Starting at "queued"
+  // whenever a deployment id is on record (not just right after a fresh
+  // publish click) means reloading the builder mid-build still picks the
+  // polling back up instead of just showing a stale "Published" state.
+  const [deployStatus, setDeployStatus] = useState<
+    "idle" | "queued" | "building" | "ready" | "error" | "unknown"
+  >(() => {
+    if (!artist?.published_repo_url || !artist?.published_site_url) return "idle";
+    return artist.published_deployment_id ? "queued" : "unknown";
+  });
+  const [deployStartedAt] = useState(() => Date.now());
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   // Explicit "Save progress" + silent autosave both funnel through here, so
   // a brand-new artist can be saved at any point in the form, not just at
@@ -192,10 +207,44 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
     setIsPublishing(false);
     if (result.ok) {
       setPublished({ repoUrl: result.repoUrl, siteUrl: result.siteUrl });
+      setDeployStatus(result.deploymentId ? "queued" : "unknown");
     } else {
       setPublishError(result.error);
     }
   }
+
+  // Polls Vercel's real deployment status every few seconds while a build
+  // is in flight, rather than the previous behavior of declaring success
+  // the instant the repo + Vercel project existed — which is what let
+  // "Published!" show even though nothing had actually built yet, and the
+  // link 404'd until someone found their way into the Vercel dashboard and
+  // deployed it by hand.
+  useEffect(() => {
+    if (deployStatus !== "queued" && deployStatus !== "building") return;
+    if (!idRef.current) return;
+    const artistId = idRef.current;
+
+    const poll = setInterval(async () => {
+      const result = await checkPublishStatus(artistId);
+      if (result.status === "ready") setDeployStatus("ready");
+      else if (result.status === "error") {
+        setDeployStatus("error");
+        setPublishError(result.message);
+      } else if (result.status === "building") setDeployStatus("building");
+      else if (result.status === "queued") setDeployStatus("queued");
+      else setDeployStatus("unknown");
+    }, 4000);
+
+    return () => clearInterval(poll);
+  }, [deployStatus]);
+
+  useEffect(() => {
+    if (deployStatus !== "queued" && deployStatus !== "building") return;
+    const tick = setInterval(() => {
+      setElapsedSeconds(Math.round((Date.now() - deployStartedAt) / 1000));
+    }, 1000);
+    return () => clearInterval(tick);
+  }, [deployStatus, deployStartedAt]);
 
   async function handleUnpublish() {
     if (!idRef.current) return;
@@ -510,9 +559,50 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
           {published ? (
             <div className="flex flex-col gap-1 text-sm">
               <div className="flex items-center gap-2">
-                <BrandLogoAnimation className="h-8 w-8 dark:invert" />
-                <p className="text-emerald-600 dark:text-emerald-400">Published.</p>
+                <BrandLogoAnimation className="h-8 w-8 dark:invert" loop={deployStatus === "queued" || deployStatus === "building"} />
+                <p
+                  className={
+                    deployStatus === "ready"
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : deployStatus === "error"
+                        ? "text-red-600 dark:text-red-400"
+                        : "text-neutral-600 dark:text-white/70"
+                  }
+                >
+                  {deployStatus === "ready"
+                    ? "Live."
+                    : deployStatus === "queued"
+                      ? "Queued to deploy..."
+                      : deployStatus === "building"
+                        ? "Building..."
+                        : deployStatus === "error"
+                          ? "Build failed."
+                          : "Published — repo and Vercel project created."}
+                </p>
               </div>
+
+              {(deployStatus === "queued" || deployStatus === "building") && (
+                <div className="my-1 flex flex-col gap-1">
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-200 dark:bg-white/10">
+                    <div
+                      className="h-full rounded-full bg-builder-accent transition-all duration-700 ease-out"
+                      style={{ width: `${Math.min(92, (elapsedSeconds / 90) * 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-neutral-500 dark:text-white/40">
+                    {elapsedSeconds}s elapsed — usually takes 1-2 minutes. This page checks automatically;
+                    no need to refresh or go to Vercel yourself.
+                  </p>
+                </div>
+              )}
+
+              {deployStatus === "unknown" && (
+                <p className="text-xs text-amber-700 dark:text-amber-400">
+                  Couldn&apos;t confirm the build status automatically — open the Vercel dashboard for
+                  this project to check.
+                </p>
+              )}
+
               <a
                 href={published.repoUrl}
                 target="_blank"
@@ -529,9 +619,6 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
               >
                 {published.siteUrl}
               </a>
-              <p className="mt-1 text-xs text-neutral-500 dark:text-white/40">
-                The Vercel deployment can take a minute or two to finish building the first time.
-              </p>
               <button
                 type="button"
                 disabled={isUnpublishing}
