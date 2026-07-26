@@ -50,7 +50,10 @@ export function NewsTicker({
 
   if (!articles.length) {
     return (
-      <div className="relative mt-3 overflow-hidden py-2">
+      <div
+        className="relative mt-3 overflow-hidden py-2"
+        style={{ borderTop: "1px solid var(--accent)", borderBottom: "1px solid var(--accent)" }}
+      >
         <Editable
           artistId={artistId}
           contentKey="ticker.empty_state"
@@ -69,6 +72,8 @@ export function NewsTicker({
     <div
       className="relative mt-3 overflow-hidden py-2"
       style={{
+        borderTop: "1px solid var(--accent)",
+        borderBottom: "1px solid var(--accent)",
         maskImage:
           "linear-gradient(to right, transparent, black 48px, black calc(100% - 48px), transparent)",
         WebkitMaskImage:

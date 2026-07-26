@@ -1,8 +1,10 @@
 import type { CSSProperties } from "react";
 
 // Fine-tuning values set from the builder's click-to-select visual editor.
-// Separate from AestheticParams (database.types.ts), which stays driven by
-// the Gemini-parsed free-text box — this is direct manual control instead.
+// Separate from AestheticParams (database.types.ts), which covers background
+// photo/video effects (grain, tint, blur, vignette, chromatic aberration) —
+// those are set either via AestheticPanel's manual sliders or, for anything
+// unusual, the Gemini-parsed free-text box.
 export type ThemeOverrides = {
   card_radius?: number; // px, corner roundedness of KPI/article/board cards
   card_bg_opacity?: number; // 0..1, card background darkness

@@ -96,7 +96,7 @@ export function SiteFooter({
               href={`/builder/artists/${artistId}`}
               className="rounded-full border border-white/20 px-4 py-1.5 text-xs font-medium text-white/70 transition-all duration-150 ease-out hover:-translate-y-0.5 hover:border-white/40 hover:text-white"
             >
-              Edit this site
+              Open in Builder
             </Link>
             <button
               type="button"
@@ -107,7 +107,7 @@ export function SiteFooter({
                   : "border-white/20 text-white/70 hover:border-white/40 hover:text-white"
               }`}
             >
-              {editMode ? "Done editing" : "Edit page"}
+              {editMode ? "Done editing" : "Quick Edit"}
             </button>
           </>
         )}

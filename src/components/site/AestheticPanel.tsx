@@ -6,12 +6,22 @@ import { updateArtistAesthetics } from "@/app/s/[slug]/actions";
 import { ColorField } from "@/components/builder/ColorField";
 import { FontPicker } from "@/components/builder/FontPicker";
 import { DEFAULT_THEME_OVERRIDES, type ThemeOverrides } from "@/lib/theme";
+import type { AestheticParams } from "@/lib/database.types";
+
+const DEFAULT_AESTHETIC_PARAMS: Required<AestheticParams> = {
+  grain_intensity: 0,
+  tint_opacity: 0,
+  blur: 0,
+  vignette: 0,
+  chromatic_aberration: 0,
+};
 
 type Aesthetics = {
   primary_color: string;
   accent_color: string;
   font_family: string;
   theme_overrides: ThemeOverrides;
+  aesthetic_params: AestheticParams;
 };
 
 function Slider({
@@ -86,6 +96,14 @@ export function AestheticPanel({ artistId, initial }: { artistId: string; initia
     root.style.setProperty("--card-text-color", t.card_text_color);
     root.style.setProperty("--header-font-weight", t.header_bold ? "700" : "400");
     root.style.setProperty("--header-font-style", t.header_italic ? "italic" : "normal");
+
+    const a = { ...DEFAULT_AESTHETIC_PARAMS, ...values.aesthetic_params };
+    root.style.setProperty("--bg-blur", `${a.blur * 12}px`);
+    root.style.setProperty("--bg-tint-opacity", String(a.tint_opacity * 0.65));
+    root.style.setProperty("--bg-vignette", String(a.vignette));
+    root.style.setProperty("--bg-grain-opacity", String(a.grain_intensity));
+    document.getElementById("chroma-offset-r")?.setAttribute("dx", String(a.chromatic_aberration * 8));
+    document.getElementById("chroma-offset-b")?.setAttribute("dx", String(a.chromatic_aberration * -8));
   }, [values]);
 
   useEffect(() => {
@@ -122,6 +140,11 @@ export function AestheticPanel({ artistId, initial }: { artistId: string; initia
   const theme = { ...DEFAULT_THEME_OVERRIDES, ...values.theme_overrides };
   function setTheme<K extends keyof ThemeOverrides>(key: K, v: ThemeOverrides[K]) {
     setValues((s) => ({ ...s, theme_overrides: { ...s.theme_overrides, [key]: v } }));
+  }
+
+  const aesthetics = { ...DEFAULT_AESTHETIC_PARAMS, ...values.aesthetic_params };
+  function setAesthetic<K extends keyof AestheticParams>(key: K, v: AestheticParams[K]) {
+    setValues((s) => ({ ...s, aesthetic_params: { ...s.aesthetic_params, [key]: v } }));
   }
 
   return (
@@ -213,6 +236,54 @@ export function AestheticPanel({ artistId, initial }: { artistId: string; initia
             />
             Italic
           </label>
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-white/10 pt-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-white/50">Background effects</p>
+          <Slider
+            label="Animated film grain"
+            min={0}
+            max={1}
+            step={0.05}
+            value={aesthetics.grain_intensity}
+            onChange={(v) => setAesthetic("grain_intensity", v)}
+          />
+          <Slider
+            label="Chromatic aberration"
+            min={0}
+            max={1}
+            step={0.05}
+            value={aesthetics.chromatic_aberration}
+            onChange={(v) => setAesthetic("chromatic_aberration", v)}
+          />
+          <Slider
+            label="Vignette"
+            min={0}
+            max={1}
+            step={0.05}
+            value={aesthetics.vignette}
+            onChange={(v) => setAesthetic("vignette", v)}
+          />
+          <Slider
+            label="Colour tint"
+            min={0}
+            max={1}
+            step={0.05}
+            value={aesthetics.tint_opacity}
+            onChange={(v) => setAesthetic("tint_opacity", v)}
+          />
+          <Slider
+            label="Blur"
+            min={0}
+            max={1}
+            step={0.05}
+            value={aesthetics.blur}
+            onChange={(v) => setAesthetic("blur", v)}
+          />
+          <p className="text-xs text-white/30">
+            For anything else — describe it in the Aesthetic tailoring box in Builder and it&apos;ll be parsed
+            automatically.
+          </p>
         </div>
       </div>
     </>

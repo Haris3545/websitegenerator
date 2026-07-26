@@ -78,9 +78,16 @@ export async function publishArtistSite(artistId: string): Promise<PublishResult
 
   if (!generateRes.ok) {
     const body = await generateRes.text();
+    const hint =
+      generateRes.status === 404
+        ? ` This almost always means either (a) "Template repository" isn't checked in ` +
+          `${TEMPLATE_OWNER}/${TEMPLATE_REPO}'s GitHub Settings > General, or (b) GITHUB_ACCESS_TOKEN ` +
+          `can't see that repo — a classic token needs the "repo" scope, a fine-grained token needs to be ` +
+          `explicitly granted access to ${TEMPLATE_OWNER}/${TEMPLATE_REPO} with Contents read/write.`
+        : "";
     return {
       ok: false,
-      error: `GitHub repo creation failed (${generateRes.status}): ${body}`,
+      error: `GitHub repo creation failed (${generateRes.status}): ${body}.${hint}`,
     };
   }
 

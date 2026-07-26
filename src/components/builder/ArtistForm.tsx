@@ -424,11 +424,11 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
 
       <Section
         title="Aesthetic tailoring"
-        description='Describe grain, tint, blur, or vignette adjustments in your own words — parsed into CSS on save.'
+        description="Grain, tint, blur, vignette, and chromatic aberration all have sliders on the live site itself (Edit mode > 🎨). Only use this box for something those sliders can't do — it's parsed into the same effects on save."
       >
         <textarea
           rows={3}
-          placeholder='e.g. "film grain overlay, 30%, slight vignette"'
+          placeholder='e.g. "warm orange tint that pulses slightly"'
           value={form.aesthetic_prompt}
           onChange={(e) => update("aesthetic_prompt", e.target.value)}
           className={inputClass}

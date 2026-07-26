@@ -17,7 +17,7 @@ import { computeArtistPassword, artistAccessCookieName } from "@/lib/artistAcces
 import { artistCacheTag } from "@/lib/getSiteArtist";
 import { ALL_TAB_KEYS } from "@/lib/tabs";
 import type { ThemeOverrides } from "@/lib/theme";
-import type { SentimentFilter, BoardItem, TabKey } from "@/lib/database.types";
+import type { AestheticParams, SentimentFilter, BoardItem, TabKey } from "@/lib/database.types";
 
 /** These six steps are independent of each other — running them
  * sequentially (as this used to) meant the total wall-clock time was their
@@ -192,6 +192,7 @@ export async function updateArtistAesthetics(
     accent_color: string;
     font_family: string;
     theme_overrides: ThemeOverrides;
+    aesthetic_params: AestheticParams;
   }
 ) {
   const supabase = createServiceRoleClient();
@@ -204,6 +205,7 @@ export async function updateArtistAesthetics(
       accent_color: aesthetics.accent_color,
       font_family: aesthetics.font_family,
       theme_overrides: aesthetics.theme_overrides,
+      aesthetic_params: aesthetics.aesthetic_params,
     })
     .eq("id", artistId);
   if (artist?.slug) updateTag(artistCacheTag(artist.slug));
@@ -223,14 +225,14 @@ export async function verifyArtistAccess(
   const supabase = createServiceRoleClient();
   const { data: artist, error } = await supabase
     .from("artists")
-    .select("name")
+    .select("slug")
     .eq("slug", slug)
     .maybeSingle();
 
   if (error) return { ok: false, error: `Artist lookup failed: ${error.message}` };
   if (!artist) return { ok: false, error: `No artist found for slug "${slug}".` };
 
-  if (password.trim().toLowerCase() !== computeArtistPassword(artist.name)) {
+  if (password.trim().toLowerCase() !== computeArtistPassword(artist.slug)) {
     return { ok: false };
   }
 

@@ -60,7 +60,7 @@ export default async function ArtistSiteLayout({
     after(() => refreshMediaIfStale(artist.id, artist.name));
   }
 
-  const { grain_intensity = 0, tint_opacity = 0, blur = 0, vignette = 0 } =
+  const { grain_intensity = 0, tint_opacity = 0, blur = 0, vignette = 0, chromatic_aberration = 0 } =
     artist.aesthetic_params ?? {};
   const theme = withThemeDefaults(artist.theme_overrides);
   const isBackgroundVideo = /\.(mp4|webm|mov|m4v)(\?|$)/i.test(artist.background_image_url ?? "");
@@ -75,12 +75,47 @@ export default async function ArtistSiteLayout({
           "--primary": artist.primary_color,
           "--secondary": artist.secondary_color,
           "--accent": artist.accent_color,
+          "--bg-blur": `${blur * 12}px`,
+          "--bg-tint-opacity": tint_opacity * 0.65,
+          "--bg-vignette": vignette,
+          "--bg-grain-opacity": grain_intensity,
           fontFamily: `"${artist.font_family}", sans-serif`,
           ...themeToCssVars(artist.theme_overrides),
         } as React.CSSProperties
       }
     >
       <link rel="stylesheet" href={googleFontsCssUrl(artist.font_family)} />
+
+      {/* Chromatic aberration: splits the background into its red/blue
+          channels, offsets them in opposite directions, then screen-blends
+          them back together. The two feOffset dx values (0 at rest) are the
+          only thing AestheticPanel's live preview needs to touch. */}
+      <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden="true">
+        <filter id="chroma-filter">
+          <feColorMatrix
+            in="SourceGraphic"
+            type="matrix"
+            values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"
+            result="red"
+          />
+          <feOffset id="chroma-offset-r" in="red" dx={chromatic_aberration * 8} dy="0" result="redOffset" />
+          <feColorMatrix
+            in="SourceGraphic"
+            type="matrix"
+            values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"
+            result="blue"
+          />
+          <feOffset id="chroma-offset-b" in="blue" dx={chromatic_aberration * -8} dy="0" result="blueOffset" />
+          <feColorMatrix
+            in="SourceGraphic"
+            type="matrix"
+            values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0"
+            result="green"
+          />
+          <feBlend mode="screen" in="redOffset" in2="blueOffset" result="rb" />
+          <feBlend mode="screen" in="rb" in2="green" />
+        </filter>
+      </svg>
 
       <div className="fixed inset-0 -z-20" style={{ backgroundColor: artist.secondary_color }}>
         {artist.background_image_url &&
@@ -93,7 +128,7 @@ export default async function ArtistSiteLayout({
               playsInline
               className="h-full w-full object-cover"
               style={{
-                filter: `blur(${blur * 12}px) contrast(${theme.bg_contrast}) saturate(${theme.bg_saturate})`,
+                filter: `blur(var(--bg-blur)) contrast(${theme.bg_contrast}) saturate(${theme.bg_saturate}) url(#chroma-filter)`,
                 objectPosition: `${theme.bg_position_x}% ${theme.bg_position_y}%`,
                 transform: `scale(${theme.bg_zoom})`,
               }}
@@ -105,7 +140,7 @@ export default async function ArtistSiteLayout({
               alt=""
               className="h-full w-full object-cover"
               style={{
-                filter: `blur(${blur * 12}px) contrast(${theme.bg_contrast}) saturate(${theme.bg_saturate})`,
+                filter: `blur(var(--bg-blur)) contrast(${theme.bg_contrast}) saturate(${theme.bg_saturate}) url(#chroma-filter)`,
                 objectPosition: `${theme.bg_position_x}% ${theme.bg_position_y}%`,
                 transform: `scale(${theme.bg_zoom})`,
               }}
@@ -116,30 +151,29 @@ export default async function ArtistSiteLayout({
             and the photo reads as punchy rather than washed out. */}
         <div className="absolute inset-0" style={{ backgroundColor: `rgba(0,0,0,${theme.bg_scrim_opacity})` }} />
         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/20 to-black/70" />
-        {tint_opacity > 0 && (
-          <div
-            className="absolute inset-0"
-            style={{ backgroundColor: artist.primary_color, opacity: tint_opacity * 0.65 }}
-          />
-        )}
-        {vignette > 0 && (
-          <div
-            className="absolute inset-0"
-            style={{
-              boxShadow: `inset 0 0 ${vignette * 260}px rgba(0,0,0,${Math.min(1, vignette * 1.3)})`,
-            }}
-          />
-        )}
-        {grain_intensity > 0 && (
-          <div
-            className="absolute inset-0 mix-blend-overlay"
-            style={{
-              opacity: grain_intensity,
-              backgroundImage:
-                "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
-            }}
-          />
-        )}
+        {/* These three stay mounted (opacity/shadow driven by CSS vars that
+            default to 0) rather than conditionally rendering, so the
+            AestheticPanel sliders can preview them live without a re-render. */}
+        <div
+          className="absolute inset-0"
+          style={{ backgroundColor: artist.primary_color, opacity: "var(--bg-tint-opacity, 0)" }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            boxShadow:
+              "inset 0 0 calc(var(--bg-vignette, 0) * 260px) rgba(0,0,0,calc(var(--bg-vignette, 0) * 1.3))",
+          }}
+        />
+        <div
+          className="animate-grain absolute inset-0 mix-blend-overlay"
+          style={{
+            opacity: "var(--bg-grain-opacity, 0)",
+            backgroundImage:
+              "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
+            backgroundSize: "160% 160%",
+          }}
+        />
       </div>
 
       <SiteHeader projectTitle={artist.project_title} tagline={artist.tagline} />
@@ -176,6 +210,7 @@ export default async function ArtistSiteLayout({
           accent_color: artist.accent_color,
           font_family: artist.font_family,
           theme_overrides: artist.theme_overrides,
+          aesthetic_params: artist.aesthetic_params,
         }}
       />
     </div>

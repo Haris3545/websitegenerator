@@ -73,8 +73,7 @@ function LoginForm() {
       <div className="flex w-full max-w-sm flex-col justify-center px-4">
         <div className="mb-6 flex flex-col items-center text-center">
           <div className="flex items-center gap-2.5">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/vccp-media-logo.png" alt="" className="h-9 w-9 dark:invert" />
+            <BrandLogoAnimation className="h-9 w-9 dark:invert" />
             <p className="text-sm font-semibold uppercase tracking-wider text-neutral-700 dark:text-white/80">
               Cultural Intelligence Designer
             </p>

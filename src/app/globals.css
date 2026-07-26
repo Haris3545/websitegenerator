@@ -43,3 +43,23 @@ body {
 .animate-tab-in {
   animation: tab-in 0.25s ease-out;
 }
+
+/* Flickers the film-grain texture between offsets on a stepped timer rather
+   than sliding smoothly, so it reads as noisy grain rather than a panning
+   texture. */
+@keyframes grain-shift {
+  0%, 100% { background-position: 0% 0%; }
+  10% { background-position: -8% -12%; }
+  20% { background-position: 5% 15%; }
+  30% { background-position: -15% 5%; }
+  40% { background-position: 12% -8%; }
+  50% { background-position: -5% 12%; }
+  60% { background-position: 15% -15%; }
+  70% { background-position: -12% -5%; }
+  80% { background-position: 8% 8%; }
+  90% { background-position: -8% 15%; }
+}
+
+.animate-grain {
+  animation: grain-shift 0.9s steps(1) infinite;
+}

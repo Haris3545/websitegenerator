@@ -11,7 +11,7 @@ import { resolveYoutubeChannel, type YoutubeChannelLookup } from "@/lib/youtube"
 import { captureGateScreenshot, gateVisualsChanged } from "@/lib/screenshot";
 import { ALL_TAB_KEYS } from "@/lib/tabs";
 import { artistCacheTag } from "@/lib/getSiteArtist";
-import type { TabKey } from "@/lib/database.types";
+import type { AestheticParams, TabKey } from "@/lib/database.types";
 import type { ThemeOverrides } from "@/lib/theme";
 
 export async function signOut() {
@@ -59,7 +59,6 @@ export async function upsertArtist(
     const supabase = await createClient();
 
     const enabled_tabs = input.enabled_tabs.filter((t) => ALL_TAB_KEYS.includes(t));
-    const aesthetic_params = await parseAestheticPrompt(input.aesthetic_prompt);
 
     const gateVisuals = {
       secondary_color: input.secondary_color,
@@ -76,13 +75,27 @@ export async function upsertArtist(
     // change (say, a new YouTube channel ID) shouldn't invalidate an
     // otherwise still-accurate screenshot.
     let shouldRecapture = !input.id;
+    // Re-parsing on every save would blow away whatever AestheticPanel's
+    // manual sliders had set, since this free-text box is usually just
+    // sitting there unchanged — only worth a fresh Gemini call when the
+    // prompt text itself actually changed. A brand-new artist has nothing
+    // to preserve, so it always parses (typically empty -> all-zero params).
+    let aesthetic_params: AestheticParams | undefined;
     if (input.id) {
       const { data: existing } = await supabase
         .from("artists")
-        .select("secondary_color, accent_color, gate_background_url, project_title, tagline, font_family")
+        .select(
+          "secondary_color, accent_color, gate_background_url, project_title, tagline, font_family, aesthetic_prompt, aesthetic_params"
+        )
         .eq("id", input.id)
         .maybeSingle();
       if (existing && gateVisualsChanged(existing, gateVisuals)) shouldRecapture = true;
+      if (existing && existing.aesthetic_prompt === input.aesthetic_prompt) {
+        aesthetic_params = existing.aesthetic_params;
+      }
+    }
+    if (aesthetic_params === undefined) {
+      aesthetic_params = await parseAestheticPrompt(input.aesthetic_prompt);
     }
 
     const row = {

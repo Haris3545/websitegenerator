@@ -5,10 +5,11 @@
 import type { ThemeOverrides } from "@/lib/theme";
 
 export type AestheticParams = {
-  grain_intensity?: number; // 0..1
+  grain_intensity?: number; // 0..1, now rendered as animated film grain
   tint_opacity?: number; // 0..1
   blur?: number; // 0..1
   vignette?: number; // 0..1
+  chromatic_aberration?: number; // 0..1
 };
 
 export type SentimentFilter = { label: string; keywords: string[] };
