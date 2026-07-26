@@ -36,7 +36,7 @@ export async function refreshEverything(slug: string) {
   const supabase = createServiceRoleClient();
   const { data: artist } = await supabase
     .from("artists")
-    .select("id, name, youtube_channel_id, project_title")
+    .select("id, name, youtube_channel_id")
     .eq("slug", slug)
     .single();
 
@@ -81,7 +81,7 @@ export async function refreshEverything(slug: string) {
   // Reads across Wikipedia trends and social_comment_map, both only just
   // refreshed above, so it has to run after — never in parallel with them.
   try {
-    await refreshConversationThemesForArtist(artist.id, artist.project_title);
+    await refreshConversationThemesForArtist(artist.id);
   } catch (err) {
     console.error(`refreshEverything: conversation themes refresh failed for ${slug}:`, err);
   }

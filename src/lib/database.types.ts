@@ -54,7 +54,8 @@ export type SocialComment = {
 export type SocialCommentSubcategory = { name: string; comments: SocialComment[] };
 export type SocialCommentCategory = { name: string; subcategories: SocialCommentSubcategory[] };
 
-export type ConversationTheme = { name: string; count: number };
+export type ConversationTheme = { name: string; count: number; examples: string[] };
+export type WordCloudEntry = { text: string; count: number };
 
 export type WikipediaArticleTrend = {
   title: string;
@@ -368,8 +369,18 @@ export interface Database {
         Relationships: [];
       };
       conversation_themes: {
-        Row: { artist_id: string; themes: ConversationTheme[]; computed_at: string };
-        Insert: { artist_id: string; themes?: ConversationTheme[]; computed_at?: string };
+        Row: {
+          artist_id: string;
+          themes: ConversationTheme[];
+          word_cloud: WordCloudEntry[];
+          computed_at: string;
+        };
+        Insert: {
+          artist_id: string;
+          themes?: ConversationTheme[];
+          word_cloud?: WordCloudEntry[];
+          computed_at?: string;
+        };
         Update: Partial<Database["public"]["Tables"]["conversation_themes"]["Insert"]>;
         Relationships: [];
       };

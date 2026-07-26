@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getSiteArtist } from "@/lib/getSiteArtist";
 import { refreshConversationThemesForArtist, refreshConversationThemesIfStale } from "@/lib/conversationThemes";
 import { ConversationThemes } from "@/components/site/ConversationThemes";
+import { WordCloud } from "@/components/site/WordCloud";
 import { TabHeading } from "@/components/site/TabHeading";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { BrandedEmptyState } from "@/components/BrandedEmptyState";
@@ -18,27 +19,33 @@ export default async function SocialListeningPage({
   const supabase = createServiceRoleClient();
   let { data: row, error: rowError } = await supabase
     .from("conversation_themes")
-    .select("themes, computed_at")
+    .select("themes, word_cloud, computed_at")
     .eq("artist_id", artist.id)
     .maybeSingle();
 
   if (!row?.computed_at && !rowError) {
     try {
-      await refreshConversationThemesForArtist(artist.id, artist.project_title);
+      await refreshConversationThemesForArtist(artist.id);
       ({ data: row, error: rowError } = await supabase
         .from("conversation_themes")
-        .select("themes, computed_at")
+        .select("themes, word_cloud, computed_at")
         .eq("artist_id", artist.id)
         .maybeSingle());
     } catch (err) {
       console.error(`Initial conversation themes fetch failed for ${slug}:`, err);
     }
   } else if (!rowError) {
-    after(() => refreshConversationThemesIfStale(artist.id, artist.project_title));
+    after(() => refreshConversationThemesIfStale(artist.id));
   }
 
   const themes = row?.themes ?? [];
-  const csvRows = themes.map((t) => ({ theme: t.name, count: t.count }));
+  const wordCloud = row?.word_cloud ?? [];
+  const totalMentions = themes.reduce((sum, t) => sum + t.count, 0);
+  const csvRows = themes.map((t) => ({
+    theme: t.name,
+    pct: totalMentions ? Math.round((t.count / totalMentions) * 1000) / 10 : 0,
+    examples: t.examples.join(" | "),
+  }));
 
   return (
     <div>
@@ -64,8 +71,9 @@ export default async function SocialListeningPage({
           <BrandedEmptyState message={`No themes found yet — hit "Refresh Everything" below.`} />
         </div>
       ) : (
-        <div className="mt-6">
+        <div className="mt-6 flex flex-col gap-6">
           <ConversationThemes themes={themes} />
+          {wordCloud.length > 0 && <WordCloud entries={wordCloud} />}
         </div>
       )}
 

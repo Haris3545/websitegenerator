@@ -1,9 +1,9 @@
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import type { ConversationTheme } from "@/lib/database.types";
+import type { ConversationTheme, WordCloudEntry } from "@/lib/database.types";
 
 const STALE_AFTER_MS = 12 * 60 * 60 * 1000; // 12 hours
 
-type ThemeDef = { name: string; color: string; keywords: string[] };
+type ThemeDef = { name: string; keywords: string[] };
 
 // Deliberately NOT the same taxonomy commentCategorizer.ts uses for
 // individual YouTube comments (that one clusters by topic — visuals vs
@@ -13,11 +13,15 @@ type ThemeDef = { name: string; color: string; keywords: string[] };
 // topics. Deliberately not Gemini-based either, so it costs nothing and
 // never depends on the daily quota. Keywords stay away from generic
 // structural phrases ("music video", "sounds like") that describe format
-// rather than an actual theme.
+// rather than an actual theme. No dynamic per-artist "release buzz" theme
+// here anymore — it just became a near-empty, hard-to-interpret bucket
+// ("<project title> buzz") on artists with little actual album chatter.
+// Colors live in conversationThemeColors.ts (name -> color only), kept
+// separate so the client-side chart component doesn't need this file's
+// server-only Supabase import just to look up a color.
 const BASE_THEMES: ThemeDef[] = [
   {
     name: "Nostalgia",
-    color: "#a78bfa",
     keywords: [
       "nostalgia", "nostalgic", "throwback", "takes me back", "old school", "remember when",
       "childhood", "brings back memories", "back in the day", "growing up", "years ago",
@@ -26,7 +30,6 @@ const BASE_THEMES: ThemeDef[] = [
   },
   {
     name: "Musical",
-    color: "#2dd4bf",
     keywords: [
       "production", "instrumental", "melody", "melodies", "vocals", "songwriting", "composition",
       "arrangement", "sound design", "sonics", "mixing", "mastering", "genre", "harmonies",
@@ -35,7 +38,6 @@ const BASE_THEMES: ThemeDef[] = [
   },
   {
     name: "Icon",
-    color: "#facc15",
     keywords: [
       "icon", "iconic", "legend", "legendary", "goat", "greatest of all time", "generational talent",
       "legacy", "trailblazer", "pioneer", "influential artist", "cultural icon", "pop icon",
@@ -43,7 +45,6 @@ const BASE_THEMES: ThemeDef[] = [
   },
   {
     name: "Emotional",
-    color: "#f472b6",
     keywords: [
       "emotional", "cried", "crying", "heartbroken", "healing", "therapeutic", "relate to this",
       "touched me", "moved me", "vulnerable", "raw emotion", "brought me to tears", "comfort",
@@ -51,7 +52,6 @@ const BASE_THEMES: ThemeDef[] = [
   },
   {
     name: "Hype & Anticipation",
-    color: "#34d399",
     keywords: [
       "can't wait", "cant wait", "hype", "anticipation", "so excited", "counting down",
       "coming soon", "next era", "finally here", "been waiting", "so hyped",
@@ -59,7 +59,6 @@ const BASE_THEMES: ThemeDef[] = [
   },
   {
     name: "Criticism",
-    color: "#9ca3af",
     keywords: [
       "overrated", "disappointing", "disappointed", "flop", "boring", "worst", "let down",
       "backlash", "controversy", "criticized", "criticised", "polarizing", "divisive",
@@ -67,7 +66,6 @@ const BASE_THEMES: ThemeDef[] = [
   },
   {
     name: "Cultural",
-    color: "#60a5fa",
     keywords: [
       "cultural impact", "influence on", "generation", "zeitgeist", "representation", "cultural moment",
       "movement", "impact on culture", "shaped a generation", "defined a generation", "pop culture",
@@ -75,7 +73,6 @@ const BASE_THEMES: ThemeDef[] = [
   },
   {
     name: "Discovery",
-    color: "#22d3ee",
     keywords: [
       "just found", "new fan", "first time hearing", "discovered this artist", "algorithm brought me",
       "randomly found", "just discovered", "getting into", "new to her music", "new to his music",
@@ -84,44 +81,109 @@ const BASE_THEMES: ThemeDef[] = [
   },
   {
     name: "Humour",
-    color: "#38bdf8",
     keywords: ["lol", "lmao", "hilarious", "so funny", "comedic", "meme", "😂", "💀", "the joke"],
   },
 ];
 
-const RELEASE_COLOR = "#fb923c";
-
-function countHits(lowerText: string, keywords: string[]): number {
-  let hits = 0;
-  for (const keyword of keywords) {
-    if (lowerText.includes(keyword)) hits += 1;
-  }
-  return hits;
+function keywordHits(lowerText: string, keywords: string[]): boolean {
+  return keywords.some((k) => lowerText.includes(k));
 }
 
-/** Scores combined free text against the fixed theme taxonomy plus one
- * dynamic release-specific theme folded in per artist (their actual
- * project/album name can't be a fixed keyword list the way the others
- * are). Only themes that actually matched anything are returned, ranked
- * highest first — matching the reference "Conversation themes" bar chart,
- * which only shows themes genuinely present in the data. */
-export function scoreConversationThemes(
-  snippets: string[],
-  releaseTheme: { name: string; keywords: string[] } | null
-): ConversationTheme[] {
-  const combined = ` ${snippets.join(" \n ").toLowerCase()} `;
-  const themes: ThemeDef[] = releaseTheme
-    ? [...BASE_THEMES, { name: releaseTheme.name, color: RELEASE_COLOR, keywords: releaseTheme.keywords }]
-    : BASE_THEMES;
+/** Up to `max` distinct-enough excerpts from the snippets that matched a
+ * theme, so "Criticism" (etc.) shows what people are actually saying
+ * instead of just an abstract bucket count — deduped on their first ~60
+ * characters since near-duplicate comments are common ("this flopped so
+ * hard", "ngl this flopped"), and trimmed to a readable quote length. */
+function pickExamples(matches: string[], max = 3): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of matches) {
+    const text = raw.trim();
+    if (!text) continue;
+    const key = text.slice(0, 60).toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(text.length > 220 ? `${text.slice(0, 220)}…` : text);
+    if (out.length >= max) break;
+  }
+  return out;
+}
 
-  return themes
-    .map((t) => ({ name: t.name, count: countHits(combined, t.keywords) }))
-    .filter((t) => t.count > 0)
+/** Scores combined free text against the fixed theme taxonomy. `count` is
+ * the number of distinct snippets that matched (not raw keyword-occurrence
+ * count) — a single comment hitting two keywords is still one instance of
+ * that theme in the conversation, which is what the UI's "% of discussion"
+ * framing needs as its denominator. Only themes that matched anything are
+ * returned, ranked highest first. */
+export function scoreConversationThemes(snippets: string[]): ConversationTheme[] {
+  const cleaned = snippets.map((s) => s.trim()).filter(Boolean);
+
+  return BASE_THEMES.map((theme) => {
+    const matches = cleaned.filter((s) => keywordHits(s.toLowerCase(), theme.keywords));
+    if (!matches.length) return null;
+    return { name: theme.name, count: matches.length, examples: pickExamples(matches) };
+  })
+    .filter((t): t is ConversationTheme => t !== null)
     .sort((a, b) => b.count - a.count);
 }
 
-export function colorForTheme(name: string): string {
-  return BASE_THEMES.find((t) => t.name === name)?.color ?? RELEASE_COLOR;
+// Common English function words, plus a few filler words that show up
+// constantly in comments/press copy without meaning anything on their own
+// ("like", "just", "really") — filtered out of both the unigram and phrase
+// word-cloud counts so the cloud reads as actual subject matter.
+const STOPWORDS = new Set([
+  "the", "and", "for", "are", "but", "not", "you", "your", "with", "this", "that", "was", "were",
+  "have", "has", "had", "from", "they", "them", "their", "what", "when", "where", "who", "will",
+  "would", "could", "should", "can", "just", "like", "really", "very", "much", "more", "most",
+  "some", "such", "than", "then", "there", "here", "into", "out", "about", "over", "under", "also",
+  "its", "it's", "his", "her", "she", "him", "our", "ours", "all", "any", "one", "two", "get", "got",
+  "these", "those", "being", "been", "does", "did", "doing", "off", "own", "same", "too", "only",
+  "now", "how", "why", "because", "while", "still", "even", "back", "make", "makes", "made", "way",
+  "know", "think", "going", "come", "came", "actually", "literally", "song", "songs", "video",
+  "videos", "music", "artist", "album", "track",
+]);
+
+function tokenize(text: string): string[] {
+  return (text.toLowerCase().match(/[a-z']+/g) ?? []).filter((w) => w.length > 2);
+}
+
+/** Ranks the most frequent words AND short phrases (2-3 word n-grams)
+ * across all the same snippets the themes are scored from, for the Social
+ * listening word cloud. Phrases are skipped if they start or end on a
+ * stopword ("of the", "the new") since those read as sentence fragments
+ * rather than an actual recurring phrase. Words need >=2 occurrences to
+ * appear at all — a corpus this size will otherwise be dominated by
+ * one-off words that just happened to show up in a single comment. */
+export function extractWordCloud(snippets: string[], max = 50): WordCloudEntry[] {
+  const unigramCounts = new Map<string, number>();
+  const phraseCounts = new Map<string, number>();
+
+  for (const snippet of snippets) {
+    const tokens = tokenize(snippet);
+    for (const token of tokens) {
+      if (STOPWORDS.has(token)) continue;
+      unigramCounts.set(token, (unigramCounts.get(token) ?? 0) + 1);
+    }
+    for (let n = 2; n <= 3; n++) {
+      for (let i = 0; i + n <= tokens.length; i++) {
+        const gram = tokens.slice(i, i + n);
+        if (STOPWORDS.has(gram[0]) || STOPWORDS.has(gram[gram.length - 1])) continue;
+        const phrase = gram.join(" ");
+        phraseCounts.set(phrase, (phraseCounts.get(phrase) ?? 0) + 1);
+      }
+    }
+  }
+
+  const entries: WordCloudEntry[] = [
+    ...[...phraseCounts.entries()]
+      .filter(([, count]) => count >= 2)
+      .map(([text, count]) => ({ text, count })),
+    ...[...unigramCounts.entries()]
+      .filter(([, count]) => count >= 2)
+      .map(([text, count]) => ({ text, count })),
+  ];
+
+  return entries.sort((a, b) => b.count - a.count).slice(0, max);
 }
 
 type WikiSummary = { extract?: string };
@@ -147,12 +209,12 @@ async function fetchWikipediaExtract(title: string): Promise<string> {
  * Wikipedia article extracts (titles from wikipedia_trends), YouTube
  * comment text (from social_comment_map), and press coverage (title +
  * excerpt from media_articles) — and scores it against the theme taxonomy
- * above. Depends on those three tables already being populated, so this
- * should run after the refreshes that fill them (see refreshEverything). */
+ * above, plus a word/phrase-frequency cloud from the same corpus. Depends
+ * on those three tables already being populated, so this should run after
+ * the refreshes that fill them (see refreshEverything). */
 export async function refreshConversationThemesForArtist(
-  artistId: string,
-  projectTitle: string | null
-): Promise<ConversationTheme[]> {
+  artistId: string
+): Promise<{ themes: ConversationTheme[]; wordCloud: WordCloudEntry[] }> {
   const supabase = createServiceRoleClient();
 
   const [{ data: wikiRow }, { data: commentRow }, { data: articles }] = await Promise.all([
@@ -172,26 +234,21 @@ export async function refreshConversationThemesForArtist(
 
   const snippets = [...wikiExtracts, ...commentTexts, ...articleTexts].filter(Boolean);
 
-  const releaseTheme = projectTitle?.trim()
-    ? {
-        name: `${projectTitle.trim()} buzz`,
-        keywords: [projectTitle.trim().toLowerCase(), "new album", "new era", "new music", "album drop"],
-      }
-    : { name: "New release buzz", keywords: ["new album", "new era", "new music", "album drop"] };
-
-  const themes = scoreConversationThemes(snippets, releaseTheme);
+  const themes = scoreConversationThemes(snippets);
+  const wordCloud = extractWordCloud(snippets);
 
   const { error } = await supabase.from("conversation_themes").upsert({
     artist_id: artistId,
     themes,
+    word_cloud: wordCloud,
     computed_at: new Date().toISOString(),
   });
   if (error) throw new Error(`conversation_themes upsert failed: ${error.message}`);
 
-  return themes;
+  return { themes, wordCloud };
 }
 
-export async function refreshConversationThemesIfStale(artistId: string, projectTitle: string | null) {
+export async function refreshConversationThemesIfStale(artistId: string) {
   const supabase = createServiceRoleClient();
   const { data } = await supabase
     .from("conversation_themes")
@@ -204,7 +261,7 @@ export async function refreshConversationThemesIfStale(artistId: string, project
   if (!isStale) return;
 
   try {
-    await refreshConversationThemesForArtist(artistId, projectTitle);
+    await refreshConversationThemesForArtist(artistId);
   } catch (err) {
     console.error(`refreshConversationThemesIfStale failed for artist ${artistId}:`, err);
   }
