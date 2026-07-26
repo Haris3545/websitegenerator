@@ -45,11 +45,16 @@ function LoginForm() {
   return (
     <div className="flex min-h-screen justify-center bg-white text-neutral-900 dark:bg-neutral-950 dark:text-white">
       <div className="flex w-full max-w-sm flex-col justify-center px-4">
-        <div className="mb-6 flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full bg-builder-accent" />
-          <h1 className="text-2xl font-semibold tracking-tight">Builder login</h1>
+        <div className="mb-8 flex flex-col items-center text-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/vccp-media-logo.png" alt="" className="h-16 w-16 dark:invert" />
+          <p className="mt-3 text-lg font-semibold tracking-tight">VCCP Media</p>
+          <p className="text-xs font-medium uppercase tracking-wider text-neutral-500 dark:text-white/40">
+            Cultural Intelligence Designer
+          </p>
         </div>
-        <p className="mb-6 text-sm text-neutral-500 dark:text-white/50">
+        <h1 className="mb-1 text-center text-sm font-medium text-neutral-500 dark:text-white/50">Builder login</h1>
+        <p className="mb-6 text-center text-xs text-neutral-400 dark:text-white/30">
           Internal admin access for the dashboard generator.
         </p>
         <form

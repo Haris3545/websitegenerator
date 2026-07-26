@@ -1,25 +1,16 @@
 import Link from "next/link";
-import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { ArtistsBoard } from "@/components/builder/ArtistsBoard";
 
 export default async function ArtistsPage() {
   const supabase = await createClient();
-  const [{ data: artists }, { data: folders }, headerList] = await Promise.all([
+  const [{ data: artists }, { data: folders }] = await Promise.all([
     supabase
       .from("artists")
-      .select("id, name, slug, updated_at, folder_id, sort_order, primary_color")
+      .select("id, name, slug, updated_at, folder_id, sort_order, primary_color, gate_screenshot_url")
       .order("sort_order", { ascending: true }),
     supabase.from("artist_folders").select("id, name, position").order("position", { ascending: true }),
-    headers(),
   ]);
-
-  // Whatever host this request actually came in on — works the same for a
-  // custom domain, a Vercel preview URL, or local dev, unlike hardcoding one
-  // canonical URL.
-  const host = headerList.get("host") ?? "localhost:3000";
-  const proto = host.startsWith("localhost") ? "http" : "https";
-  const siteBaseUrl = `${proto}://${host}`;
 
   return (
     <div>
@@ -43,7 +34,7 @@ export default async function ArtistsPage() {
           No artist dashboards yet. Create the first one to get started.
         </p>
       ) : (
-        <ArtistsBoard initialArtists={artists} initialFolders={folders ?? []} siteBaseUrl={siteBaseUrl} />
+        <ArtistsBoard initialArtists={artists} initialFolders={folders ?? []} />
       )}
     </div>
   );

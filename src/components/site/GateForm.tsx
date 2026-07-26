@@ -4,6 +4,20 @@ import { useState, useTransition } from "react";
 import { verifyArtistAccess } from "@/app/s/[slug]/actions";
 import { googleFontsCssUrl } from "@/lib/fonts";
 
+/** Standard relative-luminance formula (0 black .. 1 white) — used to
+ * decide whether the VCCP logo animation (black mark on a light backdrop
+ * in its source file) needs inverting to read as a light mark on this
+ * artist's chosen gate background, or looks right as-is. */
+function isDarkColor(hex: string): boolean {
+  const clean = hex.replace("#", "");
+  if (clean.length !== 6) return true;
+  const r = parseInt(clean.slice(0, 2), 16) / 255;
+  const g = parseInt(clean.slice(2, 4), 16) / 255;
+  const b = parseInt(clean.slice(4, 6), 16) / 255;
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance < 0.5;
+}
+
 export function GateForm({
   slug,
   backgroundUrl,
@@ -26,6 +40,7 @@ export function GateForm({
   const [isPending, startTransition] = useTransition();
 
   const isVideo = /\.(mp4|webm|mov|m4v)(\?|$)/i.test(backgroundUrl ?? "");
+  const invertLogo = isDarkColor(backgroundColor);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -70,7 +85,17 @@ export function GateForm({
       <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/70" />
 
       <div className="relative z-10 flex w-full max-w-4xl flex-col items-center px-4 text-center">
-        <p className="text-xs font-semibold uppercase tracking-[0.35em] text-white/70">{tagline}</p>
+        {/* Plays once and holds its final frame (no `loop`) — inverted
+            against a dark gate background so the mark reads as light on
+            dark rather than disappearing into it. */}
+        <video
+          src="/vccp-media-logo-animation.mp4"
+          autoPlay
+          muted
+          playsInline
+          className={`h-20 w-20 object-contain sm:h-24 sm:w-24 ${invertLogo ? "invert" : ""}`}
+        />
+        <p className="mt-6 text-xs font-semibold uppercase tracking-[0.35em] text-white/70">{tagline}</p>
         <h1 className="mt-3 text-4xl font-bold uppercase leading-none tracking-tight sm:text-6xl lg:text-7xl">
           {projectTitle}
         </h1>

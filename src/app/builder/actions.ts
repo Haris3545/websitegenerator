@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { revalidatePath, updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
@@ -7,6 +8,7 @@ import { parseAestheticPrompt } from "@/lib/aesthetic";
 import { publishArtistSite, unpublishArtistSite, type PublishResult, type UnpublishResult } from "@/lib/publish";
 import { parseAudienceFile, storeAudienceUpload } from "@/lib/audience";
 import { resolveYoutubeChannel, type YoutubeChannelLookup } from "@/lib/youtube";
+import { captureGateScreenshot, gateVisualsChanged } from "@/lib/screenshot";
 import { ALL_TAB_KEYS } from "@/lib/tabs";
 import { artistCacheTag } from "@/lib/getSiteArtist";
 import type { TabKey } from "@/lib/database.types";
@@ -59,23 +61,43 @@ export async function upsertArtist(
     const enabled_tabs = input.enabled_tabs.filter((t) => ALL_TAB_KEYS.includes(t));
     const aesthetic_params = await parseAestheticPrompt(input.aesthetic_prompt);
 
+    const gateVisuals = {
+      secondary_color: input.secondary_color,
+      accent_color: input.accent_color,
+      gate_background_url: input.gate_background_url,
+      project_title: input.project_title,
+      tagline: input.tagline,
+      font_family: input.font_family,
+    };
+
+    // A brand-new artist has nothing cached yet, worth an eager first
+    // capture; an existing one only needs re-capturing if this save
+    // actually touched something the gate page renders — an unrelated
+    // change (say, a new YouTube channel ID) shouldn't invalidate an
+    // otherwise still-accurate screenshot.
+    let shouldRecapture = !input.id;
+    if (input.id) {
+      const { data: existing } = await supabase
+        .from("artists")
+        .select("secondary_color, accent_color, gate_background_url, project_title, tagline, font_family")
+        .eq("id", input.id)
+        .maybeSingle();
+      if (existing && gateVisualsChanged(existing, gateVisuals)) shouldRecapture = true;
+    }
+
     const row = {
       slug: input.slug,
       name: input.name,
       primary_color: input.primary_color,
-      secondary_color: input.secondary_color,
-      accent_color: input.accent_color,
-      font_family: input.font_family,
+      ...gateVisuals,
       background_image_url: input.background_image_url,
-      gate_background_url: input.gate_background_url,
       youtube_channel_id: input.youtube_channel_id,
       aesthetic_prompt: input.aesthetic_prompt,
       aesthetic_params,
-      tagline: input.tagline,
-      project_title: input.project_title,
       theme_overrides: input.theme_overrides,
       enabled_tabs,
       updated_at: new Date().toISOString(),
+      ...(shouldRecapture ? { gate_screenshot_url: null } : {}),
     };
 
     let id = input.id;
@@ -91,6 +113,12 @@ export async function upsertArtist(
     revalidatePath("/builder/artists");
     revalidatePath(`/builder/artists/${id}`);
     updateTag(artistCacheTag(input.slug));
+
+    if (shouldRecapture) {
+      const capturedId = id;
+      after(() => captureGateScreenshot(capturedId, input.slug));
+    }
+
     return { ok: true, id };
   } catch (err) {
     return {

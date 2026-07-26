@@ -18,6 +18,7 @@ type ArtistLite = {
   folder_id: string | null;
   sort_order: number;
   primary_color?: string | null;
+  gate_screenshot_url?: string | null;
 };
 type FolderLite = { id: string; name: string; position: number };
 
@@ -32,11 +33,11 @@ function FolderGlyph() {
   );
 }
 
-/** Shows a live screenshot of the artist's own password page when it loads
- * successfully, falling back to a plain tinted glyph otherwise (the
- * screenshot service is a third-party dependency that can rate-limit, be
- * slow to render a fresh page, or simply be unreachable — none of that
- * should ever break the icon). */
+/** Shows the artist's cached gate-page screenshot (see src/lib/screenshot.ts
+ * — captured once server-side and re-hosted in our own storage, not a live
+ * third-party render on every paint), falling back to a plain tinted glyph
+ * before that first capture has happened or if the image ever fails to
+ * load. */
 function SiteGlyph({ color, screenshotUrl }: { color: string; screenshotUrl?: string }) {
   const [failed, setFailed] = useState(false);
 
@@ -70,11 +71,9 @@ function SiteGlyph({ color, screenshotUrl }: { color: string; screenshotUrl?: st
 export function ArtistsBoard({
   initialArtists,
   initialFolders,
-  siteBaseUrl,
 }: {
   initialArtists: ArtistLite[];
   initialFolders: FolderLite[];
-  siteBaseUrl: string;
 }) {
   const [artists, setArtists] = useState(initialArtists);
   const [folders, setFolders] = useState(
@@ -86,6 +85,7 @@ export function ArtistsBoard({
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // The menu for every artist stays mounted at all times (see
@@ -306,14 +306,33 @@ export function ArtistsBoard({
                 if (dragId) persistMove(dragId, view.level === "folder" ? view.folderId : null, artist.id);
                 setDragId(null);
               }}
-              onClick={() => setMenuFor((m) => (m === artist.id ? null : artist.id))}
+              onClick={(e) => {
+                if (menuFor === artist.id) {
+                  setMenuFor(null);
+                  return;
+                }
+                // Fixed (viewport-relative) positioning, clamped to stay
+                // fully on-screen — the old version centered the menu on
+                // the icon via absolute positioning with no awareness of
+                // the viewport edge, so an icon near the left/right side on
+                // a narrow screen had its menu clipped or pushed half off.
+                const rect = e.currentTarget.getBoundingClientRect();
+                const menuWidth = 160;
+                const margin = 12;
+                const left = Math.min(
+                  Math.max(rect.left + rect.width / 2 - menuWidth / 2, margin),
+                  window.innerWidth - menuWidth - margin
+                );
+                setMenuPos({ top: rect.bottom + 6, left });
+                setMenuFor(artist.id);
+              }}
               className={`flex w-24 cursor-pointer select-none flex-col items-center gap-1.5 rounded-lg p-2 text-center transition-colors ${
                 dropTarget === artist.id ? "bg-builder-accent/10 ring-2 ring-builder-accent" : "hover:bg-black/[0.03] dark:hover:bg-white/5"
               }`}
             >
               <SiteGlyph
                 color={artist.primary_color || "#eab308"}
-                screenshotUrl={`https://image.thum.io/get/width/240/crop/300/noanimate/${siteBaseUrl}/s/${artist.slug}/gate`}
+                screenshotUrl={artist.gate_screenshot_url ?? undefined}
               />
               <span className="w-full truncate text-xs font-medium text-neutral-800 dark:text-white/90">
                 {artist.name}
@@ -324,7 +343,8 @@ export function ArtistsBoard({
             </div>
 
             <div
-              className={`absolute left-1/2 top-full z-30 mt-1 w-40 origin-top -translate-x-1/2 overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-xl transition-all duration-150 ease-out dark:border-white/10 dark:bg-neutral-900 ${
+              style={menuFor === artist.id && menuPos ? { top: menuPos.top, left: menuPos.left } : undefined}
+              className={`fixed z-30 w-40 origin-top overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-xl transition-all duration-150 ease-out dark:border-white/10 dark:bg-neutral-900 ${
                 menuFor === artist.id
                   ? "scale-100 opacity-100"
                   : "pointer-events-none scale-95 opacity-0"
@@ -332,7 +352,8 @@ export function ArtistsBoard({
             >
               <Link
                 href={`/s/${artist.slug}`}
-                className="block px-3 py-2 text-left text-sm text-neutral-700 hover:bg-neutral-50 dark:text-white/80 dark:hover:bg-white/5"
+                className="block px-3 py-2 text-left text-sm font-medium hover:bg-neutral-50 dark:hover:bg-white/5"
+                style={{ color: "#75ba75" }}
               >
                 View site
               </Link>

@@ -105,6 +105,7 @@ export interface Database {
           published_site_url: string | null;
           published_at: string | null;
           gate_background_url: string | null;
+          gate_screenshot_url: string | null;
           youtube_channel_id: string | null;
           enabled_tabs: TabKey[];
           dashboard_section_order: string[];
@@ -134,6 +135,7 @@ export interface Database {
           published_site_url?: string | null;
           published_at?: string | null;
           gate_background_url?: string | null;
+          gate_screenshot_url?: string | null;
           youtube_channel_id?: string | null;
           enabled_tabs?: TabKey[];
           dashboard_section_order?: string[];
