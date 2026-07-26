@@ -7,6 +7,7 @@ import type { SocialComment, SocialCommentCategory } from "@/lib/database.types"
 const VIEW_SIZE = 1000;
 const MIN_K = 0.8;
 const MAX_K = 60;
+const MIN_LABEL_RADIUS = 26; // on-screen px a bubble needs before its label is worth showing
 const ZOOM_TRANSITION = "transform 550ms cubic-bezier(0.22, 1, 0.36, 1)";
 
 type PackNode = {
@@ -103,6 +104,15 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
   const dragState = useRef<{ startX: number; startY: number; startTx: number; startTy: number; moved: boolean } | null>(
     null
   );
+  // handlePointerUp clears dragState.current before the browser's own
+  // subsequent "click" event fires (pointerup -> click is always the
+  // sequence, regardless of movement in between) — so reading
+  // dragState.current?.moved from a click handler always saw it already
+  // nulled out, meaning every pan-then-release was immediately followed by
+  // a click that (wrongly) treated it as a plain click and reset/re-zoomed
+  // the view right back. This ref captures the moved flag at the moment of
+  // release, before it's cleared, so the click handlers can still see it.
+  const wasDraggingRef = useRef(false);
 
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
   const [selected, setSelected] = useState<SocialComment | null>(null);
@@ -155,7 +165,13 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
       if (!node) return;
       el.style.transition = withTransition ? ZOOM_TRANSITION : "none";
       el.style.transform = `scale(${1 / k})`;
-      el.style.opacity = String(stageOpacity(node.depth, k));
+      // A label whose bubble renders too small on screen just adds clutter
+      // (several overlapping subcategory bubbles' names all fighting for
+      // the same few pixels) rather than being readable — fade it out
+      // below a minimum rendered radius instead of showing it regardless.
+      const onScreenRadius = node.r * k;
+      const sizeFactor = clamp((onScreenRadius - MIN_LABEL_RADIUS) / 20, 0, 1);
+      el.style.opacity = String(stageOpacity(node.depth, k) * sizeFactor);
     });
     if (withTransition) {
       window.setTimeout(() => {
@@ -263,11 +279,15 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
   }
 
   function handlePointerUp() {
+    wasDraggingRef.current = dragState.current?.moved ?? false;
     dragState.current = null;
   }
 
   function handleNodeClick(node: Node, clickX: number, clickY: number) {
-    if (dragState.current?.moved) return;
+    if (wasDraggingRef.current) {
+      wasDraggingRef.current = false;
+      return;
+    }
     if (node.data.kind === "comment" && node.data.comment) {
       setSelected(node.data.comment);
     } else if (node.depth === 0) {
@@ -282,7 +302,10 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
   }
 
   function handleBackgroundClick() {
-    if (dragState.current?.moved) return;
+    if (wasDraggingRef.current) {
+      wasDraggingRef.current = false;
+      return;
+    }
     resetView();
   }
 
@@ -324,6 +347,12 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
                 <stop offset="100%" stopColor={color} stopOpacity={0} />
               </radialGradient>
             ))}
+            {/* A soft shadow reads as polished label legibility; the old
+                thick, fully-opaque black stroke read as a cartoon outline
+                and made overlapping labels look messy. */}
+            <filter id={`label-shadow-${uid}`} x="-50%" y="-50%" width="200%" height="200%">
+              <feDropShadow dx="0" dy="1" stdDeviation="2.5" floodColor="#000" floodOpacity="0.85" />
+            </filter>
           </defs>
 
           <g ref={groupRef}>
@@ -365,18 +394,15 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
             })}
             {labelNodes.map((node, i) => (
               <g key={i} transform={`translate(${node.x},${node.y})`}>
-                <g ref={(el) => { if (el) labelRefs.current.set(i, el); }}>
+                <g
+                  ref={(el) => { if (el) labelRefs.current.set(i, el); }}
+                  style={{ filter: `url(#label-shadow-${uid})` }}
+                >
                   <text
                     textAnchor="middle"
                     dominantBaseline="middle"
                     className="pointer-events-none select-none font-semibold"
-                    style={{
-                      fontSize: node.depth === 0 ? 30 : node.depth === 1 ? 22 : 15,
-                      fill: "#fff",
-                      paintOrder: "stroke",
-                      stroke: "rgba(0,0,0,0.55)",
-                      strokeWidth: 3,
-                    }}
+                    style={{ fontSize: node.depth === 0 ? 30 : node.depth === 1 ? 22 : 15, fill: "#fff" }}
                   >
                     {node.data.name}
                   </text>
@@ -386,7 +412,7 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
                       dominantBaseline="middle"
                       y={34}
                       className="pointer-events-none select-none"
-                      style={{ fontSize: 15, fill: "rgba(255,255,255,0.6)", paintOrder: "stroke", stroke: "rgba(0,0,0,0.55)", strokeWidth: 3 }}
+                      style={{ fontSize: 15, fill: "rgba(255,255,255,0.75)" }}
                     >
                       {node.value ?? 0} comments · scroll to explore
                     </text>

@@ -1,3 +1,5 @@
+import { AutoFitHeading } from "@/components/site/AutoFitHeading";
+
 export function SiteHeader({
   projectTitle,
   tagline,
@@ -11,15 +13,17 @@ export function SiteHeader({
         <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--accent)] sm:text-xs">
           {tagline}
         </p>
-        <h1
-          className="mt-1 text-2xl text-white sm:text-3xl"
+        <AutoFitHeading
+          maxFontSizePx={36}
+          minFontSizePx={18}
+          className="mt-1 text-white"
           style={{
             fontWeight: "var(--header-font-weight, 700)",
             fontStyle: "var(--header-font-style, normal)",
           }}
         >
           {projectTitle}
-        </h1>
+        </AutoFitHeading>
       </div>
       <div className="mt-4 h-1 w-full bg-[var(--accent)]" />
     </div>

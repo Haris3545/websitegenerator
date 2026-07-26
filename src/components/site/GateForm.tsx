@@ -4,16 +4,7 @@ import { useState, useTransition } from "react";
 import { verifyArtistAccess } from "@/app/s/[slug]/actions";
 import { googleFontsCssUrl } from "@/lib/fonts";
 import { grainTexture } from "@/lib/grainTexture";
-
-// Sized down for longer titles so they stay on one line rather than
-// wrapping — same length-tiered approach KpiCard.tsx uses for values.
-function titleSizeClass(title: string): string {
-  const len = title.length;
-  if (len > 28) return "text-2xl sm:text-4xl lg:text-5xl";
-  if (len > 20) return "text-3xl sm:text-5xl lg:text-6xl";
-  if (len > 14) return "text-4xl sm:text-6xl lg:text-7xl";
-  return "text-5xl sm:text-7xl lg:text-8xl";
-}
+import { AutoFitHeading } from "@/components/site/AutoFitHeading";
 
 export function GateForm({
   slug,
@@ -96,11 +87,13 @@ export function GateForm({
 
       <div className="relative z-10 flex w-full max-w-4xl flex-col items-center px-4 text-center">
         <p className="text-sm font-semibold uppercase tracking-[0.35em] text-white/70 sm:text-base">{tagline}</p>
-        <h1
-          className={`mt-4 w-full overflow-hidden text-ellipsis whitespace-nowrap font-bold uppercase leading-none tracking-tight ${titleSizeClass(projectTitle)}`}
+        <AutoFitHeading
+          maxFontSizePx={112}
+          minFontSizePx={22}
+          className="mt-4 font-bold uppercase leading-none tracking-tight"
         >
           {projectTitle}
-        </h1>
+        </AutoFitHeading>
         <div className="mt-6 h-px w-24" style={{ backgroundColor: accentColor }} />
 
         <form onSubmit={handleSubmit} className="mt-10 flex w-full max-w-sm flex-col gap-4">
