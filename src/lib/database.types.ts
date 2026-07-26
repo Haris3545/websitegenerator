@@ -295,6 +295,8 @@ export interface Database {
           source: string;
           latitude: number | null;
           longitude: number | null;
+          description: string | null;
+          image_url: string | null;
           fetched_at: string;
         };
         Insert: {
@@ -304,6 +306,8 @@ export interface Database {
           venue: string;
           city?: string;
           country?: string;
+          description?: string | null;
+          image_url?: string | null;
           url?: string | null;
           source?: string;
           latitude?: number | null;

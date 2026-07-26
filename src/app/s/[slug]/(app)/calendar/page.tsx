@@ -44,17 +44,16 @@ export default async function CalendarPage({ params }: { params: Promise<{ slug:
         subtitle="Upcoming dates by month"
       />
 
-      {!events?.length ? (
-        <p className="mt-4 rounded-lg border border-dashed border-white/20 p-8 text-center text-white/50">
-          No upcoming dates cached yet — hit &quot;Refresh Everything&quot; below. If nothing shows
-          up after that, ask whoever manages this app to set TICKETMASTER_API_KEY for broader
-          coverage.
+      {!events?.length && (
+        <p className="mt-4 text-sm text-white/50">
+          No upcoming dates cached yet — hit &quot;Refresh Everything&quot; below, or add one yourself
+          with &quot;+ Add event&quot;. If nothing shows up after refreshing, ask whoever manages this
+          app to set TICKETMASTER_API_KEY for broader coverage.
         </p>
-      ) : (
-        <div className="mt-4">
-          <MonthCalendar events={events} />
-        </div>
       )}
+      <div className="mt-4">
+        <MonthCalendar artistId={artist.id} slug={slug} events={events ?? []} />
+      </div>
 
       <SiteFooter
         slug={slug}

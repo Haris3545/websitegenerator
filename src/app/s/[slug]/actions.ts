@@ -16,7 +16,7 @@ import { computeArtistPassword, artistAccessCookieName } from "@/lib/artistAcces
 import { artistCacheTag } from "@/lib/getSiteArtist";
 import { ALL_TAB_KEYS } from "@/lib/tabs";
 import type { ThemeOverrides } from "@/lib/theme";
-import type { AestheticParams, SentimentFilter, BoardItem, TabKey } from "@/lib/database.types";
+import type { AestheticParams, SentimentFilter, BoardItem, TabKey, ArtistEvent } from "@/lib/database.types";
 
 /** Deliberately excludes anything that calls Gemini (sentiment analysis,
  * dashboard insights, the web-search half of tour-date discovery) and the
@@ -280,4 +280,78 @@ export async function deleteBoardItem(itemId: string) {
   const { error } = await supabase.from("board_items").delete().eq("id", itemId);
   if (error) throw new Error(error.message);
   revalidatePath(`/s/[slug]`, "layout");
+}
+
+/** Adds a manually-created Calendar event — the "+" flow, for dates a
+ * ticketing API or web search wouldn't know about (a fan meetup, a private
+ * session, anything not publicly listed). Uploads the optional image
+ * server-side with the service-role client rather than the usual
+ * client-side upload MediaUploadField.tsx uses, since that path requires
+ * an authenticated builder admin per storage.objects' RLS policy — this
+ * runs from the live site itself, gated only by the artist's password
+ * cookie, not a Supabase Auth session. */
+export async function addManualEvent(
+  artistId: string,
+  slug: string,
+  formData: FormData
+): Promise<{ ok: true; event: ArtistEvent } | { ok: false; error: string }> {
+  const venue = String(formData.get("venue") ?? "").trim();
+  const city = String(formData.get("city") ?? "").trim();
+  const country = String(formData.get("country") ?? "").trim();
+  const date = String(formData.get("date") ?? "").trim();
+  const time = String(formData.get("time") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const url = String(formData.get("url") ?? "").trim();
+  const file = formData.get("image");
+
+  if (!venue) return { ok: false, error: "Venue is required." };
+  if (!date) return { ok: false, error: "Date is required." };
+
+  const eventDate = new Date(`${date}T${time || "00:00"}:00`);
+  if (Number.isNaN(eventDate.getTime())) return { ok: false, error: "That date/time isn't valid." };
+
+  const supabase = createServiceRoleClient();
+
+  let imageUrl: string | null = null;
+  if (file instanceof File && file.size > 0) {
+    const ext = file.name.split(".").pop() || "jpg";
+    const path = `${slug}/events/${crypto.randomUUID()}.${ext}`;
+    const bytes = await file.arrayBuffer();
+    const { error: uploadError } = await supabase.storage
+      .from("artist-media")
+      .upload(path, bytes, { contentType: file.type || "image/jpeg" });
+    if (uploadError) return { ok: false, error: `Image upload failed: ${uploadError.message}` };
+    const { data: publicUrlData } = supabase.storage.from("artist-media").getPublicUrl(path);
+    imageUrl = publicUrlData.publicUrl;
+  }
+
+  const { data, error } = await supabase
+    .from("artist_events")
+    .insert({
+      artist_id: artistId,
+      event_date: eventDate.toISOString(),
+      venue,
+      city,
+      country,
+      description: description || null,
+      image_url: imageUrl,
+      url: url || null,
+      source: "manual",
+    })
+    .select()
+    .single();
+
+  if (error) return { ok: false, error: error.message };
+
+  updateTag(artistCacheTag(slug));
+  revalidatePath(`/s/${slug}/calendar`);
+  return { ok: true, event: data };
+}
+
+export async function deleteManualEvent(eventId: string, slug: string) {
+  const supabase = createServiceRoleClient();
+  const { error } = await supabase.from("artist_events").delete().eq("id", eventId).eq("source", "manual");
+  if (error) throw new Error(error.message);
+  updateTag(artistCacheTag(slug));
+  revalidatePath(`/s/${slug}/calendar`);
 }
