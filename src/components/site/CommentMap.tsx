@@ -175,10 +175,21 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes]);
 
+  // The container (h-[28rem] w-full) is never actually square, but the
+  // viewBox is — with the SVG default preserveAspectRatio ("xMidYMid
+  // meet"), the browser scales uniformly by the SMALLER of width/height and
+  // letterboxes the rest, rather than stretching each axis independently.
+  // Converting client coordinates with rect.width and rect.height as two
+  // separate ratios (as this used to) ignores both that shared scale and
+  // the letterbox offset, so drags and clicks silently drifted from the
+  // cursor on any non-square viewport — which is most of them.
   function toViewBox(clientX: number, clientY: number) {
     const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return { x: VIEW_SIZE / 2, y: VIEW_SIZE / 2 };
-    return { x: ((clientX - rect.left) / rect.width) * VIEW_SIZE, y: ((clientY - rect.top) / rect.height) * VIEW_SIZE };
+    const scale = Math.min(rect.width, rect.height) / VIEW_SIZE;
+    const offsetX = (rect.width - VIEW_SIZE * scale) / 2;
+    const offsetY = (rect.height - VIEW_SIZE * scale) / 2;
+    return { x: (clientX - rect.left - offsetX) / scale, y: (clientY - rect.top - offsetY) / scale };
   }
 
   function zoomToward(px: number, py: number, factor: number, withTransition: boolean) {
@@ -239,8 +250,9 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
     if (!ds) return;
     const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const dx = ((e.clientX - ds.startX) / rect.width) * VIEW_SIZE;
-    const dy = ((e.clientY - ds.startY) / rect.height) * VIEW_SIZE;
+    const scale = Math.min(rect.width, rect.height) / VIEW_SIZE;
+    const dx = (e.clientX - ds.startX) / scale;
+    const dy = (e.clientY - ds.startY) / scale;
     if (!ds.moved && (Math.abs(dx) > 2 || Math.abs(dy) > 2)) {
       ds.moved = true;
       setTooltip(null);

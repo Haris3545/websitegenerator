@@ -2,7 +2,7 @@ import { after } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getSiteArtist } from "@/lib/getSiteArtist";
 import { refreshEventsForArtist, refreshEventsIfStale } from "@/lib/events";
-import { EventList } from "@/components/site/EventList";
+import { MonthCalendar } from "@/components/site/MonthCalendar";
 import { TabHeading } from "@/components/site/TabHeading";
 import { SiteFooter } from "@/components/site/SiteFooter";
 
@@ -52,7 +52,7 @@ export default async function CalendarPage({ params }: { params: Promise<{ slug:
         </p>
       ) : (
         <div className="mt-4">
-          <EventList events={events} groupBy="month" />
+          <MonthCalendar events={events} />
         </div>
       )}
 

@@ -31,7 +31,16 @@ export async function captureGateScreenshot(artistId: string, slug: string): Pro
     const siteBaseUrl = await getSiteBaseUrl();
     if (siteBaseUrl.includes("localhost") || siteBaseUrl.includes("127.0.0.1")) return;
 
-    const shotUrl = `https://image.thum.io/get/width/480/crop/640/noanimate/${siteBaseUrl}/s/${slug}/gate`;
+    // The builder's icon renders this at a tiny 56x48px (see SiteGlyph in
+    // ArtistsBoard.tsx) — 480x640 was both ~10x too much resolution for
+    // that and the wrong aspect ratio entirely (portrait vs. the icon's
+    // landscape box), so object-cover was cropping a narrow vertical sliver
+    // out of the middle rather than showing a sensible thumbnail. This
+    // matches the icon's own 7:6 aspect ratio at a reasonable 4x for
+    // retina. wait/3 gives the gate's background video/fonts a few seconds
+    // to actually render a frame before the shot is taken — without it,
+    // thum.io was capturing the page before the video started playing.
+    const shotUrl = `https://image.thum.io/get/width/224/crop/192/wait/3/noanimate/${siteBaseUrl}/s/${slug}/gate`;
     const res = await fetch(shotUrl, { headers: { "User-Agent": "websitegenerator:screenshot:v1.0" } });
     if (!res.ok) return;
     const contentType = res.headers.get("content-type") ?? "image/jpeg";

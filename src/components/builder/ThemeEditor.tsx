@@ -4,7 +4,7 @@ import { useRef, useState, type CSSProperties } from "react";
 import { DEFAULT_THEME_OVERRIDES, type ThemeOverrides } from "@/lib/theme";
 import { ColorField } from "@/components/builder/ColorField";
 
-type Selection = "background" | "header" | "cards" | null;
+type Selection = "background" | "header" | "cards" | "readability" | null;
 
 function clamp(v: number, min: number, max: number) {
   return Math.min(max, Math.max(min, v));
@@ -98,7 +98,9 @@ export function ThemeEditor({
         <p className="font-medium">Fine-tune the look, by hand</p>
         <p className="text-xs text-neutral-500 dark:text-white/40">
           Click a part of the preview below to select it, then adjust it with the controls that
-          appear underneath.
+          appear underneath. Readability is separate — it&apos;s reachable from its own button below
+          rather than by clicking the preview, since a selection outline right on the cards would
+          make it impossible to judge a low border-visibility setting on its own.
         </p>
       </div>
 
@@ -176,10 +178,23 @@ export function ThemeEditor({
         </div>
       </div>
 
+      <button
+        type="button"
+        onClick={() => setSelected(selected === "readability" ? null : "readability")}
+        className={`self-start rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+          selected === "readability"
+            ? "border-builder-accent bg-builder-accent text-black"
+            : "border-neutral-300 text-neutral-700 hover:bg-neutral-100 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
+        }`}
+      >
+        Readability →
+      </button>
+
       <div className="rounded-lg border border-neutral-300 bg-neutral-50 p-4 dark:border-white/15 dark:bg-white/5">
         {selected === null && (
           <p className="text-neutral-500 dark:text-white/50">
-            Click the background, the title, or a card above.
+            Click the background, the title, or a card above — or Readability, for the controls
+            that affect whether people can actually read the dashboard over your background.
           </p>
         )}
 
@@ -213,14 +228,6 @@ export function ThemeEditor({
               step={0.05}
               value={t.bg_saturate}
               onChange={(v) => set("bg_saturate", v)}
-            />
-            <Slider
-              label="Darkness overlay"
-              min={0}
-              max={0.8}
-              step={0.05}
-              value={t.bg_scrim_opacity}
-              onChange={(v) => set("bg_scrim_opacity", v)}
             />
           </div>
         )}
@@ -261,8 +268,27 @@ export function ThemeEditor({
               onChange={(v) => set("card_radius", v)}
               displayUnit="px"
             />
+          </div>
+        )}
+
+        {selected === "readability" && (
+          <div className="flex flex-col gap-3">
+            <p className="font-medium">Readability</p>
+            <p className="text-xs text-neutral-500 dark:text-white/40">
+              Whether people can actually read the dashboard over your background — deliberately not
+              tied to clicking the preview above, so nothing outlines the cards while you&apos;re
+              judging a low border-visibility value against the real thing.
+            </p>
             <Slider
-              label="Background darkness"
+              label="Background darkness overlay"
+              min={0}
+              max={0.8}
+              step={0.05}
+              value={t.bg_scrim_opacity}
+              onChange={(v) => set("bg_scrim_opacity", v)}
+            />
+            <Slider
+              label="Card background darkness"
               min={0}
               max={0.8}
               step={0.05}
@@ -270,7 +296,7 @@ export function ThemeEditor({
               onChange={(v) => set("card_bg_opacity", v)}
             />
             <Slider
-              label="Border visibility"
+              label="Card border visibility"
               min={0}
               max={0.5}
               step={0.05}
@@ -278,7 +304,7 @@ export function ThemeEditor({
               onChange={(v) => set("card_border_opacity", v)}
             />
             <ColorField
-              label="Text colour"
+              label="Card text colour"
               value={t.card_text_color}
               onChange={(v) => set("card_text_color", v)}
             />

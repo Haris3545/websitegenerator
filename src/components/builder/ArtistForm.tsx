@@ -288,7 +288,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
         </button>
       </div>
 
-      <Section title="Basics">
+      <Section title="1. Artist info" description="Who this is and what their site includes.">
         <label className="flex flex-col gap-1.5 text-sm">
           <span className={labelClass}>Artist name</span>
           <input
@@ -310,8 +310,67 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
             }}
             className={`${inputClass} font-mono`}
           />
+          <span className="text-xs text-neutral-500 dark:text-white/40">
+            Also determines the gate password — see below.
+          </span>
         </label>
 
+        <div className="flex flex-col gap-1.5 text-sm">
+          <span className={labelClass}>YouTube channel</span>
+          <div className="flex gap-2">
+            <input
+              value={youtubeUrlInput}
+              onChange={(e) => {
+                setYoutubeUrlInput(e.target.value);
+                setYoutubeLookup(null);
+              }}
+              placeholder="Paste the channel's URL, or a link to one of their videos"
+              className={`flex-1 text-sm ${inputClass}`}
+            />
+            <button
+              type="button"
+              disabled={isLookingUpYoutube || !youtubeUrlInput.trim()}
+              onClick={() =>
+                startYoutubeLookup(async () => {
+                  const result = await lookupYoutubeChannel(youtubeUrlInput);
+                  if (result.ok) {
+                    update("youtube_channel_id", result.channelId);
+                    setYoutubeLookup({ status: "success", channelTitle: result.channelTitle });
+                  } else {
+                    setYoutubeLookup({ status: "error", error: result.error });
+                  }
+                })
+              }
+              className="rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-40 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
+            >
+              {isLookingUpYoutube ? "Looking up..." : "Find channel"}
+            </button>
+          </div>
+          {youtubeLookup?.status === "success" && (
+            <p className="text-xs text-emerald-600 dark:text-emerald-400">
+              ✓ Found: {youtubeLookup.channelTitle || form.youtube_channel_id}
+            </p>
+          )}
+          {youtubeLookup?.status === "error" && (
+            <p className="text-xs text-red-600 dark:text-red-400">{youtubeLookup.error}</p>
+          )}
+          {!youtubeLookup && form.youtube_channel_id && (
+            <p className="text-xs text-neutral-500 dark:text-white/40">
+              Currently linked: {form.youtube_channel_id}
+            </p>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-1.5 text-sm">
+          <span className={labelClass}>Tabs</span>
+          <TabsChecklist value={form.enabled_tabs} onChange={(tabs) => update("enabled_tabs", tabs)} />
+        </div>
+      </Section>
+
+      <Section
+        title="2. Aesthetic choices"
+        description="The big, foundational choices — colours, font, background media, and the title text they all surround."
+      >
         <label className="flex flex-col gap-1.5 text-sm">
           <span className={labelClass}>Project title</span>
           <input
@@ -333,54 +392,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
             className={inputClass}
           />
         </label>
-      </Section>
 
-      <Section title="YouTube channel" description="Powers the YouTube tab.">
-        <div className="flex gap-2">
-          <input
-            value={youtubeUrlInput}
-            onChange={(e) => {
-              setYoutubeUrlInput(e.target.value);
-              setYoutubeLookup(null);
-            }}
-            placeholder="Paste the channel's URL, or a link to one of their videos"
-            className={`flex-1 text-sm ${inputClass}`}
-          />
-          <button
-            type="button"
-            disabled={isLookingUpYoutube || !youtubeUrlInput.trim()}
-            onClick={() =>
-              startYoutubeLookup(async () => {
-                const result = await lookupYoutubeChannel(youtubeUrlInput);
-                if (result.ok) {
-                  update("youtube_channel_id", result.channelId);
-                  setYoutubeLookup({ status: "success", channelTitle: result.channelTitle });
-                } else {
-                  setYoutubeLookup({ status: "error", error: result.error });
-                }
-              })
-            }
-            className="rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-40 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
-          >
-            {isLookingUpYoutube ? "Looking up..." : "Find channel"}
-          </button>
-        </div>
-        {youtubeLookup?.status === "success" && (
-          <p className="text-xs text-emerald-600 dark:text-emerald-400">
-            ✓ Found: {youtubeLookup.channelTitle || form.youtube_channel_id}
-          </p>
-        )}
-        {youtubeLookup?.status === "error" && (
-          <p className="text-xs text-red-600 dark:text-red-400">{youtubeLookup.error}</p>
-        )}
-        {!youtubeLookup && form.youtube_channel_id && (
-          <p className="text-xs text-neutral-500 dark:text-white/40">
-            Currently linked: {form.youtube_channel_id}
-          </p>
-        )}
-      </Section>
-
-      <Section title="Branding">
         <div className="flex gap-6">
           <ColorField label="Primary" value={form.primary_color} onChange={(v) => update("primary_color", v)} />
           <ColorField
@@ -391,9 +403,27 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
           <ColorField label="Accent" value={form.accent_color} onChange={(v) => update("accent_color", v)} />
         </div>
         <FontPicker value={form.font_family} onChange={(v) => update("font_family", v)} />
-      </Section>
 
-      <Section title="Media">
+        <div className="flex flex-col gap-1.5">
+          <span className={labelClass}>Password page preview</span>
+          <div
+            className="flex flex-col items-center justify-center gap-2 rounded-lg px-4 py-8 text-center text-white"
+            style={{ backgroundColor: form.secondary_color, fontFamily: `"${form.font_family}", sans-serif` }}
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-white/70">
+              {form.tagline || "Tagline"}
+            </p>
+            <p className="text-xl font-bold uppercase leading-none tracking-tight">
+              {form.project_title || "Project title"}
+            </p>
+            <div className="mt-1 h-px w-16" style={{ backgroundColor: form.accent_color }} />
+          </div>
+          <span className="text-xs text-neutral-500 dark:text-white/40">
+            The secondary colour fills the whole password page background; the accent colour is the
+            thin divider line under the title.
+          </span>
+        </div>
+
         {form.slug ? (
           <>
             <MediaUploadField
@@ -423,19 +453,9 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
       </Section>
 
       <Section
-        title="Aesthetic tailoring"
-        description="Grain, tint, blur, vignette, and chromatic aberration all have sliders on the live site itself (Edit mode > 🎨). Only use this box for something those sliders can't do — it's parsed into the same effects on save."
+        title="3. Aesthetic tweaks"
+        description="Fine-tuning on top of the choices above — background pan/zoom/contrast, title weight, card shape, plus a dedicated Readability button for text contrast and border visibility."
       >
-        <textarea
-          rows={3}
-          placeholder='e.g. "warm orange tint that pulses slightly"'
-          value={form.aesthetic_prompt}
-          onChange={(e) => update("aesthetic_prompt", e.target.value)}
-          className={inputClass}
-        />
-      </Section>
-
-      <Section title="Fine-tuned theme">
         <ThemeEditor
           value={form.theme_overrides}
           onChange={(theme_overrides) => update("theme_overrides", theme_overrides)}
@@ -447,10 +467,21 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
           tagline={form.tagline}
           artistName={form.name}
         />
-      </Section>
-
-      <Section title="Tabs">
-        <TabsChecklist value={form.enabled_tabs} onChange={(tabs) => update("enabled_tabs", tabs)} />
+        <div className="border-t border-neutral-200 pt-4 dark:border-white/10">
+          <p className={labelClass}>Edge cases</p>
+          <p className="mt-1 text-xs text-neutral-500 dark:text-white/40">
+            Grain, tint, blur, vignette, and chromatic aberration all have sliders on the live site
+            itself (Edit mode &gt; 🎨). Only use this box for something those sliders can&apos;t do —
+            it&apos;s parsed into the same effects on save.
+          </p>
+          <textarea
+            rows={3}
+            placeholder='e.g. "warm orange tint that pulses slightly"'
+            value={form.aesthetic_prompt}
+            onChange={(e) => update("aesthetic_prompt", e.target.value)}
+            className={`mt-2 w-full ${inputClass}`}
+          />
+        </div>
       </Section>
 
       <Section title="Audience research">
