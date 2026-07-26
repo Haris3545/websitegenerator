@@ -231,7 +231,7 @@ export default async function DashboardPage({
       value: kpi?.value ?? "—",
       caption: kpi?.caption ?? (LIVE_TABS.includes(tab.key) ? "no data yet" : "live in a later phase"),
       trend: kpi?.trend ?? null,
-      color: tab.key === "media" ? "var(--accent)" : "var(--primary)",
+      color: "var(--primary)",
     };
   });
 

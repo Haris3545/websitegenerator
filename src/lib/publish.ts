@@ -147,7 +147,6 @@ export async function publishArtistSite(artistId: string): Promise<PublishResult
   }
 
   const projectData = await createProjectRes.json();
-  const siteUrl = `https://${projectData.name}.vercel.app`;
 
   // 3. Generating a repo from a template doesn't emit a "push" event the
   // way a real commit does, so Vercel's GitHub integration never learns
@@ -160,6 +159,19 @@ export async function publishArtistSite(artistId: string): Promise<PublishResult
   // just stays null, and checkPublishStatus reports that as "unknown"
   // rather than crashing on it.
   let deploymentId: string | null = null;
+  // The project's own "<name>.vercel.app" alias only gets pointed at a
+  // deployment that Vercel's git integration deployed automatically via a
+  // real push webhook — a deployment triggered directly through this API
+  // call, on a repo that was never actually pushed to, does NOT
+  // necessarily get that alias assigned, even once it's fully built and
+  // READY. That mismatch is exactly what caused "waited for Live, then
+  // 404 DEPLOYMENT_NOT_FOUND" — the guessed "<name>.vercel.app" URL simply
+  // never had anything behind it. The deployment creation response's own
+  // `url` field is the one URL Vercel actually guarantees will resolve to
+  // this specific deployment once it finishes building, so that's what
+  // gets stored — falling back to the guessed alias only if the deployment
+  // call itself failed outright.
+  let siteUrl = `https://${projectData.name}.vercel.app`;
   const createDeploymentRes = await fetch(`${VERCEL_API}/v13/deployments`, {
     method: "POST",
     headers: {
@@ -177,6 +189,7 @@ export async function publishArtistSite(artistId: string): Promise<PublishResult
   if (createDeploymentRes.ok) {
     const deploymentData = await createDeploymentRes.json();
     deploymentId = deploymentData.id ?? null;
+    if (deploymentData.url) siteUrl = `https://${deploymentData.url}`;
   } else {
     const body = await createDeploymentRes.text();
     console.error(`publishArtistSite: triggering the initial deployment failed for ${artist.slug}: ${body}`);
