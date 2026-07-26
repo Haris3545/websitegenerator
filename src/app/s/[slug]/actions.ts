@@ -12,6 +12,8 @@ import { refreshSocialListeningForArtist } from "@/lib/socialListening";
 import { refreshMusicStats } from "@/lib/music";
 import { refreshInsightsNow } from "@/lib/insights";
 import { refreshWikipediaTrendsNow } from "@/lib/wikipedia";
+import { refreshGeniusAnnotations } from "@/lib/genius";
+import { refreshSearchTrendsNow } from "@/lib/googleTrends";
 import { refreshConversationThemesForArtist } from "@/lib/conversationThemes";
 import { computeArtistPassword, artistAccessCookieName } from "@/lib/artistAccess";
 import { artistCacheTag } from "@/lib/getSiteArtist";
@@ -30,7 +32,9 @@ import type { AestheticParams, SentimentFilter, BoardItem, TabKey } from "@/lib/
  * the time at the SLOWEST single step instead. Only insights depends on
  * everything else having finished (it reads across all the refreshed data),
  * so it alone still has to run last. */
-const STEP_LABELS = ["media", "sentiment", "events", "youtube", "social listening", "music"] as const;
+const STEP_LABELS = [
+  "media", "sentiment", "events", "youtube", "social listening", "music", "genius", "search trends",
+] as const;
 
 export async function refreshEverything(slug: string) {
   const supabase = createServiceRoleClient();
@@ -51,6 +55,8 @@ export async function refreshEverything(slug: string) {
       : Promise.resolve(),
     refreshSocialListeningForArtist(artist.id, artist.name),
     refreshMusicStats(artist.id, artist.name),
+    refreshGeniusAnnotations(artist.id, artist.name),
+    refreshSearchTrendsNow(artist.id, artist.name),
   ]);
 
   results.forEach((result, i) => {

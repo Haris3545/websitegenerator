@@ -2,9 +2,11 @@ import { after } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getSiteArtist } from "@/lib/getSiteArtist";
 import { refreshMusicStats, refreshMusicIfStale } from "@/lib/music";
+import { refreshGeniusAnnotations, refreshGeniusAnnotationsIfStale } from "@/lib/genius";
 import { getRecentTrends, formatTrend } from "@/lib/trends";
 import { KpiCard } from "@/components/site/KpiCard";
 import { AlbumCoverFlow } from "@/components/site/AlbumCoverFlow";
+import { GeniusAnnotations } from "@/components/site/GeniusAnnotations";
 import { TabHeading } from "@/components/site/TabHeading";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { BrandedEmptyState } from "@/components/BrandedEmptyState";
@@ -33,6 +35,23 @@ export default async function MusicPage({ params }: { params: Promise<{ slug: st
     }
   } else {
     after(() => refreshMusicIfStale(artist.id, artist.name));
+  }
+
+  let { data: geniusRow } = await supabase
+    .from("genius_annotations")
+    .select("annotations, computed_at")
+    .eq("artist_id", artist.id)
+    .maybeSingle();
+
+  if (!geniusRow?.computed_at) {
+    try {
+      const annotations = await refreshGeniusAnnotations(artist.id, artist.name);
+      geniusRow = { annotations, computed_at: new Date().toISOString() };
+    } catch (err) {
+      console.error(`Initial Genius annotations fetch failed for ${slug}:`, err);
+    }
+  } else {
+    after(() => refreshGeniusAnnotationsIfStale(artist.id, artist.name));
   }
 
   const trends = stats ? await getRecentTrends(artist.id) : {};
@@ -133,6 +152,8 @@ export default async function MusicPage({ params }: { params: Promise<{ slug: st
               </div>
             </div>
           )}
+
+          <GeniusAnnotations annotations={geniusRow?.annotations ?? []} />
         </>
       )}
 

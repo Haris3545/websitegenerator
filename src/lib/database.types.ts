@@ -64,6 +64,16 @@ export type WikipediaArticleTrend = {
   dailyViews: number[];
 };
 
+export type GeniusAnnotation = {
+  songTitle: string;
+  songUrl: string;
+  fragment: string;
+  annotation: string;
+  votes: number;
+};
+
+export type SearchTrendPoint = { date: string; value: number };
+
 export type TabKey =
   | "dashboard"
   | "media"
@@ -382,6 +392,18 @@ export interface Database {
           computed_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["conversation_themes"]["Insert"]>;
+        Relationships: [];
+      };
+      genius_annotations: {
+        Row: { artist_id: string; annotations: GeniusAnnotation[]; computed_at: string };
+        Insert: { artist_id: string; annotations?: GeniusAnnotation[]; computed_at?: string };
+        Update: Partial<Database["public"]["Tables"]["genius_annotations"]["Insert"]>;
+        Relationships: [];
+      };
+      search_trends: {
+        Row: { artist_id: string; points: SearchTrendPoint[]; computed_at: string };
+        Insert: { artist_id: string; points?: SearchTrendPoint[]; computed_at?: string };
+        Update: Partial<Database["public"]["Tables"]["search_trends"]["Insert"]>;
         Relationships: [];
       };
       youtube_stats: {

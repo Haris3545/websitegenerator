@@ -2,6 +2,7 @@ import { XMLParser } from "fast-xml-parser";
 import { unstable_cache } from "next/cache";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { artistCacheTag } from "@/lib/getSiteArtist";
+import { fetchNewsApiArticles, type NewsApiRow } from "@/lib/newsapi";
 import type { MediaArticle } from "@/lib/database.types";
 
 const STALE_AFTER_MS = 30 * 60 * 1000; // 30 minutes
@@ -41,10 +42,11 @@ type RssItem = {
   description?: string;
 };
 
-/** Fetches Google News' public RSS feed for the artist and caches new
- * articles. Uses the service-role client since this is a background data
- * pipeline, not a request scoped to the visiting user's own permissions. */
-export async function refreshMediaForArtist(artistId: string, artistName: string) {
+/** Fetches Google News' public RSS feed for the artist — free and keyless,
+ * so this stays the baseline source even where NEWSAPI_KEY isn't set.
+ * Throws on failure (unlike fetchNewsApiArticles) since this is the one
+ * source the Media tab has always depended on. */
+async function fetchGoogleNewsArticles(artistName: string): Promise<NewsApiRow[]> {
   const query = encodeURIComponent(`"${artistName}"`);
   const feedUrl = `https://news.google.com/rss/search?q=${query}&hl=en-US&gl=US&ceid=US:en`;
 
@@ -60,8 +62,7 @@ export async function refreshMediaForArtist(artistId: string, artistName: string
   const rawItems = parsed?.rss?.channel?.item ?? [];
   const items: RssItem[] = Array.isArray(rawItems) ? rawItems : [rawItems];
 
-  const supabase = createServiceRoleClient();
-  const rows = items.slice(0, 40).map((item) => {
+  return items.slice(0, 40).map((item) => {
     const sourceText =
       typeof item.source === "string" ? item.source : item.source?.["#text"];
     const url = item.link;
@@ -72,15 +73,41 @@ export async function refreshMediaForArtist(artistId: string, artistName: string
       // leave host as-is if the link isn't a valid absolute URL
     }
     return {
-      artist_id: artistId,
       title: stripHtml(item.title),
       url,
       source: host,
       excerpt: stripHtml(item.description ?? "").slice(0, 400),
       published_at: parseDateSafe(item.pubDate),
-      fetched_at: new Date().toISOString(),
     };
   });
+}
+
+/** Merges Google News RSS (free, always on) with NewsAPI.org (richer
+ * metadata, needs NEWSAPI_KEY) into the same media_articles table — same
+ * row shape either way, deduped by URL. Uses the service-role client since
+ * this is a background data pipeline, not a request scoped to the visiting
+ * user's own permissions. */
+export async function refreshMediaForArtist(artistId: string, artistName: string) {
+  const [rssRows, newsApiRows] = await Promise.all([
+    fetchGoogleNewsArticles(artistName),
+    fetchNewsApiArticles(artistName),
+  ]);
+
+  const fetchedAt = new Date().toISOString();
+  // Same URL can show up from both sources (wire syndication) — the DB
+  // upsert's onConflict handles that across calls, but within one batch
+  // Postgres errors on "affect row a second time", so dedupe here first.
+  const deduped = new Map<string, NewsApiRow>();
+  for (const row of [...rssRows, ...newsApiRows]) {
+    if (!deduped.has(row.url)) deduped.set(row.url, row);
+  }
+
+  const supabase = createServiceRoleClient();
+  const rows = [...deduped.values()].map((row) => ({
+    artist_id: artistId,
+    ...row,
+    fetched_at: fetchedAt,
+  }));
 
   if (rows.length) {
     const { error } = await supabase

@@ -207,21 +207,24 @@ async function fetchWikipediaExtract(title: string): Promise<string> {
 
 /** Pulls together everything already fetched for this artist elsewhere —
  * Wikipedia article extracts (titles from wikipedia_trends), YouTube
- * comment text (from social_comment_map), and press coverage (title +
- * excerpt from media_articles) — and scores it against the theme taxonomy
- * above, plus a word/phrase-frequency cloud from the same corpus. Depends
- * on those three tables already being populated, so this should run after
- * the refreshes that fill them (see refreshEverything). */
+ * comment text (from social_comment_map), press coverage (title + excerpt
+ * from media_articles), and Genius lyric annotations (fragment + fan
+ * commentary from genius_annotations) — and scores it against the theme
+ * taxonomy above, plus a word/phrase-frequency cloud from the same corpus.
+ * Depends on those tables already being populated, so this should run
+ * after the refreshes that fill them (see refreshEverything). */
 export async function refreshConversationThemesForArtist(
   artistId: string
 ): Promise<{ themes: ConversationTheme[]; wordCloud: WordCloudEntry[] }> {
   const supabase = createServiceRoleClient();
 
-  const [{ data: wikiRow }, { data: commentRow }, { data: articles }] = await Promise.all([
-    supabase.from("wikipedia_trends").select("articles").eq("artist_id", artistId).maybeSingle(),
-    supabase.from("social_comment_map").select("categories").eq("artist_id", artistId).maybeSingle(),
-    supabase.from("media_articles").select("title, excerpt").eq("artist_id", artistId).limit(60),
-  ]);
+  const [{ data: wikiRow }, { data: commentRow }, { data: articles }, { data: geniusRow }] =
+    await Promise.all([
+      supabase.from("wikipedia_trends").select("articles").eq("artist_id", artistId).maybeSingle(),
+      supabase.from("social_comment_map").select("categories").eq("artist_id", artistId).maybeSingle(),
+      supabase.from("media_articles").select("title, excerpt").eq("artist_id", artistId).limit(60),
+      supabase.from("genius_annotations").select("annotations").eq("artist_id", artistId).maybeSingle(),
+    ]);
 
   const wikiTitles = (wikiRow?.articles ?? []).map((a) => a.title);
   const wikiExtracts = await Promise.all(wikiTitles.map(fetchWikipediaExtract));
@@ -232,7 +235,9 @@ export async function refreshConversationThemesForArtist(
 
   const articleTexts = (articles ?? []).flatMap((a) => [a.title, a.excerpt]);
 
-  const snippets = [...wikiExtracts, ...commentTexts, ...articleTexts].filter(Boolean);
+  const geniusTexts = (geniusRow?.annotations ?? []).flatMap((a) => [a.fragment, a.annotation]);
+
+  const snippets = [...wikiExtracts, ...commentTexts, ...articleTexts, ...geniusTexts].filter(Boolean);
 
   const themes = scoreConversationThemes(snippets);
   const wordCloud = extractWordCloud(snippets);

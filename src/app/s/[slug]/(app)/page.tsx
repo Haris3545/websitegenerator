@@ -5,10 +5,12 @@ import { refreshSentimentNow, refreshSentimentIfStale } from "@/lib/sentiment";
 import { refreshInsightsNow, refreshInsightsIfStale } from "@/lib/insights";
 import { getRecentTrends, formatTrend } from "@/lib/trends";
 import { refreshWikipediaTrendsNow, refreshWikipediaTrendsIfStale } from "@/lib/wikipedia";
+import { refreshSearchTrendsNow, refreshSearchTrendsIfStale } from "@/lib/googleTrends";
 import { resolveContent } from "@/lib/contentOverrides";
 import { ArticleCard } from "@/components/site/ArticleCard";
 import { InsightCard } from "@/components/site/InsightCard";
 import { WikipediaTrendsSection } from "@/components/site/WikipediaTrends";
+import { SearchTrendsSection } from "@/components/site/SearchTrends";
 import { DashboardKpiGrid, type KpiEntry } from "@/components/site/DashboardKpiGrid";
 import { DashboardSections, type DashboardSectionEntry } from "@/components/site/DashboardSections";
 import { TabHeading } from "@/components/site/TabHeading";
@@ -134,6 +136,25 @@ export default async function DashboardPage({
 
   const wikipediaTrends = { articles: wikipediaRow?.articles ?? [], topMover: wikipediaRow?.top_mover ?? null };
 
+  let { data: searchTrendsRow } = await supabase
+    .from("search_trends")
+    .select("points, computed_at")
+    .eq("artist_id", artist.id)
+    .maybeSingle();
+
+  if (!searchTrendsRow?.computed_at) {
+    try {
+      const points = await refreshSearchTrendsNow(artist.id, artist.name);
+      searchTrendsRow = { points, computed_at: new Date().toISOString() };
+    } catch (err) {
+      console.error(`Initial search trends fetch failed for ${slug}:`, err);
+    }
+  } else {
+    after(() => refreshSearchTrendsIfStale(artist.id, artist.name));
+  }
+
+  const searchTrendPoints = searchTrendsRow?.points ?? [];
+
   // Preserves whatever order a visitor last drag-reordered the tabs/cards
   // into (see NavPills / DashboardKpiGrid), rather than always falling
   // back to this file's fixed declaration order.
@@ -252,6 +273,19 @@ export default async function DashboardPage({
     };
   }
 
+  if (searchTrendPoints.length >= 2) {
+    availableSections.searchTrends = {
+      key: "searchTrends",
+      label: "Google search interest",
+      summary: `${searchTrendPoints.length} data points tracked`,
+      content: (
+        <div className="mt-8">
+          <SearchTrendsSection points={searchTrendPoints} artistName={artist.name} />
+        </div>
+      ),
+    };
+  }
+
   if (latestArticles?.length) {
     availableSections.coverage = {
       key: "coverage",
@@ -287,7 +321,7 @@ export default async function DashboardPage({
   // dropping any section whose underlying data isn't available right now.
   const storedOrder = artist.dashboard_section_order?.length
     ? artist.dashboard_section_order
-    : ["insights", "wikipedia", "coverage"];
+    : ["insights", "wikipedia", "searchTrends", "coverage"];
   const orderedSectionKeys = [
     ...storedOrder,
     ...Object.keys(availableSections).filter((k) => !storedOrder.includes(k)),

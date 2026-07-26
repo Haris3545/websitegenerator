@@ -18,6 +18,9 @@ const ENV_VARS_TO_COPY = [
   "YOUTUBE_API_KEY",
   "LASTFM_API_KEY",
   "TICKETMASTER_API_KEY",
+  "NEWSAPI_KEY",
+  "GENIUS_ACCESS_TOKEN",
+  "SERPAPI_KEY",
 ];
 
 export type PublishResult =
