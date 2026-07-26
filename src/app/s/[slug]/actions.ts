@@ -355,3 +355,219 @@ export async function deleteManualEvent(eventId: string, slug: string) {
   updateTag(artistCacheTag(slug));
   revalidatePath(`/s/${slug}/calendar`);
 }
+
+async function uploadIdeaImage(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  slug: string,
+  file: File
+): Promise<{ url: string } | { error: string }> {
+  const ext = file.name.split(".").pop() || "webp";
+  const path = `${slug}/ideas/${crypto.randomUUID()}.${ext}`;
+  const bytes = await file.arrayBuffer();
+  const { error } = await supabase.storage
+    .from("artist-media")
+    .upload(path, bytes, { contentType: file.type || "image/webp" });
+  if (error) return { error: `Image upload failed: ${error.message}` };
+  const { data } = supabase.storage.from("artist-media").getPublicUrl(path);
+  return { url: data.publicUrl };
+}
+
+/** Adds a card to the Ideas tab's swipeable stack — like addBoardItem but
+ * with the extra image/timeline fields the card UI needs. Uploads the image
+ * server-side with the service-role client, mirroring addManualEvent, since
+ * this runs from the live site itself (gated only by the artist's password
+ * cookie) rather than an authenticated builder session that storage.objects'
+ * RLS policy would otherwise require. The client is expected to have already
+ * run the file through browser-image-compression before it lands here. */
+export async function addIdeaCard(
+  artistId: string,
+  slug: string,
+  formData: FormData
+): Promise<{ ok: true; item: BoardItem } | { ok: false; error: string }> {
+  const title = String(formData.get("title") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  const timeline = String(formData.get("timeline") ?? "").trim();
+  const file = formData.get("image");
+
+  if (!title) return { ok: false, error: "Title can't be empty." };
+
+  const supabase = createServiceRoleClient();
+
+  let imageUrl: string | null = null;
+  if (file instanceof File && file.size > 0) {
+    const result = await uploadIdeaImage(supabase, slug, file);
+    if ("error" in result) return { ok: false, error: result.error };
+    imageUrl = result.url;
+  }
+
+  const { data, error } = await supabase
+    .from("board_items")
+    .insert({
+      artist_id: artistId,
+      board_key: "ideas",
+      title,
+      body,
+      timeline: timeline || null,
+      image_url: imageUrl,
+      status: "pending",
+    })
+    .select()
+    .single();
+
+  if (error) return { ok: false, error: error.message };
+  updateTag(artistCacheTag(slug));
+  revalidatePath(`/s/${slug}/ideas`);
+  return { ok: true, item: data };
+}
+
+/** Edits an idea's title/body/timeline and optionally replaces its image —
+ * the card-back edit button. */
+export async function updateIdeaCard(
+  itemId: string,
+  slug: string,
+  formData: FormData
+): Promise<{ ok: true; item: BoardItem } | { ok: false; error: string }> {
+  const title = String(formData.get("title") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  const timeline = String(formData.get("timeline") ?? "").trim();
+  const file = formData.get("image");
+
+  if (!title) return { ok: false, error: "Title can't be empty." };
+
+  const supabase = createServiceRoleClient();
+  const update: { title: string; body: string; timeline: string | null; image_url?: string } = {
+    title,
+    body,
+    timeline: timeline || null,
+  };
+
+  if (file instanceof File && file.size > 0) {
+    const result = await uploadIdeaImage(supabase, slug, file);
+    if ("error" in result) return { ok: false, error: result.error };
+    update.image_url = result.url;
+  }
+
+  const { data, error } = await supabase.from("board_items").update(update).eq("id", itemId).select().single();
+  if (error) return { ok: false, error: error.message };
+  updateTag(artistCacheTag(slug));
+  revalidatePath(`/s/${slug}/ideas`);
+  return { ok: true, item: data };
+}
+
+/** Moves one or more ideas between the pending stack and the liked/disliked
+ * folders — a swipe result, a bulk "switch to disliked"/"return to stack"
+ * from the folder grid's select mode, or an undo. */
+export async function updateIdeaStatuses(
+  itemIds: string[],
+  status: "pending" | "liked" | "disliked",
+  slug: string
+) {
+  if (itemIds.length === 0) return;
+  const supabase = createServiceRoleClient();
+  const { error } = await supabase.from("board_items").update({ status }).in("id", itemIds);
+  if (error) throw new Error(error.message);
+  updateTag(artistCacheTag(slug));
+  revalidatePath(`/s/${slug}/ideas`);
+}
+
+/** Deletes an idea card and, if it had been scheduled onto the calendar,
+ * the artist_events row that scheduling created too — otherwise that event
+ * would be left behind with nothing in the Ideas tab pointing at it. */
+export async function deleteIdeaCard(itemId: string, slug: string) {
+  const supabase = createServiceRoleClient();
+  const { data: item } = await supabase
+    .from("board_items")
+    .select("calendar_event_id")
+    .eq("id", itemId)
+    .maybeSingle();
+
+  if (item?.calendar_event_id) {
+    await supabase.from("artist_events").delete().eq("id", item.calendar_event_id);
+  }
+
+  const { error } = await supabase.from("board_items").delete().eq("id", itemId);
+  if (error) throw new Error(error.message);
+  updateTag(artistCacheTag(slug));
+  revalidatePath(`/s/${slug}/ideas`);
+  revalidatePath(`/s/${slug}/calendar`);
+}
+
+/** "Add to calendar" from the Liked folder. A confirmed date/time creates
+ * (or updates) a real artist_events row so the idea shows up on the actual
+ * month grid like any other event; ticking "to be confirmed" instead just
+ * flags the idea so it shows up in the small pending-confirmation stack at
+ * the bottom of the Calendar tab, with no firm date committed yet. */
+export async function scheduleIdeaToCalendar(
+  itemId: string,
+  artistId: string,
+  slug: string,
+  input: { date: string; time: string; tbc: boolean }
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = createServiceRoleClient();
+  const { data: item, error: fetchError } = await supabase
+    .from("board_items")
+    .select("title, body, image_url, calendar_event_id")
+    .eq("id", itemId)
+    .maybeSingle();
+  if (fetchError) return { ok: false, error: fetchError.message };
+  if (!item) return { ok: false, error: "Idea not found." };
+
+  if (input.tbc) {
+    if (item.calendar_event_id) {
+      await supabase.from("artist_events").delete().eq("id", item.calendar_event_id);
+    }
+    const { error } = await supabase
+      .from("board_items")
+      .update({
+        calendar_status: "tbc",
+        scheduled_date: input.date || null,
+        scheduled_time: input.time || null,
+        calendar_event_id: null,
+      })
+      .eq("id", itemId);
+    if (error) return { ok: false, error: error.message };
+  } else {
+    if (!input.date) return { ok: false, error: "Pick a date, or mark it to be confirmed." };
+    const eventDate = new Date(`${input.date}T${input.time || "00:00"}:00`);
+    if (Number.isNaN(eventDate.getTime())) return { ok: false, error: "That date/time isn't valid." };
+
+    if (item.calendar_event_id) {
+      const { error } = await supabase
+        .from("artist_events")
+        .update({
+          event_date: eventDate.toISOString(),
+          venue: item.title,
+          description: item.body || null,
+          image_url: item.image_url,
+        })
+        .eq("id", item.calendar_event_id);
+      if (error) return { ok: false, error: error.message };
+    } else {
+      const { data: newEvent, error } = await supabase
+        .from("artist_events")
+        .insert({
+          artist_id: artistId,
+          event_date: eventDate.toISOString(),
+          venue: item.title,
+          description: item.body || null,
+          image_url: item.image_url,
+          source: "idea",
+        })
+        .select()
+        .single();
+      if (error) return { ok: false, error: error.message };
+      await supabase.from("board_items").update({ calendar_event_id: newEvent.id }).eq("id", itemId);
+    }
+
+    const { error: updateError } = await supabase
+      .from("board_items")
+      .update({ calendar_status: "confirmed", scheduled_date: input.date, scheduled_time: input.time || null })
+      .eq("id", itemId);
+    if (updateError) return { ok: false, error: updateError.message };
+  }
+
+  updateTag(artistCacheTag(slug));
+  revalidatePath(`/s/${slug}/ideas`);
+  revalidatePath(`/s/${slug}/calendar`);
+  return { ok: true };
+}

@@ -63,7 +63,7 @@ export async function publishArtistSite(artistId: string): Promise<PublishResult
     };
   }
 
-  const repoName = `${artist.slug}-dashboard`;
+  const repoName = `${artist.slug}-cultural-engine`;
 
   // 1. Create the repo by generating a full copy from the template — this
   // requires "Template repository" to be checked in this repo's GitHub
@@ -210,7 +210,7 @@ export async function publishArtistSite(artistId: string): Promise<PublishResult
 
 export type PublishStatus =
   | { status: "queued" | "building" }
-  | { status: "ready" }
+  | { status: "ready"; siteUrl?: string }
   | { status: "error"; message: string }
   | { status: "unknown" };
 
@@ -219,7 +219,17 @@ export type PublishStatus =
  * minutes before a build actually finishes (or fails). "unknown" covers
  * both a never-recorded deployment id and a deleted/inaccessible one, so
  * the builder UI can fall back to "check the Vercel dashboard" instead of
- * hanging on a spinner forever. */
+ * hanging on a spinner forever.
+ *
+ * Once a build reaches READY, this also assigns the project's clean
+ * "<slug>-cultural-engine.vercel.app" alias to that deployment. That alias
+ * doesn't get pointed here automatically — Vercel only auto-assigns it off
+ * the back of a real git-push webhook, and these deployments are triggered
+ * directly via the API (see the long comment in publishArtistSite) — so
+ * without this step the stored URL stays the long, hash-suffixed one Vercel
+ * handed back at creation time (e.g. "charli-xcx-cultural-engine-<hash>-
+ * <account>.vercel.app") instead of the short one people actually want to
+ * share. */
 export async function checkPublishStatus(artistId: string): Promise<PublishStatus> {
   const vercelToken = process.env.VERCEL_API_TOKEN;
   if (!vercelToken) return { status: "unknown" };
@@ -227,7 +237,7 @@ export async function checkPublishStatus(artistId: string): Promise<PublishStatu
   const supabase = createServiceRoleClient();
   const { data: artist } = await supabase
     .from("artists")
-    .select("published_deployment_id")
+    .select("slug, published_deployment_id, published_site_url")
     .eq("id", artistId)
     .maybeSingle();
 
@@ -242,7 +252,27 @@ export async function checkPublishStatus(artistId: string): Promise<PublishStatu
   const data = await res.json();
   const readyState: string = data.readyState ?? "";
 
-  if (readyState === "READY") return { status: "ready" };
+  if (readyState === "READY") {
+    let siteUrl = artist?.published_site_url ?? undefined;
+    const cleanAlias = artist?.slug ? `${artist.slug}-cultural-engine.vercel.app` : null;
+    if (cleanAlias && siteUrl !== `https://${cleanAlias}`) {
+      const aliasRes = await fetch(`${VERCEL_API}/v2/deployments/${deploymentId}/aliases`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${vercelToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ alias: cleanAlias }),
+      });
+      if (aliasRes.ok) {
+        siteUrl = `https://${cleanAlias}`;
+        await supabase.from("artists").update({ published_site_url: siteUrl }).eq("id", artistId);
+      } else {
+        console.error(`checkPublishStatus: alias assignment failed for ${artist?.slug}:`, await aliasRes.text());
+      }
+    }
+    return { status: "ready", siteUrl };
+  }
   if (readyState === "ERROR" || readyState === "CANCELED") {
     return { status: "error", message: data.errorMessage ?? `Deployment ${readyState.toLowerCase()}.` };
   }
@@ -279,7 +309,12 @@ export async function unpublishArtistSite(artistId: string): Promise<UnpublishRe
   if (!artist) return { ok: false, error: "Artist not found." };
   if (!artist.published_repo_url) return { ok: false, error: "This artist hasn't been published." };
 
-  const repoName = `${artist.slug}-dashboard`;
+  // Derived from the stored repo URL (its last path segment) rather than
+  // recomputed from the slug, since the naming convention has changed over
+  // time (from "-dashboard" to "-cultural-engine") — this way unpublish
+  // still finds the right repo/project regardless of when an artist was
+  // originally published.
+  const repoName = artist.published_repo_url.split("/").filter(Boolean).pop()!;
   const errors: string[] = [];
 
   const deleteProjectRes = await fetch(`${VERCEL_API}/v9/projects/${repoName}`, {

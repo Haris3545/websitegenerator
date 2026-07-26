@@ -270,6 +270,13 @@ export interface Database {
           board_key: string;
           title: string;
           body: string;
+          image_url: string | null;
+          status: "pending" | "liked" | "disliked";
+          timeline: string | null;
+          calendar_status: "confirmed" | "tbc" | null;
+          scheduled_date: string | null;
+          scheduled_time: string | null;
+          calendar_event_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -278,6 +285,13 @@ export interface Database {
           board_key: string;
           title: string;
           body?: string;
+          image_url?: string | null;
+          status?: "pending" | "liked" | "disliked";
+          timeline?: string | null;
+          calendar_status?: "confirmed" | "tbc" | null;
+          scheduled_date?: string | null;
+          scheduled_time?: string | null;
+          calendar_event_id?: string | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["board_items"]["Insert"]>;

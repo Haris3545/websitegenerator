@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getSiteArtist } from "@/lib/getSiteArtist";
 import { refreshEventsForArtist, refreshEventsIfStale } from "@/lib/events";
 import { MonthCalendar } from "@/components/site/MonthCalendar";
+import { PendingIdeaStack } from "@/components/site/PendingIdeaStack";
 import { TabHeading } from "@/components/site/TabHeading";
 import { SiteFooter } from "@/components/site/SiteFooter";
 
@@ -34,6 +35,14 @@ export default async function CalendarPage({ params }: { params: Promise<{ slug:
     after(() => refreshEventsIfStale(artist.id, artist.name));
   }
 
+  const { data: tbcIdeas } = await supabase
+    .from("board_items")
+    .select("*")
+    .eq("artist_id", artist.id)
+    .eq("board_key", "ideas")
+    .eq("calendar_status", "tbc")
+    .order("created_at", { ascending: false });
+
   return (
     <div>
       <TabHeading
@@ -54,6 +63,12 @@ export default async function CalendarPage({ params }: { params: Promise<{ slug:
       <div className="mt-4">
         <MonthCalendar artistId={artist.id} slug={slug} events={events ?? []} />
       </div>
+
+      {tbcIdeas && tbcIdeas.length > 0 && (
+        <div className="mt-8">
+          <PendingIdeaStack artistId={artist.id} slug={slug} items={tbcIdeas} />
+        </div>
+      )}
 
       <SiteFooter
         slug={slug}

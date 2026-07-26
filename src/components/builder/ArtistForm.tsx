@@ -234,8 +234,12 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
 
     const poll = setInterval(async () => {
       const result = await checkPublishStatus(artistId);
-      if (result.status === "ready") setDeployStatus("ready");
-      else if (result.status === "error") {
+      if (result.status === "ready") {
+        setDeployStatus("ready");
+        if (result.siteUrl) {
+          setPublished((prev) => (prev ? { ...prev, siteUrl: result.siteUrl! } : prev));
+        }
+      } else if (result.status === "error") {
         setDeployStatus("error");
         setPublishError(result.message);
       } else if (result.status === "building") setDeployStatus("building");

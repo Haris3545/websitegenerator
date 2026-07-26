@@ -63,3 +63,60 @@ body {
 .animate-grain {
   animation: grain-shift 0.9s steps(1) infinite;
 }
+
+/* A slim, custom-styled scrollbar for dark modal/panel content, used instead
+   of the default browser (Chromium) scrollbar — Firefox picks it up via the
+   scrollbar-* properties, WebKit/Chromium/Blink via the ::-webkit-scrollbar
+   pseudo-elements. */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.35);
+  background-clip: padding-box;
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-modal-in {
+  animation: modal-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* iOS-style "jiggle mode" wiggle for selectable grid cards — each card gets
+   a slightly different animation-delay (see IdeaFolderView.tsx) so they
+   don't all rock in perfect unison. */
+@keyframes jiggle {
+  0%, 100% { transform: rotate(-1deg); }
+  50% { transform: rotate(1deg); }
+}
+
+.animate-jiggle {
+  animation: jiggle 0.22s ease-in-out infinite;
+}
