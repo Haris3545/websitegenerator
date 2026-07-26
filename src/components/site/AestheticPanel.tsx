@@ -6,10 +6,12 @@ import { updateArtistAesthetics } from "@/app/s/[slug]/actions";
 import { ColorField } from "@/components/builder/ColorField";
 import { FontPicker } from "@/components/builder/FontPicker";
 import { DEFAULT_THEME_OVERRIDES, type ThemeOverrides } from "@/lib/theme";
+import { grainTexture } from "@/lib/grainTexture";
 import type { AestheticParams } from "@/lib/database.types";
 
 const DEFAULT_AESTHETIC_PARAMS: Required<AestheticParams> = {
   grain_intensity: 0,
+  grain_monochrome: false,
   tint_opacity: 0,
   blur: 0,
   vignette: 0,
@@ -102,6 +104,7 @@ export function AestheticPanel({ artistId, initial }: { artistId: string; initia
     root.style.setProperty("--bg-tint-opacity", String(a.tint_opacity * 0.65));
     root.style.setProperty("--bg-vignette", String(a.vignette));
     root.style.setProperty("--bg-grain-opacity", String(a.grain_intensity));
+    root.style.setProperty("--bg-grain-image", grainTexture(a.grain_monochrome));
     document.getElementById("chroma-offset-r")?.setAttribute("dx", String(a.chromatic_aberration * 8));
     document.getElementById("chroma-offset-b")?.setAttribute("dx", String(a.chromatic_aberration * -8));
   }, [values]);
@@ -248,6 +251,15 @@ export function AestheticPanel({ artistId, initial }: { artistId: string; initia
             value={aesthetics.grain_intensity}
             onChange={(v) => setAesthetic("grain_intensity", v)}
           />
+          <label className="-mt-2 flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={aesthetics.grain_monochrome}
+              onChange={(e) => setAesthetic("grain_monochrome", e.target.checked)}
+              className="accent-builder-accent"
+            />
+            Monochrome grain
+          </label>
           <Slider
             label="Chromatic aberration"
             min={0}

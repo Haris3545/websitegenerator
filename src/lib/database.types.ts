@@ -6,6 +6,7 @@ import type { ThemeOverrides } from "@/lib/theme";
 
 export type AestheticParams = {
   grain_intensity?: number; // 0..1, now rendered as animated film grain
+  grain_monochrome?: boolean; // false = coloured static (default), true = greyscale
   tint_opacity?: number; // 0..1
   blur?: number; // 0..1
   vignette?: number; // 0..1

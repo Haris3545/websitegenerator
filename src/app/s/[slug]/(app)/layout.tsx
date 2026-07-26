@@ -5,6 +5,7 @@ import { refreshMediaForArtist, refreshMediaIfStale, getTickerArticles } from "@
 import { resolveContent } from "@/lib/contentOverrides";
 import { googleFontsCssUrl } from "@/lib/fonts";
 import { withThemeDefaults, themeToCssVars } from "@/lib/theme";
+import { grainTexture } from "@/lib/grainTexture";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { NewsTicker } from "@/components/site/NewsTicker";
 import { NavPills } from "@/components/site/NavPills";
@@ -60,8 +61,14 @@ export default async function ArtistSiteLayout({
     after(() => refreshMediaIfStale(artist.id, artist.name));
   }
 
-  const { grain_intensity = 0, tint_opacity = 0, blur = 0, vignette = 0, chromatic_aberration = 0 } =
-    artist.aesthetic_params ?? {};
+  const {
+    grain_intensity = 0,
+    grain_monochrome = false,
+    tint_opacity = 0,
+    blur = 0,
+    vignette = 0,
+    chromatic_aberration = 0,
+  } = artist.aesthetic_params ?? {};
   const theme = withThemeDefaults(artist.theme_overrides);
   const isBackgroundVideo = /\.(mp4|webm|mov|m4v)(\?|$)/i.test(artist.background_image_url ?? "");
 
@@ -79,6 +86,7 @@ export default async function ArtistSiteLayout({
           "--bg-tint-opacity": tint_opacity * 0.65,
           "--bg-vignette": vignette,
           "--bg-grain-opacity": grain_intensity,
+          "--bg-grain-image": grainTexture(grain_monochrome),
           fontFamily: `"${artist.font_family}", sans-serif`,
           ...themeToCssVars(artist.theme_overrides),
         } as React.CSSProperties
@@ -169,8 +177,7 @@ export default async function ArtistSiteLayout({
           className="animate-grain absolute inset-0 mix-blend-overlay"
           style={{
             opacity: "var(--bg-grain-opacity, 0)",
-            backgroundImage:
-              "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
+            backgroundImage: "var(--bg-grain-image)",
             backgroundSize: "160% 160%",
           }}
         />
