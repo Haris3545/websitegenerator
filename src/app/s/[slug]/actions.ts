@@ -356,6 +356,31 @@ export async function deleteManualEvent(eventId: string, slug: string) {
   revalidatePath(`/s/${slug}/calendar`);
 }
 
+/** Deletes a "manual" or "idea"-sourced calendar event (Ticketmaster/web
+ * events aren't user-deletable). If the event was scheduled from an idea,
+ * also un-links + resets that idea's calendar fields back to unscheduled
+ * so it doesn't keep thinking it's on the grid — the idea itself stays in
+ * Liked, only its "add to calendar" state clears. */
+export async function deleteCalendarEvent(eventId: string, slug: string) {
+  const supabase = createServiceRoleClient();
+
+  await supabase
+    .from("board_items")
+    .update({ calendar_status: null, scheduled_date: null, scheduled_time: null, calendar_event_id: null })
+    .eq("calendar_event_id", eventId);
+
+  const { error } = await supabase
+    .from("artist_events")
+    .delete()
+    .eq("id", eventId)
+    .in("source", ["manual", "idea"]);
+  if (error) throw new Error(error.message);
+
+  updateTag(artistCacheTag(slug));
+  revalidatePath(`/s/${slug}/calendar`);
+  revalidatePath(`/s/${slug}/ideas`);
+}
+
 async function uploadIdeaImage(
   supabase: ReturnType<typeof createServiceRoleClient>,
   slug: string,

@@ -24,13 +24,6 @@ export function useSwipeGesture({
   onCommit: (direction: SwipeDirection) => void;
 }) {
   const [offset, setOffset] = useState({ x: 0, y: 0 });
-  // Which half of the card was grabbed (-1 = top half, 1 = bottom half) —
-  // real Tinder-style cards rotate as if pivoting around the opposite edge
-  // from where you're holding them, so the same horizontal drag swings the
-  // card a different way depending on where the gesture started. Not real
-  // physics, just enough of the illusion that grabbing different corners
-  // doesn't produce identical, robotic-feeling rotation.
-  const [pivot, setPivot] = useState(1);
   const [isDragging, setIsDragging] = useState(false);
   const [isSettling, setIsSettling] = useState(false);
   const gestureRef = useRef<Gesture | null>(null);
@@ -41,9 +34,6 @@ export function useSwipeGesture({
       if (!enabled || e.button !== 0 || isSettling) return;
       wasDraggedRef.current = false;
       gestureRef.current = { startX: e.clientX, startY: e.clientY, startTime: performance.now(), started: false };
-      const rect = e.currentTarget.getBoundingClientRect();
-      const grabFractionY = rect.height > 0 ? (e.clientY - rect.top) / rect.height : 0.5;
-      setPivot(grabFractionY < 0.5 ? -1 : 1);
       e.currentTarget.setPointerCapture(e.pointerId);
     },
     [enabled, isSettling]
@@ -124,7 +114,10 @@ export function useSwipeGesture({
 
   return {
     offset,
-    rotation: (offset.x / 18) * pivot,
+    // Always rotates as if the card were hinged along its top edge — a
+    // fixed, predictable swing (not corner-dependent) rather than physics
+    // that changes depending on where you happen to grab the card.
+    rotation: offset.x / 18,
     isDragging,
     isSettling,
     handlePointerDown,

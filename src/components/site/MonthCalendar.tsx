@@ -1,12 +1,27 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition, useRef } from "react";
-import { addManualEvent, deleteManualEvent } from "@/app/s/[slug]/actions";
+import { addManualEvent, deleteCalendarEvent } from "@/app/s/[slug]/actions";
 import { useEditMode } from "@/components/site/EditModeContext";
 import { useClosableOverlay } from "@/hooks/useClosableOverlay";
 import type { ArtistEvent } from "@/lib/database.types";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+type SourceFilter = "all" | "concerts" | "ideas" | "manual";
+
+function sourceCategory(source: string): Exclude<SourceFilter, "all"> {
+  if (source === "idea") return "ideas";
+  if (source === "manual") return "manual";
+  return "concerts";
+}
+
+const FILTER_OPTIONS: { value: SourceFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "concerts", label: "Concerts" },
+  { value: "ideas", label: "Ideas" },
+  { value: "manual", label: "Manual" },
+];
 
 function dayKey(year: number, month: number, day: number): string {
   return `${year}-${month}-${day}`;
@@ -198,7 +213,19 @@ export function MonthCalendar({
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [viewIndex, setViewIndex] = useState(0);
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
+  const [monthPickerClosing, setMonthPickerClosing] = useState(false);
   const [, startTransition] = useTransition();
+
+  function closeMonthPicker() {
+    if (monthPickerClosing) return;
+    setMonthPickerClosing(true);
+    window.setTimeout(() => {
+      setMonthPickerOpen(false);
+      setMonthPickerClosing(false);
+    }, 150);
+  }
 
   // Merges an externally-scheduled event (dragged onto a day from
   // PendingIdeaStack) into local state. Guarded by an existence check
@@ -210,20 +237,25 @@ export function MonthCalendar({
     setEvents((prev) => [...prev.filter((e) => e.id !== injectedEvent.id), injectedEvent]);
   }
 
+  const filteredEvents = useMemo(
+    () => (sourceFilter === "all" ? events : events.filter((e) => sourceCategory(e.source) === sourceFilter)),
+    [events, sourceFilter]
+  );
+
   const byDay = useMemo(() => {
     const map = new Map<string, ArtistEvent[]>();
-    for (const event of events) {
+    for (const event of filteredEvents) {
       const d = new Date(event.event_date);
       const key = dayKey(d.getFullYear(), d.getMonth(), d.getDate());
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(event);
     }
     return map;
-  }, [events]);
+  }, [filteredEvents]);
 
-  // Every month that actually has an event, in chronological order, plus
-  // the current month so there's always somewhere to click "+ Add event"
-  // even before any dates exist.
+  // Every month that actually has a (filtered) event, in chronological
+  // order, plus the current month so there's always somewhere to click
+  // "+ Add event" even before any dates exist.
   const monthOrder = useMemo(() => {
     const seenMonths = new Set<string>();
     const months: { year: number; month: number }[] = [];
@@ -236,13 +268,13 @@ export function MonthCalendar({
       }
     };
     addMonth(now.getFullYear(), now.getMonth());
-    for (const event of events) {
+    for (const event of filteredEvents) {
       const d = new Date(event.event_date);
       addMonth(d.getFullYear(), d.getMonth());
     }
     months.sort((a, b) => a.year - b.year || a.month - b.month);
     return months;
-  }, [events]);
+  }, [filteredEvents]);
 
   // Same render-time-adjustment approach for navigating to the injected
   // event's month/day — self-terminating once viewIndex/selectedKey match,
@@ -288,7 +320,7 @@ export function MonthCalendar({
   function handleDelete(eventId: string) {
     setEvents((prev) => prev.filter((e) => e.id !== eventId));
     startTransition(() => {
-      deleteManualEvent(eventId, slug);
+      deleteCalendarEvent(eventId, slug);
     });
   }
 
@@ -312,20 +344,48 @@ export function MonthCalendar({
           </button>
 
           <div className="relative">
-            <select
-              value={safeIndex}
-              onChange={(e) => goToMonth(Number(e.target.value))}
-              className="cursor-pointer appearance-none rounded-full border border-white/15 bg-white/5 py-1.5 pl-4 pr-9 text-sm font-semibold uppercase tracking-wide text-white transition-colors hover:border-white/30 focus:border-[var(--accent)] focus:outline-none [color-scheme:dark]"
+            <button
+              type="button"
+              onClick={() => (monthPickerOpen ? closeMonthPicker() : setMonthPickerOpen(true))}
+              className="flex items-center gap-2 rounded-full border border-white/15 bg-white/5 py-1.5 pl-4 pr-3.5 text-sm font-semibold uppercase tracking-wide text-white transition-colors hover:border-white/30"
             >
-              {monthOrder.map(({ year: y, month: m }, i) => (
-                <option key={`${y}-${m}`} value={i} className="bg-neutral-900 text-white">
-                  {new Date(y, m, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" })}
-                </option>
-              ))}
-            </select>
-            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-white/40">
-              ▾
-            </span>
+              {monthLabel}
+              <span
+                className="text-[10px] text-white/40 transition-transform duration-150"
+                style={{ transform: monthPickerOpen ? "rotate(180deg)" : "none" }}
+              >
+                ▾
+              </span>
+            </button>
+
+            {monthPickerOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={closeMonthPicker} />
+                <div
+                  className={`custom-scrollbar absolute left-0 top-full z-50 mt-2 max-h-64 w-52 overflow-y-auto rounded-xl border border-white/15 bg-neutral-900 p-1.5 shadow-2xl shadow-black/50 ${
+                    monthPickerClosing ? "animate-dropdown-furl" : "animate-dropdown-unfurl"
+                  }`}
+                >
+                  {monthOrder.map(({ year: y, month: m }, i) => (
+                    <button
+                      key={`${y}-${m}`}
+                      type="button"
+                      onClick={() => {
+                        goToMonth(i);
+                        closeMonthPicker();
+                      }}
+                      className={`block w-full rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                        i === safeIndex
+                          ? "bg-[var(--accent)] font-semibold text-black"
+                          : "text-white/80 hover:bg-white/10"
+                      }`}
+                    >
+                      {new Date(y, m, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
           <button
@@ -348,6 +408,23 @@ export function MonthCalendar({
             + Add event
           </button>
         )}
+      </div>
+
+      <div className="flex flex-wrap gap-1.5">
+        {FILTER_OPTIONS.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => setSourceFilter(opt.value)}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              sourceFilter === opt.value
+                ? "bg-[var(--accent)] text-black"
+                : "border border-white/15 text-white/60 hover:border-white/30 hover:text-white"
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
       </div>
 
       <div>
@@ -422,7 +499,7 @@ export function MonthCalendar({
                   border: "1px solid rgba(255,255,255,var(--card-border-opacity, 0.15))",
                 }}
               >
-                {event.source === "manual" && editingAllowed && (
+                {(event.source === "manual" || event.source === "idea") && editingAllowed && (
                   <button
                     type="button"
                     onClick={() => handleDelete(event.id)}

@@ -100,6 +100,32 @@ const TrashIcon = () => (
   </svg>
 );
 
+const TapIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden>
+    <path
+      d="M9 11.5V6a1.5 1.5 0 0 1 3 0v5m0-2V4.5a1.5 1.5 0 0 1 3 0V11m0-1.5a1.5 1.5 0 0 1 3 0V12m0-.5a1.5 1.5 0 0 1 3 0V14c0 4-2.5 7-6.5 7-3 0-4.3-1.2-5.7-3l-2-3.3c-.5-.9-.2-1.9.6-2.3.8-.4 1.7 0 2.2.8L9 14"
+      stroke="currentColor"
+      strokeWidth={1.4}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+/** A blurred, darkened blow-up of the card's own image, filling the flipped
+ * back face behind the text — instead of a flat tint — so the back reads as
+ * part of the same object rather than a plain settings panel. */
+function BlurredBackdrop({ imageUrl }: { imageUrl: string | null }) {
+  if (!imageUrl) return <div className="absolute inset-0 bg-neutral-900" />;
+  return (
+    <div className="absolute inset-0 overflow-hidden">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={imageUrl} alt="" className="h-full w-full scale-125 object-cover blur-2xl brightness-[0.35]" />
+      <div className="absolute inset-0 bg-black/35" />
+    </div>
+  );
+}
+
 export function TopCard({
   item,
   flipped,
@@ -151,6 +177,7 @@ export function TopCard({
         }`}
         style={{
           transformStyle: "preserve-3d",
+          transformOrigin: "top center",
           transform: `translate(${offset.x}px, ${offset.y}px) rotate(${rotate}deg) rotateY(${flipped ? 180 : 0}deg)`,
           transition: isDragging ? "none" : "transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
         }}
@@ -165,10 +192,15 @@ export function TopCard({
         >
           <CardFront item={item} />
           {showFlipHint && !flipped && (
-            <div className="pointer-events-none absolute inset-x-0 bottom-24 flex justify-center">
-              <span className="animate-bounce rounded-full bg-black/70 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-white shadow-lg">
-                Tap to read the full idea →
-              </span>
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-end gap-2 pb-9">
+              <div className="animate-hint-pulse flex flex-col items-center gap-1.5">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white shadow-lg backdrop-blur-md ring-1 ring-inset ring-white/30">
+                  <TapIcon />
+                </div>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/85 drop-shadow-sm">
+                  Tap to read
+                </span>
+              </div>
             </div>
           )}
         </div>
@@ -179,10 +211,10 @@ export function TopCard({
             ...cardFaceStyle,
             backfaceVisibility: "hidden",
             transform: "rotateY(180deg)",
-            backgroundColor: "rgba(0,0,0,var(--card-bg-opacity, 0.7))",
           }}
         >
-          <div className="flex items-start justify-between gap-3">
+          <BlurredBackdrop imageUrl={item.image_url} />
+          <div className="relative flex items-start justify-between gap-3">
             <h3 className="text-base font-bold leading-tight text-white">{item.title}</h3>
             <div className="flex shrink-0 gap-1.5">
               <button

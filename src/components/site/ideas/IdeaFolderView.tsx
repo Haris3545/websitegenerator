@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useClosableOverlay } from "@/hooks/useClosableOverlay";
 import type { BoardItem } from "@/lib/database.types";
 
-const DRAG_UP_COMMIT_PX = 120;
+const DRAG_UP_COMMIT_PX = 80;
 
 function IdeaGridCard({
   item,
@@ -215,6 +215,7 @@ export function IdeaFolderView({
   const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
   const [dragStarted, setDragStarted] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const wasDraggedRef = useRef(false);
   const { closing, requestClose } = useClosableOverlay(onClose);
 
   function toggleSelect(id: string) {
@@ -227,7 +228,14 @@ export function IdeaFolderView({
   }
 
   function handleCardTap(item: BoardItem) {
-    if (draggedId) return;
+    // A completed drag still fires a trailing click right after pointerup —
+    // wasDraggedRef (not React state) survives that gap reliably since it's
+    // read/written synchronously in the same tick, unlike state which may
+    // not have re-rendered yet by the time the click arrives.
+    if (wasDraggedRef.current) {
+      wasDraggedRef.current = false;
+      return;
+    }
     if (selectMode) {
       toggleSelect(item.id);
     } else {
@@ -242,7 +250,10 @@ export function IdeaFolderView({
   }
 
   function handlePointerDown(e: React.PointerEvent<HTMLDivElement>, id: string) {
-    if (!selectMode || e.button !== 0) return;
+    // Dragging up to return a card works whether or not "Select" is on —
+    // select mode only changes whether the whole current selection comes
+    // along for the ride, or just this one card.
+    if (e.button !== 0) return;
     setDragStart({ x: e.clientX, y: e.clientY });
     setDragStarted(false);
     setDraggedId(id);
@@ -253,7 +264,10 @@ export function IdeaFolderView({
   function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
     if (!draggedId) return;
     const dy = e.clientY - dragStart.y;
-    if (!dragStarted && Math.abs(dy) > 6) setDragStarted(true);
+    if (!dragStarted && Math.abs(dy) > 6) {
+      setDragStarted(true);
+      wasDraggedRef.current = true;
+    }
     setDragPos({ x: e.clientX, y: e.clientY });
   }
 

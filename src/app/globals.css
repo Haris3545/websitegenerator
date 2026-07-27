@@ -198,3 +198,50 @@ body {
 .animate-jiggle {
   animation: jiggle 0.22s ease-in-out infinite;
 }
+
+/* A slow, gentle breathing pulse for the "tap to read" idle hint — a soft
+   fade/scale rather than a bounce, so it reads as a quiet nudge instead of
+   a cheap-looking chip bouncing at the viewer. */
+@keyframes hint-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(0.94); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+.animate-hint-pulse {
+  animation: hint-pulse 1.8s ease-in-out infinite;
+}
+
+/* The custom month-picker panel (see MonthDropdown.tsx) unfurling open /
+   furling shut from its trigger button, rather than a native <select>
+   popup that can't be animated. */
+@keyframes dropdown-unfurl {
+  from {
+    opacity: 0;
+    transform: scaleY(0.85) translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1) translateY(0);
+  }
+}
+
+.animate-dropdown-unfurl {
+  animation: dropdown-unfurl 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: top center;
+}
+
+@keyframes dropdown-furl {
+  from {
+    opacity: 1;
+    transform: scaleY(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scaleY(0.85) translateY(-6px);
+  }
+}
+
+.animate-dropdown-furl {
+  animation: dropdown-furl 0.15s cubic-bezier(0.4, 0, 1, 1) forwards;
+  transform-origin: top center;
+}

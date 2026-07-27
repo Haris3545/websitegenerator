@@ -9,6 +9,55 @@ import { ScheduleModal } from "@/components/site/ideas/ScheduleModal";
 import type { SwipeDirection } from "@/hooks/useSwipeGesture";
 import type { BoardItem } from "@/lib/database.types";
 
+/** A small tilted preview stack for a folder button — echoes the main
+ * swipe stack's visual language at a glance instead of a plain text pill,
+ * so "Liked"/"Disliked" read as an actual pile of ideas. */
+function FolderMiniStack({
+  label,
+  items,
+  onClick,
+}: {
+  label: string;
+  items: BoardItem[];
+  onClick: () => void;
+}) {
+  const preview = items.slice(0, 3).reverse();
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex items-center gap-3 rounded-2xl border border-white/15 bg-white/5 py-2 pl-3 pr-4 text-left transition-colors hover:border-white/30 hover:bg-white/10"
+    >
+      <div className="relative h-11 w-9 shrink-0">
+        {preview.length === 0 ? (
+          <div className="absolute inset-0 rounded-lg border border-dashed border-white/15" />
+        ) : (
+          preview.map((item, i) => (
+            <div
+              key={item.id}
+              className="absolute inset-0 overflow-hidden rounded-lg border border-white/20 shadow-md shadow-black/40"
+              style={{ transform: `rotate(${(i - (preview.length - 1) / 2) * 8}deg)`, zIndex: i }}
+            >
+              {item.image_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={item.image_url} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <div className="h-full w-full bg-white/10" />
+              )}
+            </div>
+          ))
+        )}
+      </div>
+      <div>
+        <p className="text-sm font-medium text-white/80 group-hover:text-white">{label}</p>
+        <p className="text-xs text-white/40">
+          {items.length} idea{items.length === 1 ? "" : "s"}
+        </p>
+      </div>
+    </button>
+  );
+}
+
 /** The whole Ideas tab: a Tinder-style swipe stack in the middle, with
  * Liked/Disliked folder buttons below it — replaces BoardList.tsx (the
  * plain title+body list Strategy/Tactics/Research still use) with a
@@ -74,21 +123,9 @@ export function IdeasBoard({
           + New idea
         </button>
 
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setOpenFolder("liked")}
-            className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition-colors hover:border-white/30 hover:bg-white/10"
-          >
-            Liked <span className="text-white/40">({liked.length})</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setOpenFolder("disliked")}
-            className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white/80 transition-colors hover:border-white/30 hover:bg-white/10"
-          >
-            Disliked <span className="text-white/40">({disliked.length})</span>
-          </button>
+        <div className="flex gap-3">
+          <FolderMiniStack label="Liked" items={liked} onClick={() => setOpenFolder("liked")} />
+          <FolderMiniStack label="Disliked" items={disliked} onClick={() => setOpenFolder("disliked")} />
         </div>
       </div>
 
