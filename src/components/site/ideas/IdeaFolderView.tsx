@@ -296,21 +296,23 @@ export function IdeaFolderView({
       className={`fixed inset-0 z-[60] flex flex-col bg-neutral-950 ${closing ? "animate-sheet-out" : "animate-sheet-in"}`}
     >
       {/* A soft green glow that grows in from the top as the drag approaches
-          the commit threshold, rather than a hard-edged solid bar. */}
+          the commit threshold, rather than a hard-edged solid bar. Sits
+          below the header (which paints above it via z-20) so the label
+          never collides with the folder title. */}
       <div
         className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center overflow-hidden transition-opacity duration-150"
         style={{
-          height: 180,
+          height: 220,
           opacity: dropProgress,
           background: "radial-gradient(ellipse at top, rgba(52,211,153,0.55), transparent 70%)",
         }}
       >
-        <span className="mt-6 text-sm font-bold uppercase tracking-wide text-emerald-300 drop-shadow-md">
+        <span className="mt-20 text-sm font-bold uppercase tracking-wide text-emerald-300 drop-shadow-md">
           Drop here to send back to the stack
         </span>
       </div>
 
-      <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-5 py-4">
+      <div className="relative z-20 flex shrink-0 items-center justify-between border-b border-white/10 bg-neutral-950 px-5 py-4">
         <button
           type="button"
           onClick={() => {

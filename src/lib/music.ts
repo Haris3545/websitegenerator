@@ -89,8 +89,11 @@ export async function refreshMusicStats(artistId: string, artistName: string) {
     throw new Error("LASTFM_API_KEY isn't set — ask whoever manages this app's Vercel project to add it.");
   }
 
+  // autocorrect=1 asks Last.fm to resolve slightly-off spellings/stylization
+  // (e.g. stored artist names that don't exactly match Last.fm's own
+  // canonical casing) to the right artist instead of reporting no match.
   const infoRes = await fetch(
-    `https://ws.audioscrobbler.com/2.0/?method=artist.getinfo&artist=${encodeURIComponent(artistName)}&api_key=${apiKey}&format=json`
+    `https://ws.audioscrobbler.com/2.0/?method=artist.getinfo&artist=${encodeURIComponent(artistName)}&autocorrect=1&api_key=${apiKey}&format=json`
   );
   if (!infoRes.ok) throw new Error(`Last.fm artist.getinfo returned ${infoRes.status}`);
   const infoData: LastfmArtistInfoResponse = await infoRes.json();
@@ -101,7 +104,7 @@ export async function refreshMusicStats(artistId: string, artistName: string) {
   const topTags = tags.map((t) => t.name).filter((n): n is string => !!n).slice(0, 8);
 
   const tracksRes = await fetch(
-    `https://ws.audioscrobbler.com/2.0/?method=artist.gettoptracks&artist=${encodeURIComponent(artistName)}&api_key=${apiKey}&format=json&limit=10`
+    `https://ws.audioscrobbler.com/2.0/?method=artist.gettoptracks&artist=${encodeURIComponent(artistName)}&autocorrect=1&api_key=${apiKey}&format=json&limit=10`
   );
   if (!tracksRes.ok) throw new Error(`Last.fm artist.gettoptracks returned ${tracksRes.status}`);
   const tracksData: LastfmTopTracksResponse = await tracksRes.json();

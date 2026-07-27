@@ -253,9 +253,10 @@ export function MonthCalendar({
     return map;
   }, [filteredEvents]);
 
-  // Every month that actually has a (filtered) event, in chronological
-  // order, plus the current month so there's always somewhere to click
-  // "+ Add event" even before any dates exist.
+  // A full rolling year starting this month, plus any (filtered) event's
+  // month beyond that window — so the picker is always browsable even for
+  // an artist with events clustered in a single month, rather than only
+  // ever listing whichever months happen to already have something on them.
   const monthOrder = useMemo(() => {
     const seenMonths = new Set<string>();
     const months: { year: number; month: number }[] = [];
@@ -267,7 +268,10 @@ export function MonthCalendar({
         months.push({ year, month });
       }
     };
-    addMonth(now.getFullYear(), now.getMonth());
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      addMonth(d.getFullYear(), d.getMonth());
+    }
     for (const event of filteredEvents) {
       const d = new Date(event.event_date);
       addMonth(d.getFullYear(), d.getMonth());

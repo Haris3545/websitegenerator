@@ -22,6 +22,7 @@ export default async function MusicPage({ params }: { params: Promise<{ slug: st
     .eq("artist_id", artist.id)
     .maybeSingle();
 
+  let fetchError: string | null = null;
   if (!stats) {
     try {
       await refreshMusicStats(artist.id, artist.name);
@@ -31,6 +32,7 @@ export default async function MusicPage({ params }: { params: Promise<{ slug: st
         .eq("artist_id", artist.id)
         .maybeSingle());
     } catch (err) {
+      fetchError = err instanceof Error ? err.message : String(err);
       console.error(`Initial music fetch failed for ${slug}:`, err);
     }
   } else {
@@ -70,10 +72,16 @@ export default async function MusicPage({ params }: { params: Promise<{ slug: st
         <div className="mt-4">
           <BrandedEmptyState
             message={
-              <>
-                No stats cached yet — hit &quot;Refresh Everything&quot; below. If nothing shows up, ask
-                whoever manages this app to set LASTFM_API_KEY.
-              </>
+              fetchError ? (
+                <>
+                  Couldn&apos;t load Last.fm stats for {artist.name}: {fetchError}
+                </>
+              ) : (
+                <>
+                  No stats cached yet — hit &quot;Refresh Everything&quot; below. If nothing shows up, ask
+                  whoever manages this app to set LASTFM_API_KEY.
+                </>
+              )
             }
           />
         </div>

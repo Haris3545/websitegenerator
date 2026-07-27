@@ -116,12 +116,12 @@ const TapIcon = () => (
  * back face behind the text — instead of a flat tint — so the back reads as
  * part of the same object rather than a plain settings panel. */
 function BlurredBackdrop({ imageUrl }: { imageUrl: string | null }) {
-  if (!imageUrl) return <div className="absolute inset-0 bg-neutral-900" />;
+  if (!imageUrl) return <div className="absolute inset-0 bg-neutral-800" />;
   return (
     <div className="absolute inset-0 overflow-hidden">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={imageUrl} alt="" className="h-full w-full scale-125 object-cover blur-2xl brightness-[0.35]" />
-      <div className="absolute inset-0 bg-black/35" />
+      <img src={imageUrl} alt="" className="h-full w-full scale-125 object-cover blur-2xl brightness-[0.85]" />
+      <div className="absolute inset-0 bg-black/20" />
     </div>
   );
 }
@@ -192,7 +192,7 @@ export function TopCard({
         >
           <CardFront item={item} />
           {showFlipHint && !flipped && (
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-end gap-2 pb-9">
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-start gap-2 pt-6">
               <div className="animate-hint-pulse flex flex-col items-center gap-1.5">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white shadow-lg backdrop-blur-md ring-1 ring-inset ring-white/30">
                   <TapIcon />
@@ -215,7 +215,7 @@ export function TopCard({
         >
           <BlurredBackdrop imageUrl={item.image_url} />
           <div className="relative flex items-start justify-between gap-3">
-            <h3 className="text-base font-bold leading-tight text-white">{item.title}</h3>
+            <h3 className="text-base font-bold leading-tight text-white drop-shadow-md">{item.title}</h3>
             <div className="flex shrink-0 gap-1.5">
               <button
                 type="button"
@@ -242,18 +242,18 @@ export function TopCard({
             </div>
           </div>
 
-          <div className="custom-scrollbar mt-2.5 flex-1 overflow-y-auto pr-1 text-sm leading-relaxed text-white/75">
-            {item.body || <span className="text-white/40">No description yet.</span>}
+          <div className="custom-scrollbar mt-2.5 flex-1 overflow-y-auto pr-1 text-sm leading-relaxed text-white/90 drop-shadow-sm">
+            {item.body || <span className="text-white/50">No description yet.</span>}
           </div>
 
           {item.timeline && (
             <div className="mt-2.5 shrink-0">
-              <p className="text-[10px] uppercase tracking-wide text-white/40">Timeline / lead time</p>
-              <p className="text-sm font-semibold text-white">{item.timeline}</p>
+              <p className="text-[10px] uppercase tracking-wide text-white/60 drop-shadow-sm">Timeline / lead time</p>
+              <p className="text-sm font-semibold text-white drop-shadow-sm">{item.timeline}</p>
             </div>
           )}
 
-          <p className="mt-2 shrink-0 text-center text-[10px] uppercase tracking-wide text-white/30">
+          <p className="mt-2 shrink-0 text-center text-[10px] uppercase tracking-wide text-white/50 drop-shadow-sm">
             Tap to flip back
           </p>
 
