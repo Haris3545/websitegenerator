@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { revalidatePath, updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { parseAestheticPrompt } from "@/lib/aesthetic";
@@ -36,11 +37,30 @@ export async function signOut() {
  * moving the sign-in itself onto the server removes that gap entirely. */
 export async function signInAction(
   email: string,
-  password: string
+  password: string,
+  rememberMe: boolean = true
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { ok: false, error: error.message };
+
+  if (!rememberMe) {
+    // Downgrade the auth cookies Supabase just set to session-only (no
+    // maxAge) rather than persisting for Supabase's own default duration —
+    // "Remember me" unchecked means signing back in is required once the
+    // browser is fully closed, not any time before then.
+    const cookieStore = await cookies();
+    for (const cookie of cookieStore.getAll()) {
+      if (cookie.name.startsWith("sb-")) {
+        cookieStore.set(cookie.name, cookie.value, {
+          path: "/",
+          sameSite: "lax",
+          secure: process.env.NODE_ENV === "production",
+        });
+      }
+    }
+  }
+
   return { ok: true };
 }
 

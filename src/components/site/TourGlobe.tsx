@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import dynamicImport from "next/dynamic";
+import * as THREE from "three";
 import type { GlobeMethods } from "react-globe.gl";
 
 // Loaded only when this component actually mounts (i.e. only on the
@@ -20,31 +21,55 @@ export type TourGlobePoint = { lat: number; lng: number; label: string; color?: 
 
 const DEFAULT_GLOBE_HEIGHT = 420;
 
-function shadeColor(hex: string, percent: number): string {
-  const clean = hex.replace("#", "");
-  const num = parseInt(clean, 16);
-  const r = Math.max(0, Math.min(255, ((num >> 16) & 0xff) + percent));
-  const g = Math.max(0, Math.min(255, ((num >> 8) & 0xff) + percent));
-  const b = Math.max(0, Math.min(255, (num & 0xff) + percent));
-  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
-}
+const PIN_HEAD_RADIUS = 6;
+const PIN_NEEDLE_LENGTH = 11;
+const PIN_NEEDLE_RADIUS = 2.1;
 
-// A chunky, glossy "3D" pin planted on the globe's surface at each point's
-// lat/lng — the same look the Locations map used to use for its own
-// markers before that moved here (per feedback, the 2D map went back to
-// plain flat circles; the oversized 3D pin belongs on the globe itself).
-function pinElement(color: string): HTMLDivElement {
-  const dark = shadeColor(color, -60);
-  const el = document.createElement("div");
-  el.style.cssText =
-    "position:relative;width:22px;height:28px;transform:translate(-50%,-100%);filter:drop-shadow(0 2px 4px rgba(0,0,0,0.6));pointer-events:none;";
-  el.innerHTML = `
-    <div style="position:absolute;left:1px;top:0;width:20px;height:20px;border-radius:9999px;
-      background:radial-gradient(circle at 33% 28%, #ffffff, ${color} 45%, ${dark} 100%);
-      border:1.5px solid rgba(255,255,255,0.9);"></div>
-    <div style="position:absolute;left:50%;top:17px;width:0;height:0;transform:translateX(-50%);
-      border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid ${dark};"></div>`;
-  return el;
+// A real 3D pushpin mesh (not a DOM overlay), planted on the globe's
+// surface at each point's lat/lng — a metallic needle tip touching the
+// surface with a glossy, coloured, rounded head above it, matching a real
+// thumbtack. Building this as actual geometry in the WebGL scene (rather
+// than the previous flat HTML div positioned over the canvas) is what lets
+// the head genuinely extend past the sphere's silhouette instead of being
+// clipped by the corner overlay's circular CSS mask, which only clips the
+// canvas element itself, not content the canvas renders inside its bounds.
+function buildPinObject(color: string): THREE.Group {
+  const group = new THREE.Group();
+
+  // Cone apex (the point) starts at local z=0 — the globe surface contact
+  // point three-globe positions this group at — and the wide base sits at
+  // z=PIN_NEEDLE_LENGTH, flush against the head. objectFacesSurface (on by
+  // default for the objects layer) rotates the whole group so local +z
+  // always points radially outward from the globe's center at this pin's
+  // lat/lng, so the same local geometry works at any point on the sphere.
+  const needleGeom = new THREE.ConeGeometry(PIN_NEEDLE_RADIUS, PIN_NEEDLE_LENGTH, 16);
+  needleGeom.rotateX(-Math.PI / 2);
+  needleGeom.translate(0, 0, PIN_NEEDLE_LENGTH / 2);
+  const needle = new THREE.Mesh(
+    needleGeom,
+    new THREE.MeshStandardMaterial({ color: 0xd6d9dd, metalness: 0.9, roughness: 0.25 })
+  );
+
+  const headGeom = new THREE.SphereGeometry(PIN_HEAD_RADIUS, 24, 16);
+  headGeom.translate(0, 0, PIN_NEEDLE_LENGTH + PIN_HEAD_RADIUS * 0.35);
+  const head = new THREE.Mesh(
+    headGeom,
+    new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.22,
+      metalness: 0.12,
+      // A faint self-glow in the pin's own colour so it still reads as
+      // that colour on the far side of the globe's fixed directional
+      // light as the globe auto-rotates, rather than going flat/dark —
+      // the roughness/metalness above is what gives the glossy specular
+      // highlight while the light does hit it.
+      emissive: color,
+      emissiveIntensity: 0.16,
+    })
+  );
+
+  group.add(needle, head);
+  return group;
 }
 
 function isDarkColor(hex: string): boolean {
@@ -148,11 +173,11 @@ export function TourGlobe({
           showAtmosphere
           atmosphereColor={atmosphereGlowColor}
           atmosphereAltitude={0.18}
-          htmlElementsData={points}
-          htmlLat="lat"
-          htmlLng="lng"
-          htmlAltitude={0.015}
-          htmlElement={(d) => pinElement((d as TourGlobePoint).color ?? accentColor)}
+          objectsData={points}
+          objectLat="lat"
+          objectLng="lng"
+          objectAltitude={0.001}
+          objectThreeObject={(d) => buildPinObject((d as TourGlobePoint).color ?? accentColor)}
           animateIn={!reducedMotion}
           enablePointerInteraction={interactive}
           rendererConfig={{ antialias: true, alpha: true, powerPreference: "low-power" }}
@@ -163,11 +188,32 @@ export function TourGlobe({
             // re-render on every rotate frame) far more pixels than the
             // canvas is ever shown at.
             globe.renderer().setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+
+            // globe.gl's own default camera distance (altitude 2.5 globe
+            // radii) leaves a visible gap around the sphere inside its
+            // frame. Zoom in until the sphere's silhouette just touches the
+            // (square) frame's edges instead: a sphere viewed from distance
+            // d has angular radius asin(R/d), so the distance at which that
+            // angle equals half the camera's vertical FOV is exactly the
+            // distance where the sphere fills the frame edge-to-edge.
+            // react-globe.gl's exposed camera() is typed as the generic
+            // THREE.Camera base, but globe.gl always constructs its scene
+            // camera as a PerspectiveCamera under the hood.
+            const camera = globe.camera() as THREE.PerspectiveCamera;
+            const halfFovRad = THREE.MathUtils.degToRad(camera.fov / 2);
+            const fitAltitude = 1 / Math.sin(halfFovRad) - 1;
+            globe.pointOfView({ altitude: fitAltitude }, 0);
+
             const controls = globe.controls();
             controls.autoRotate = !reducedMotion;
             controls.autoRotateSpeed = interactive ? 0.5 : 1.1;
             controls.enableDamping = true;
             controls.enableZoom = interactive;
+            // Zooming in further is still allowed (down to globe.gl's own
+            // near-surface minDistance), but zooming back out past this
+            // fitted distance would just reintroduce the gap around the
+            // sphere the frame is meant to be filled by, so cap it here.
+            controls.maxDistance = camera.position.length();
           }}
         />
       )}

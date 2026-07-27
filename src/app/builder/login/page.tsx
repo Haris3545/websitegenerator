@@ -48,6 +48,7 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [transitioning, setTransitioning] = useState(false);
@@ -68,7 +69,7 @@ function LoginForm() {
     setLoading(true);
     setError(null);
 
-    const result = await signInAction(email, password);
+    const result = await signInAction(email, password, rememberMe);
     if (!result.ok) {
       setError(result.error);
       setLoading(false);
@@ -98,7 +99,7 @@ function LoginForm() {
   return (
     <div className="flex min-h-screen justify-center bg-white text-neutral-900 dark:bg-neutral-950 dark:text-white">
       <div className="flex w-full max-w-sm flex-col justify-center px-4">
-        <div className="mb-10 flex flex-col items-center text-center">
+        <div className="mb-10 mt-6 flex flex-col items-center text-center">
           <div className="flex items-center gap-2.5">
             <BrandLogoAnimation className="h-9 w-9 dark:invert" />
             <p className="text-sm font-semibold uppercase tracking-wider text-neutral-700 dark:text-white/80">
@@ -143,6 +144,15 @@ function LoginForm() {
                 {showPassword ? <EyeOffIcon /> : <EyeIcon />}
               </button>
             </div>
+          </label>
+          <label className="flex items-center gap-2 text-sm text-neutral-600 dark:text-white/60">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="h-4 w-4 rounded border-neutral-300 accent-builder-accent dark:border-white/20"
+            />
+            Remember me
           </label>
           {error && (
             <p className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">

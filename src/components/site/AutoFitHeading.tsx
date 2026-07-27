@@ -47,6 +47,14 @@ export function AutoFitHeading({
     fit();
     const resizeObserver = new ResizeObserver(fit);
     resizeObserver.observe(container);
+    // Belt-and-suspenders alongside the ResizeObserver above: a browser
+    // window that opens directly into (or gets OS-snapped into) a
+    // split-screen layout can settle its final size a beat after first
+    // paint, and some browser/OS combinations don't always fire a
+    // ResizeObserver entry for that settle. A plain window resize listener
+    // plus one rAF-delayed re-fit after mount catches that case too.
+    window.addEventListener("resize", fit);
+    const rafId = requestAnimationFrame(fit);
 
     // The very first fit() run measures scrollWidth using whatever font is
     // actually painted at that instant — almost always a fallback system
@@ -68,6 +76,8 @@ export function AutoFitHeading({
     return () => {
       cancelled = true;
       resizeObserver.disconnect();
+      window.removeEventListener("resize", fit);
+      cancelAnimationFrame(rafId);
     };
   }, [children, maxFontSizePx, minFontSizePx]);
 
