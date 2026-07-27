@@ -4,7 +4,11 @@ import type { BoardItem } from "@/lib/database.types";
 
 // A stable "messy stack" tilt sequence, cycled by stack position, rather
 // than a random angle per card — keeps the tilt consistent between renders
-// instead of jittering every time the list re-sorts.
+// instead of jittering every time the list re-sorts. Index 0 is deliberately
+// unused for filler tilt (the top/interactive card never uses this sequence
+// at rest — see TopCard) but index 1 is what a card was tilted at the
+// moment before it became top, which SwipeStack uses as the "enter" angle
+// it animates back down to flat from.
 const TILT_SEQUENCE = [-4, 3, -6, 5];
 
 export function tiltFor(index: number) {
@@ -15,6 +19,10 @@ const cardFaceStyle = {
   borderRadius: "var(--card-radius, 16px)",
   border: "1px solid rgba(255,255,255,var(--card-border-opacity, 0.15))",
 } as const;
+
+function isInteractiveTarget(target: EventTarget | null) {
+  return target instanceof HTMLElement && target.closest("button") !== null;
+}
 
 function CardFront({ item }: { item: BoardItem }) {
   return (
@@ -53,10 +61,51 @@ export function FillerCard({ item, index }: { item: BoardItem; index: number }) 
   );
 }
 
+const CheckIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" className="h-7 w-7" aria-hidden>
+    <path
+      d="M5 12.5 10 17.5 19 7"
+      stroke="currentColor"
+      strokeWidth={3}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const CrossIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6" aria-hidden>
+    <path d="M6 6 18 18M18 6 6 18" stroke="currentColor" strokeWidth={3} strokeLinecap="round" />
+  </svg>
+);
+
+const EditIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden>
+    <path
+      d="M4 17.25V20h2.75L17.81 8.94l-2.75-2.75L4 17.25ZM19.71 7.04a1 1 0 0 0 0-1.41l-1.34-1.34a1 1 0 0 0-1.41 0l-1.34 1.34 2.75 2.75 1.34-1.34Z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
+const TrashIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden>
+    <path
+      d="M6 7h12M9.5 7V5.5A1.5 1.5 0 0 1 11 4h2a1.5 1.5 0 0 1 1.5 1.5V7M7.5 7l.7 11.2A1.5 1.5 0 0 0 9.7 19.5h4.6a1.5 1.5 0 0 0 1.5-1.3L16.5 7"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
 export function TopCard({
   item,
   flipped,
   offset,
+  rotation,
+  restRotate,
   isDragging,
   showFlipHint,
   onPointerDown,
@@ -70,6 +119,8 @@ export function TopCard({
   item: BoardItem;
   flipped: boolean;
   offset: { x: number; y: number };
+  rotation: number;
+  restRotate: number;
   isDragging: boolean;
   showFlipHint: boolean;
   onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
@@ -80,7 +131,7 @@ export function TopCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const rotate = flipped ? offset.x / 18 : tiltFor(0);
+  const rotate = flipped ? rotation : restRotate;
   const likeOpacity = flipped ? Math.min(Math.max(offset.x / 90, 0), 1) : 0;
   const passOpacity = flipped ? Math.min(Math.max(-offset.x / 90, 0), 1) : 0;
 
@@ -88,11 +139,11 @@ export function TopCard({
     <div
       className="absolute inset-0 touch-none select-none"
       style={{ perspective: "1600px", zIndex: 20 }}
-      onPointerDown={onPointerDown}
+      onPointerDown={(e) => !isInteractiveTarget(e.target) && onPointerDown(e)}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerCancel}
-      onClick={onTap}
+      onClick={(e) => !isInteractiveTarget(e.target) && onTap()}
     >
       <div
         className={`relative h-full w-full shadow-2xl shadow-black/50 ${
@@ -101,7 +152,7 @@ export function TopCard({
         style={{
           transformStyle: "preserve-3d",
           transform: `translate(${offset.x}px, ${offset.y}px) rotate(${rotate}deg) rotateY(${flipped ? 180 : 0}deg)`,
-          transition: isDragging ? "none" : "transform 0.35s cubic-bezier(0.16, 1, 0.3, 1)",
+          transition: isDragging ? "none" : "transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
         }}
       >
         <div
@@ -123,7 +174,7 @@ export function TopCard({
         </div>
 
         <div
-          className="absolute inset-0 flex flex-col overflow-hidden p-6"
+          className="absolute inset-0 flex flex-col overflow-hidden p-5"
           style={{
             ...cardFaceStyle,
             backfaceVisibility: "hidden",
@@ -132,8 +183,8 @@ export function TopCard({
           }}
         >
           <div className="flex items-start justify-between gap-3">
-            <h3 className="text-lg font-bold leading-tight text-white">{item.title}</h3>
-            <div className="flex shrink-0 gap-2">
+            <h3 className="text-base font-bold leading-tight text-white">{item.title}</h3>
+            <div className="flex shrink-0 gap-1.5">
               <button
                 type="button"
                 onClick={(e) => {
@@ -141,9 +192,9 @@ export function TopCard({
                   onEdit();
                 }}
                 aria-label="Edit idea"
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white/80 transition-colors hover:bg-white/20"
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-white/80 transition-colors hover:bg-white/20"
               >
-                ✎
+                <EditIcon />
               </button>
               <button
                 type="button"
@@ -152,25 +203,25 @@ export function TopCard({
                   onDelete();
                 }}
                 aria-label="Delete idea"
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-red-500/80 text-white transition-colors hover:bg-red-500"
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-red-500/80 text-white transition-colors hover:bg-red-500"
               >
-                🗑
+                <TrashIcon />
               </button>
             </div>
           </div>
 
-          <div className="custom-scrollbar mt-3 flex-1 overflow-y-auto pr-1 text-sm leading-relaxed text-white/75">
+          <div className="custom-scrollbar mt-2.5 flex-1 overflow-y-auto pr-1 text-sm leading-relaxed text-white/75">
             {item.body || <span className="text-white/40">No description yet.</span>}
           </div>
 
           {item.timeline && (
-            <div className="mt-3 shrink-0">
+            <div className="mt-2.5 shrink-0">
               <p className="text-[10px] uppercase tracking-wide text-white/40">Timeline / lead time</p>
               <p className="text-sm font-semibold text-white">{item.timeline}</p>
             </div>
           )}
 
-          <p className="mt-3 shrink-0 text-center text-[10px] uppercase tracking-wide text-white/30">
+          <p className="mt-2 shrink-0 text-center text-[10px] uppercase tracking-wide text-white/30">
             Tap to flip back
           </p>
 
@@ -191,3 +242,5 @@ export function TopCard({
     </div>
   );
 }
+
+export { CheckIcon, CrossIcon };

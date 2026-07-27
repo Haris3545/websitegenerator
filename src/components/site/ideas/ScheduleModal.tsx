@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { scheduleIdeaToCalendar } from "@/app/s/[slug]/actions";
-import type { BoardItem } from "@/lib/database.types";
+import { useClosableOverlay } from "@/hooks/useClosableOverlay";
+import type { ArtistEvent, BoardItem } from "@/lib/database.types";
 
 const fieldClass =
   "rounded-lg border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white transition-colors focus:border-[var(--accent)] focus:bg-white/[0.07] focus:outline-none [color-scheme:dark]";
@@ -27,6 +28,7 @@ export function ScheduleModal({
     calendar_status: "confirmed" | "tbc";
     scheduled_date: string | null;
     scheduled_time: string | null;
+    event: ArtistEvent | null;
   }) => void;
 }) {
   const [date, setDate] = useState(item.scheduled_date ?? "");
@@ -34,6 +36,7 @@ export function ScheduleModal({
   const [tbc, setTbc] = useState(item.calendar_status === "tbc");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const { closing, requestClose } = useClosableOverlay(onClose);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -49,8 +52,9 @@ export function ScheduleModal({
           calendar_status: tbc ? "tbc" : "confirmed",
           scheduled_date: date || null,
           scheduled_time: time || null,
+          event: result.event,
         });
-        onClose();
+        requestClose();
       } else {
         setError(result.error);
       }
@@ -60,12 +64,14 @@ export function ScheduleModal({
   return (
     <div
       className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
-      onClick={onClose}
+      onClick={requestClose}
     >
       <form
         onSubmit={handleSubmit}
         onClick={(e) => e.stopPropagation()}
-        className="animate-modal-in flex w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-white/15 bg-neutral-950 text-white shadow-2xl shadow-black/50"
+        className={`flex w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-white/15 bg-neutral-950 text-white shadow-2xl shadow-black/50 ${
+          closing ? "animate-modal-out" : "animate-modal-in"
+        }`}
       >
         <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
           <div>
@@ -74,7 +80,7 @@ export function ScheduleModal({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             aria-label="Close"
             className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-white/40 transition-colors hover:bg-white/10 hover:text-white"
           >
@@ -123,7 +129,7 @@ export function ScheduleModal({
         <div className="flex items-center justify-end gap-3 border-t border-white/10 px-6 py-4">
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="rounded-full px-4 py-2 text-sm font-medium text-white/60 transition-colors hover:text-white"
           >
             Cancel

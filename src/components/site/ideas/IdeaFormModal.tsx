@@ -3,6 +3,7 @@
 import { useId, useRef, useState, useTransition } from "react";
 import imageCompression from "browser-image-compression";
 import { addIdeaCard, updateIdeaCard } from "@/app/s/[slug]/actions";
+import { useClosableOverlay } from "@/hooks/useClosableOverlay";
 import type { BoardItem } from "@/lib/database.types";
 
 const IMAGE_MAX_DIMENSION = 1600;
@@ -38,6 +39,7 @@ export function IdeaFormModal({
   const [isPending, startTransition] = useTransition();
   const fileRef = useRef<File | null>(null);
   const inputId = useId();
+  const { closing, requestClose } = useClosableOverlay(onClose);
 
   async function handleFileChange(file: File) {
     setError(null);
@@ -77,7 +79,7 @@ export function IdeaFormModal({
         : await addIdeaCard(artistId, slug, formData);
       if (result.ok) {
         onSaved(result.item);
-        onClose();
+        requestClose();
       } else {
         setError(result.error);
       }
@@ -87,18 +89,20 @@ export function IdeaFormModal({
   return (
     <div
       className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
-      onClick={onClose}
+      onClick={requestClose}
     >
       <form
         onSubmit={handleSubmit}
         onClick={(e) => e.stopPropagation()}
-        className="animate-modal-in flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-white/15 bg-neutral-950 text-white shadow-2xl shadow-black/50"
+        className={`flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-white/15 bg-neutral-950 text-white shadow-2xl shadow-black/50 ${
+          closing ? "animate-modal-out" : "animate-modal-in"
+        }`}
       >
         <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-6 py-4">
           <p className="text-base font-semibold">{isEdit ? "Edit idea" : "New idea"}</p>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             aria-label="Close"
             className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-white/40 transition-colors hover:bg-white/10 hover:text-white"
           >
@@ -175,7 +179,7 @@ export function IdeaFormModal({
         <div className="flex shrink-0 items-center justify-end gap-3 border-t border-white/10 px-6 py-4">
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="rounded-full px-4 py-2 text-sm font-medium text-white/60 transition-colors hover:text-white"
           >
             Cancel

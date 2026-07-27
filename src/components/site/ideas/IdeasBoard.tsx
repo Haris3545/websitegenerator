@@ -147,8 +147,12 @@ export function IdeasBoard({
           slug={slug}
           item={schedulingItem}
           onClose={() => setSchedulingItem(null)}
-          onScheduled={(update) => {
-            setItems((prev) => prev.map((i) => (i.id === schedulingItem.id ? { ...i, ...update } : i)));
+          onScheduled={({ calendar_status, scheduled_date, scheduled_time }) => {
+            setItems((prev) =>
+              prev.map((i) =>
+                i.id === schedulingItem.id ? { ...i, calendar_status, scheduled_date, scheduled_time } : i
+              )
+            );
           }}
         />
       )}

@@ -2,8 +2,7 @@ import { after } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getSiteArtist } from "@/lib/getSiteArtist";
 import { refreshEventsForArtist, refreshEventsIfStale } from "@/lib/events";
-import { MonthCalendar } from "@/components/site/MonthCalendar";
-import { PendingIdeaStack } from "@/components/site/PendingIdeaStack";
+import { CalendarBoard } from "@/components/site/CalendarBoard";
 import { TabHeading } from "@/components/site/TabHeading";
 import { SiteFooter } from "@/components/site/SiteFooter";
 
@@ -60,15 +59,12 @@ export default async function CalendarPage({ params }: { params: Promise<{ slug:
           app to set TICKETMASTER_API_KEY for broader coverage.
         </p>
       )}
-      <div className="mt-4">
-        <MonthCalendar artistId={artist.id} slug={slug} events={events ?? []} />
-      </div>
-
-      {tbcIdeas && tbcIdeas.length > 0 && (
-        <div className="mt-8">
-          <PendingIdeaStack artistId={artist.id} slug={slug} items={tbcIdeas} />
-        </div>
-      )}
+      <CalendarBoard
+        artistId={artist.id}
+        slug={slug}
+        initialEvents={events ?? []}
+        initialTbcIdeas={tbcIdeas ?? []}
+      />
 
       <SiteFooter
         slug={slug}

@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState, useTransition, useRef } from "react";
+import { useEffect, useMemo, useState, useTransition, useRef } from "react";
 import { addManualEvent, deleteManualEvent } from "@/app/s/[slug]/actions";
 import { useEditMode } from "@/components/site/EditModeContext";
+import { useClosableOverlay } from "@/hooks/useClosableOverlay";
 import type { ArtistEvent } from "@/lib/database.types";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -30,6 +31,7 @@ function AddEventModal({
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const { closing, requestClose } = useClosableOverlay(onClose);
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -39,7 +41,7 @@ function AddEventModal({
       const result = await addManualEvent(artistId, slug, formData);
       if (result.ok) {
         onAdded(result.event);
-        onClose();
+        requestClose();
       } else {
         setError(result.error);
       }
@@ -49,13 +51,15 @@ function AddEventModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
-      onClick={onClose}
+      onClick={requestClose}
     >
       <form
         ref={formRef}
         onSubmit={handleSubmit}
         onClick={(e) => e.stopPropagation()}
-        className="animate-modal-in flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-white/15 bg-neutral-950 text-white shadow-2xl shadow-black/50"
+        className={`flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-white/15 bg-neutral-950 text-white shadow-2xl shadow-black/50 ${
+          closing ? "animate-modal-out" : "animate-modal-in"
+        }`}
       >
         <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-6 py-4">
           <div>
@@ -64,7 +68,7 @@ function AddEventModal({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             aria-label="Close"
             className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-white/40 transition-colors hover:bg-white/10 hover:text-white"
           >
@@ -142,7 +146,7 @@ function AddEventModal({
         <div className="flex shrink-0 items-center justify-end gap-3 border-t border-white/10 px-6 py-4">
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="rounded-full px-4 py-2 text-sm font-medium text-white/60 transition-colors hover:text-white"
           >
             Cancel
@@ -172,10 +176,22 @@ export function MonthCalendar({
   artistId,
   slug,
   events: initialEvents,
+  dragHoverDayKey,
+  injectedEvent,
+  onInjected,
 }: {
   artistId: string;
   slug: string;
   events: ArtistEvent[];
+  /** The day cell (see dayKey) currently under an external drag — e.g. a
+   * to-be-confirmed idea being dragged over from PendingIdeaStack — so it
+   * can be highlighted as a drop target. */
+  dragHoverDayKey?: string | null;
+  /** An event created/updated elsewhere (a drag-drop schedule from
+   * PendingIdeaStack) to merge into this already-rendered calendar without
+   * a full page refetch. Call onInjected once consumed. */
+  injectedEvent?: ArtistEvent | null;
+  onInjected?: () => void;
 }) {
   const { editingAllowed } = useEditMode();
   const [events, setEvents] = useState(initialEvents);
@@ -183,6 +199,16 @@ export function MonthCalendar({
   const [showAddModal, setShowAddModal] = useState(false);
   const [viewIndex, setViewIndex] = useState(0);
   const [, startTransition] = useTransition();
+
+  // Merges an externally-scheduled event (dragged onto a day from
+  // PendingIdeaStack) into local state. Guarded by an existence check
+  // rather than an effect, so this is the "adjust state during rendering"
+  // pattern React's own docs recommend for syncing an incoming prop into
+  // state — it's idempotent (only fires while the event is genuinely
+  // missing) so it can't loop.
+  if (injectedEvent && !events.some((e) => e.id === injectedEvent.id)) {
+    setEvents((prev) => [...prev.filter((e) => e.id !== injectedEvent.id), injectedEvent]);
+  }
 
   const byDay = useMemo(() => {
     const map = new Map<string, ArtistEvent[]>();
@@ -217,6 +243,29 @@ export function MonthCalendar({
     months.sort((a, b) => a.year - b.year || a.month - b.month);
     return months;
   }, [events]);
+
+  // Same render-time-adjustment approach for navigating to the injected
+  // event's month/day — self-terminating once viewIndex/selectedKey match,
+  // so it converges within a render or two rather than looping.
+  if (injectedEvent) {
+    const d = new Date(injectedEvent.event_date);
+    const wantedKey = dayKey(d.getFullYear(), d.getMonth(), d.getDate());
+    const idx = monthOrder.findIndex((m) => m.year === d.getFullYear() && m.month === d.getMonth());
+    if (idx !== -1 && idx !== viewIndex) setViewIndex(idx);
+    if (selectedKey !== wantedKey) setSelectedKey(wantedKey);
+  }
+
+  // Once the merge + navigation above have both landed, tell the parent
+  // this injected event has been consumed so it clears it back to null —
+  // this effect only ever calls the *prop* callback, never a local
+  // setState, so it's just a plain "notify an external system" effect.
+  useEffect(() => {
+    if (!injectedEvent) return;
+    const stillMissing = !events.some((e) => e.id === injectedEvent.id);
+    const d = new Date(injectedEvent.event_date);
+    const wantedKey = dayKey(d.getFullYear(), d.getMonth(), d.getDate());
+    if (!stillMissing && selectedKey === wantedKey) onInjected?.();
+  }, [injectedEvent, events, selectedKey, onInjected]);
 
   const safeIndex = Math.min(viewIndex, monthOrder.length - 1);
   const { year, month } = monthOrder[safeIndex];
@@ -330,19 +379,23 @@ export function MonthCalendar({
               const isSelected = selectedKey === key;
               const isToday =
                 day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+              const isDropTarget = dragHoverDayKey === key;
               return (
                 <button
                   type="button"
                   key={i}
+                  data-calendar-day={key}
                   onClick={() => hasEvents && setSelectedKey(isSelected ? null : key)}
                   disabled={!hasEvents}
                   className={`flex aspect-square flex-col items-center justify-center gap-1 rounded-lg text-sm transition-colors ${
-                    isSelected
-                      ? "bg-[var(--accent)] font-semibold text-black"
-                      : hasEvents
-                        ? "text-white hover:bg-white/10"
-                        : "text-white/30"
-                  } ${isToday && !isSelected ? "ring-1 ring-inset ring-white/40" : ""}`}
+                    isDropTarget
+                      ? "bg-emerald-400/30 text-white ring-2 ring-emerald-400"
+                      : isSelected
+                        ? "bg-[var(--accent)] font-semibold text-black"
+                        : hasEvents
+                          ? "text-white hover:bg-white/10"
+                          : "text-white/30"
+                  } ${isToday && !isSelected && !isDropTarget ? "ring-1 ring-inset ring-white/40" : ""}`}
                 >
                   <span>{day}</span>
                   {hasEvents && (
@@ -399,11 +452,13 @@ export function MonthCalendar({
                       ? "found via web search"
                       : event.source === "manual"
                         ? "added manually"
-                        : event.source}
+                        : event.source === "idea"
+                          ? "scheduled from an idea"
+                          : event.source}
                   </span>
                 </div>
                 {event.description && (
-                  <p className="mt-2 text-sm text-white/70">{event.description}</p>
+                  <p className="mt-2 whitespace-pre-line text-sm text-white/70">{event.description}</p>
                 )}
                 {event.url && (
                   <a

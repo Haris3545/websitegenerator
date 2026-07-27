@@ -24,6 +24,13 @@ export function useSwipeGesture({
   onCommit: (direction: SwipeDirection) => void;
 }) {
   const [offset, setOffset] = useState({ x: 0, y: 0 });
+  // Which half of the card was grabbed (-1 = top half, 1 = bottom half) —
+  // real Tinder-style cards rotate as if pivoting around the opposite edge
+  // from where you're holding them, so the same horizontal drag swings the
+  // card a different way depending on where the gesture started. Not real
+  // physics, just enough of the illusion that grabbing different corners
+  // doesn't produce identical, robotic-feeling rotation.
+  const [pivot, setPivot] = useState(1);
   const [isDragging, setIsDragging] = useState(false);
   const [isSettling, setIsSettling] = useState(false);
   const gestureRef = useRef<Gesture | null>(null);
@@ -34,6 +41,9 @@ export function useSwipeGesture({
       if (!enabled || e.button !== 0 || isSettling) return;
       wasDraggedRef.current = false;
       gestureRef.current = { startX: e.clientX, startY: e.clientY, startTime: performance.now(), started: false };
+      const rect = e.currentTarget.getBoundingClientRect();
+      const grabFractionY = rect.height > 0 ? (e.clientY - rect.top) / rect.height : 0.5;
+      setPivot(grabFractionY < 0.5 ? -1 : 1);
       e.currentTarget.setPointerCapture(e.pointerId);
     },
     [enabled, isSettling]
@@ -67,6 +77,13 @@ export function useSwipeGesture({
       setOffset({ x: flyX, y: offset.y });
       window.setTimeout(() => {
         onCommit(direction);
+        // The next card takes over this same hook instance (SwipeStack
+        // never unmounts it) — without resetting here, isSettling would
+        // stay stuck true forever after the very first swipe, permanently
+        // blocking every card after it, and the new top card would render
+        // pre-translated off-screen at the old fly-out offset.
+        setOffset({ x: 0, y: 0 });
+        setIsSettling(false);
       }, 220);
     },
     [offset.y, onCommit]
@@ -107,6 +124,7 @@ export function useSwipeGesture({
 
   return {
     offset,
+    rotation: (offset.x / 18) * pivot,
     isDragging,
     isSettling,
     handlePointerDown,

@@ -72,8 +72,8 @@ export function NewsTicker({
     <div
       className="relative mt-3 overflow-hidden py-2"
       style={{
-        borderTop: "0.5px solid var(--accent)",
-        borderBottom: "0.5px solid var(--accent)",
+        borderTop: "0.5px solid color-mix(in srgb, var(--accent) 90%, transparent)",
+        borderBottom: "0.5px solid color-mix(in srgb, var(--accent) 90%, transparent)",
         maskImage:
           "linear-gradient(to right, transparent, black 48px, black calc(100% - 48px), transparent)",
         WebkitMaskImage:

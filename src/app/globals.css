@@ -109,6 +109,84 @@ body {
   animation: modal-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+@keyframes modal-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+.animate-modal-out {
+  animation: modal-out 0.18s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-sheet-in {
+  animation: sheet-in 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes sheet-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+}
+
+.animate-sheet-out {
+  animation: sheet-out 0.2s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+/* The "card sheet" (a folder grid item's detail view) unfurls from a
+   slightly tilted, scaled-down state into place — echoing the swipe cards'
+   own tilt language — and furls back the same way in reverse on close. */
+@keyframes card-sheet-in {
+  from {
+    opacity: 0;
+    transform: scale(0.86) rotate(-5deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.animate-card-sheet-in {
+  animation: card-sheet-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes card-sheet-out {
+  from {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.86) rotate(5deg);
+  }
+}
+
+.animate-card-sheet-out {
+  animation: card-sheet-out 0.2s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
 /* iOS-style "jiggle mode" wiggle for selectable grid cards — each card gets
    a slightly different animation-delay (see IdeaFolderView.tsx) so they
    don't all rock in perfect unison. */

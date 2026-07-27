@@ -492,21 +492,33 @@ export async function deleteIdeaCard(itemId: string, slug: string) {
   revalidatePath(`/s/${slug}/calendar`);
 }
 
-/** "Add to calendar" from the Liked folder. A confirmed date/time creates
- * (or updates) a real artist_events row so the idea shows up on the actual
+/** Builds the artist_events description for an idea-derived event — folds
+ * the timeline/lead-time note in underneath the idea's own description
+ * (there's no dedicated column for it on artist_events) so clicking the
+ * resulting calendar event still surfaces everything the idea card had. */
+function ideaEventDescription(body: string, timeline: string | null): string | null {
+  const parts = [body.trim(), timeline ? `Timeline / lead time: ${timeline}` : ""].filter(Boolean);
+  return parts.length ? parts.join("\n\n") : null;
+}
+
+/** "Add to calendar" from the Liked folder (or a drag onto a specific day —
+ * see PendingIdeaStack/CalendarBoard). A confirmed date/time creates (or
+ * updates) a real artist_events row so the idea shows up on the actual
  * month grid like any other event; ticking "to be confirmed" instead just
  * flags the idea so it shows up in the small pending-confirmation stack at
- * the bottom of the Calendar tab, with no firm date committed yet. */
+ * the bottom of the Calendar tab, with no firm date committed yet. Returns
+ * the resulting event (or null for the tbc case) so a client component can
+ * merge it into an already-rendered calendar without a full refetch. */
 export async function scheduleIdeaToCalendar(
   itemId: string,
   artistId: string,
   slug: string,
   input: { date: string; time: string; tbc: boolean }
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; event: ArtistEvent | null } | { ok: false; error: string }> {
   const supabase = createServiceRoleClient();
   const { data: item, error: fetchError } = await supabase
     .from("board_items")
-    .select("title, body, image_url, calendar_event_id")
+    .select("title, body, image_url, timeline, calendar_event_id")
     .eq("id", itemId)
     .maybeSingle();
   if (fetchError) return { ok: false, error: fetchError.message };
@@ -526,45 +538,85 @@ export async function scheduleIdeaToCalendar(
       })
       .eq("id", itemId);
     if (error) return { ok: false, error: error.message };
-  } else {
-    if (!input.date) return { ok: false, error: "Pick a date, or mark it to be confirmed." };
-    const eventDate = new Date(`${input.date}T${input.time || "00:00"}:00`);
-    if (Number.isNaN(eventDate.getTime())) return { ok: false, error: "That date/time isn't valid." };
 
-    if (item.calendar_event_id) {
-      const { error } = await supabase
-        .from("artist_events")
-        .update({
-          event_date: eventDate.toISOString(),
-          venue: item.title,
-          description: item.body || null,
-          image_url: item.image_url,
-        })
-        .eq("id", item.calendar_event_id);
-      if (error) return { ok: false, error: error.message };
-    } else {
-      const { data: newEvent, error } = await supabase
-        .from("artist_events")
-        .insert({
-          artist_id: artistId,
-          event_date: eventDate.toISOString(),
-          venue: item.title,
-          description: item.body || null,
-          image_url: item.image_url,
-          source: "idea",
-        })
-        .select()
-        .single();
-      if (error) return { ok: false, error: error.message };
-      await supabase.from("board_items").update({ calendar_event_id: newEvent.id }).eq("id", itemId);
-    }
-
-    const { error: updateError } = await supabase
-      .from("board_items")
-      .update({ calendar_status: "confirmed", scheduled_date: input.date, scheduled_time: input.time || null })
-      .eq("id", itemId);
-    if (updateError) return { ok: false, error: updateError.message };
+    updateTag(artistCacheTag(slug));
+    revalidatePath(`/s/${slug}/ideas`);
+    revalidatePath(`/s/${slug}/calendar`);
+    return { ok: true, event: null };
   }
+
+  if (!input.date) return { ok: false, error: "Pick a date, or mark it to be confirmed." };
+  const eventDate = new Date(`${input.date}T${input.time || "00:00"}:00`);
+  if (Number.isNaN(eventDate.getTime())) return { ok: false, error: "That date/time isn't valid." };
+  const description = ideaEventDescription(item.body, item.timeline);
+
+  let event: ArtistEvent;
+  if (item.calendar_event_id) {
+    const { data, error } = await supabase
+      .from("artist_events")
+      .update({
+        event_date: eventDate.toISOString(),
+        venue: item.title,
+        description,
+        image_url: item.image_url,
+      })
+      .eq("id", item.calendar_event_id)
+      .select()
+      .single();
+    if (error) return { ok: false, error: error.message };
+    event = data;
+  } else {
+    const { data, error } = await supabase
+      .from("artist_events")
+      .insert({
+        artist_id: artistId,
+        event_date: eventDate.toISOString(),
+        venue: item.title,
+        description,
+        image_url: item.image_url,
+        source: "idea",
+      })
+      .select()
+      .single();
+    if (error) return { ok: false, error: error.message };
+    event = data;
+    await supabase.from("board_items").update({ calendar_event_id: event.id }).eq("id", itemId);
+  }
+
+  const { error: updateError } = await supabase
+    .from("board_items")
+    .update({ calendar_status: "confirmed", scheduled_date: input.date, scheduled_time: input.time || null })
+    .eq("id", itemId);
+  if (updateError) return { ok: false, error: updateError.message };
+
+  updateTag(artistCacheTag(slug));
+  revalidatePath(`/s/${slug}/ideas`);
+  revalidatePath(`/s/${slug}/calendar`);
+  return { ok: true, event };
+}
+
+/** Un-schedules an idea — clears its calendar_status/scheduled fields and
+ * deletes the artist_events row scheduling had created, without touching
+ * the idea itself (it stays in Liked). This is the "remove" button on the
+ * to-be-confirmed stack at the bottom of the Calendar tab, for when
+ * "Add to calendar" gets tapped by accident. */
+export async function unscheduleIdeaFromCalendar(itemId: string, slug: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = createServiceRoleClient();
+  const { data: item } = await supabase
+    .from("board_items")
+    .select("calendar_event_id")
+    .eq("id", itemId)
+    .maybeSingle();
+
+  if (item?.calendar_event_id) {
+    await supabase.from("artist_events").delete().eq("id", item.calendar_event_id);
+  }
+
+  const { error } = await supabase
+    .from("board_items")
+    .update({ calendar_status: null, scheduled_date: null, scheduled_time: null, calendar_event_id: null })
+    .eq("id", itemId);
+  if (error) return { ok: false, error: error.message };
 
   updateTag(artistCacheTag(slug));
   revalidatePath(`/s/${slug}/ideas`);

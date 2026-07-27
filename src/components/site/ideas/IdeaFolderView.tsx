@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
+import { useClosableOverlay } from "@/hooks/useClosableOverlay";
 import type { BoardItem } from "@/lib/database.types";
 
 const DRAG_UP_COMMIT_PX = 120;
@@ -10,8 +11,7 @@ function IdeaGridCard({
   selectMode,
   selected,
   jiggleDelay,
-  isDragging,
-  dragOffset,
+  faded,
   onTap,
   onPointerDown,
   onPointerMove,
@@ -22,8 +22,7 @@ function IdeaGridCard({
   selectMode: boolean;
   selected: boolean;
   jiggleDelay: number;
-  isDragging: boolean;
-  dragOffset: number;
+  faded: boolean;
   onTap: () => void;
   onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
   onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => void;
@@ -32,15 +31,12 @@ function IdeaGridCard({
 }) {
   return (
     <div
-      className={`relative aspect-[3/4] touch-none select-none overflow-hidden rounded-xl shadow-lg shadow-black/30 ${
-        selectMode && !isDragging ? "animate-jiggle" : ""
-      }`}
+      className={`relative aspect-[3/4] touch-none select-none overflow-hidden rounded-xl shadow-lg shadow-black/30 transition-opacity duration-150 ${
+        selectMode && !faded ? "animate-jiggle" : ""
+      } ${faded ? "opacity-25" : ""}`}
       style={{
         border: "1px solid rgba(255,255,255,0.12)",
         animationDelay: `${jiggleDelay}s`,
-        transform: isDragging ? `translateY(${dragOffset}px) scale(1.05)` : undefined,
-        zIndex: isDragging ? 30 : undefined,
-        transition: isDragging ? "none" : "transform 0.2s ease-out",
       }}
       onClick={onTap}
       onPointerDown={onPointerDown}
@@ -89,28 +85,35 @@ function IdeaDetailSheet({
   onSchedule: () => void;
   onMove: (status: "pending" | "liked" | "disliked") => void;
 }) {
+  const { closing, requestClose } = useClosableOverlay(onClose);
+
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+      onClick={requestClose}
+    >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="animate-modal-in flex max-h-[85vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-white/15 bg-neutral-950 text-white shadow-2xl shadow-black/50"
+        className={`relative flex max-h-[85vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl border border-white/15 bg-neutral-950 text-white shadow-2xl shadow-black/50 ${
+          closing ? "animate-card-sheet-out" : "animate-card-sheet-in"
+        }`}
       >
+        <button
+          type="button"
+          onClick={requestClose}
+          aria-label="Close"
+          className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-lg text-white/50 backdrop-blur-sm transition-opacity hover:bg-black/60 hover:text-white/90 hover:opacity-100"
+        >
+          ×
+        </button>
+
         {item.image_url && (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={item.image_url} alt="" className="h-40 w-full shrink-0 object-cover" />
         )}
+
         <div className="custom-scrollbar flex-1 overflow-y-auto p-5">
-          <div className="flex items-start justify-between gap-3">
-            <h3 className="text-lg font-bold leading-tight">{item.title}</h3>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg text-white/40 hover:bg-white/10 hover:text-white"
-            >
-              ×
-            </button>
-          </div>
+          <h3 className="pr-8 text-lg font-bold leading-tight">{item.title}</h3>
           {item.body && <p className="mt-2 text-sm leading-relaxed text-white/70">{item.body}</p>}
           {item.timeline && (
             <div className="mt-3">
@@ -126,41 +129,50 @@ function IdeaDetailSheet({
             </p>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-2 border-t border-white/10 p-4">
-          <button
-            type="button"
-            onClick={onEdit}
-            className="rounded-full border border-white/15 px-3 py-1.5 text-xs font-medium text-white/80 transition-colors hover:bg-white/10"
-          >
-            Edit
-          </button>
-          <button
-            type="button"
-            onClick={onDelete}
-            className="rounded-full border border-red-500/40 px-3 py-1.5 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/10"
-          >
-            Delete
-          </button>
+
+        <div className="flex items-center justify-between gap-2 border-t border-white/10 px-4 py-3">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onEdit}
+              aria-label="Edit idea"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-white/80 transition-colors hover:bg-white/10"
+            >
+              ✎
+            </button>
+            <button
+              type="button"
+              onClick={onDelete}
+              aria-label="Delete idea"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-red-500/40 text-red-400 transition-colors hover:bg-red-500/10"
+            >
+              🗑
+            </button>
+          </div>
           {folder === "liked" && (
             <button
               type="button"
               onClick={onSchedule}
-              className="rounded-full bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-black transition-transform hover:-translate-y-0.5"
+              className="rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-black transition-transform hover:-translate-y-0.5"
             >
               Add to calendar
             </button>
           )}
+        </div>
+
+        <div className="flex items-center justify-center gap-2 border-t border-white/10 px-4 py-2.5">
           <button
             type="button"
             onClick={() => onMove("pending")}
-            className="ml-auto rounded-full border border-white/15 px-3 py-1.5 text-xs font-medium text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+            className="rounded-full px-3 py-1 text-[11px] font-medium text-white/50 transition-colors hover:text-white"
           >
             Return to stack
           </button>
+          <span className="text-white/20">·</span>
           <button
             type="button"
             onClick={() => onMove(folder === "liked" ? "disliked" : "liked")}
-            className="rounded-full border border-white/15 px-3 py-1.5 text-xs font-medium text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+            className="rounded-full px-3 py-1 text-[11px] font-medium text-white/50 transition-colors hover:text-white"
           >
             Switch to {folder === "liked" ? "disliked" : "liked"}
           </button>
@@ -173,10 +185,12 @@ function IdeaDetailSheet({
 /** The full-screen grid for the Liked/Disliked folders. "Select" turns on
  * iOS-style jiggle mode: cards wobble, get a checkmark badge, and can be
  * bulk-moved back to the stack (or across to the other folder) either with
- * the bottom action bar or by dragging a card upward past the drop banner —
- * dragging a card that's part of the current selection moves the whole
- * selection, matching the iOS Photos "drag one, act on all selected"
- * pattern, not just the one card physically under the pointer. */
+ * the bottom action bar or by dragging a card upward past the drop zone.
+ * Dragging a card that's part of the current selection lifts the whole
+ * selection together into a small floating stack that follows the pointer
+ * — matching the iOS Photos "drag one, act on all selected" pattern —
+ * while the source cards dim in place rather than each animating on their
+ * own. */
 export function IdeaFolderView({
   folder,
   items,
@@ -198,9 +212,10 @@ export function IdeaFolderView({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [viewingItem, setViewingItem] = useState<BoardItem | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
-  const [dragDy, setDragDy] = useState(0);
+  const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
   const [dragStarted, setDragStarted] = useState(false);
-  const dragStartY = useRef(0);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const { closing, requestClose } = useClosableOverlay(onClose);
 
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
@@ -228,42 +243,57 @@ export function IdeaFolderView({
 
   function handlePointerDown(e: React.PointerEvent<HTMLDivElement>, id: string) {
     if (!selectMode || e.button !== 0) return;
-    dragStartY.current = e.clientY;
+    setDragStart({ x: e.clientX, y: e.clientY });
     setDragStarted(false);
     setDraggedId(id);
-    setDragDy(0);
+    setDragPos({ x: e.clientX, y: e.clientY });
     e.currentTarget.setPointerCapture(e.pointerId);
   }
 
   function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
     if (!draggedId) return;
-    const dy = e.clientY - dragStartY.current;
+    const dy = e.clientY - dragStart.y;
     if (!dragStarted && Math.abs(dy) > 6) setDragStarted(true);
-    setDragDy(dy);
+    setDragPos({ x: e.clientX, y: e.clientY });
   }
 
   function endDrag() {
     if (!draggedId) return;
-    const committed = dragStarted && dragDy <= -DRAG_UP_COMMIT_PX;
+    const dy = dragPos.y - dragStart.y;
+    const committed = dragStarted && dy <= -DRAG_UP_COMMIT_PX;
     if (committed) {
       const ids = selectedIds.has(draggedId) && selectedIds.size > 0 ? Array.from(selectedIds) : [draggedId];
       commitMove(ids, "pending");
     }
     setDraggedId(null);
-    setDragDy(0);
     setDragStarted(false);
   }
 
   const isDraggingUp = draggedId !== null && dragStarted;
+  const dragGroupIds =
+    draggedId && selectedIds.has(draggedId) && selectedIds.size > 0 ? Array.from(selectedIds) : draggedId ? [draggedId] : [];
+  const dragGroupItems = dragGroupIds.map((id) => items.find((i) => i.id === id)).filter((i): i is BoardItem => !!i);
+  const dropProgress = isDraggingUp
+    ? Math.min(1, Math.max(0, -(dragPos.y - dragStart.y) / DRAG_UP_COMMIT_PX))
+    : 0;
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-neutral-950">
+    <div
+      className={`fixed inset-0 z-[60] flex flex-col bg-neutral-950 ${closing ? "animate-sheet-out" : "animate-sheet-in"}`}
+    >
+      {/* A soft green glow that grows in from the top as the drag approaches
+          the commit threshold, rather than a hard-edged solid bar. */}
       <div
-        className={`pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center justify-center overflow-hidden bg-[var(--accent)]/90 text-sm font-bold uppercase tracking-wide text-black transition-all duration-200 ${
-          isDraggingUp && dragDy <= -DRAG_UP_COMMIT_PX / 2 ? "h-14 opacity-100" : "h-0 opacity-0"
-        }`}
+        className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center overflow-hidden transition-opacity duration-150"
+        style={{
+          height: 180,
+          opacity: dropProgress,
+          background: "radial-gradient(ellipse at top, rgba(52,211,153,0.55), transparent 70%)",
+        }}
       >
-        Drop here to send back to the stack
+        <span className="mt-6 text-sm font-bold uppercase tracking-wide text-emerald-300 drop-shadow-md">
+          Drop here to send back to the stack
+        </span>
       </div>
 
       <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-5 py-4">
@@ -289,7 +319,7 @@ export function IdeaFolderView({
         </div>
         <button
           type="button"
-          onClick={onClose}
+          onClick={requestClose}
           aria-label="Close"
           className="flex h-8 w-8 items-center justify-center rounded-full text-xl text-white/50 transition-colors hover:bg-white/10 hover:text-white"
         >
@@ -323,8 +353,7 @@ export function IdeaFolderView({
                 selectMode={selectMode}
                 selected={selectedIds.has(item.id)}
                 jiggleDelay={(i % 5) * -0.045}
-                isDragging={draggedId === item.id && dragStarted}
-                dragOffset={draggedId === item.id ? dragDy : 0}
+                faded={dragStarted && dragGroupIds.includes(item.id)}
                 onTap={() => handleCardTap(item)}
                 onPointerDown={(e) => handlePointerDown(e, item.id)}
                 onPointerMove={handlePointerMove}
@@ -335,6 +364,39 @@ export function IdeaFolderView({
           </div>
         )}
       </div>
+
+      {/* The dragged card(s) render here as a fixed-position group that
+          follows the pointer, rather than each grid card animating on its
+          own — dragging one selected card lifts the whole selection. */}
+      {draggedId && dragStarted && (
+        <div className="pointer-events-none fixed z-[70]" style={{ left: dragPos.x, top: dragPos.y }}>
+          {dragGroupItems.slice(0, 3).map((item, i) => (
+            <div
+              key={item.id}
+              className="absolute h-24 w-20 overflow-hidden rounded-lg border border-white/25 shadow-2xl shadow-black/60"
+              style={{
+                transform: `translate(-50%, -50%) rotate(${(i - 1) * 6}deg)`,
+                zIndex: 3 - i,
+              }}
+            >
+              {item.image_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={item.image_url} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <div className="h-full w-full bg-neutral-800" />
+              )}
+            </div>
+          ))}
+          {dragGroupItems.length > 1 && (
+            <span
+              className="absolute flex h-6 w-6 items-center justify-center rounded-full bg-[var(--accent)] text-[11px] font-bold text-black shadow-lg"
+              style={{ transform: "translate(6px, -28px)" }}
+            >
+              {dragGroupItems.length}
+            </span>
+          )}
+        </div>
+      )}
 
       {selectMode && selectedIds.size > 0 && (
         <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-3 border-t border-white/10 bg-neutral-950/95 p-4 backdrop-blur-md">

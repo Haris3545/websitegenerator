@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useSwipeGesture, type SwipeDirection } from "@/hooks/useSwipeGesture";
-import { FillerCard, TopCard } from "@/components/site/ideas/SwipeCard";
+import { FillerCard, TopCard, CheckIcon, CrossIcon, tiltFor } from "@/components/site/ideas/SwipeCard";
 import type { BoardItem } from "@/lib/database.types";
 
 const IDLE_HINT_MS = 2000;
@@ -29,6 +29,11 @@ export function SwipeStack({
   const top = items[0];
   const [flipped, setFlipped] = useState(false);
   const [showFlipHint, setShowFlipHint] = useState(false);
+  // The top card rests flat (0deg) — only the fillers behind it are tilted.
+  // When a new card is promoted to top, it briefly starts at the tilt it
+  // had as the next-in-line filler and animates down to flat, so the
+  // promotion itself reads as a little settle rather than an abrupt snap.
+  const [restRotate, setRestRotate] = useState(0);
   const lastTopId = useRef<string | null>(null);
 
   useEffect(() => {
@@ -36,6 +41,9 @@ export function SwipeStack({
     lastTopId.current = top?.id ?? null;
     setFlipped(false);
     setShowFlipHint(false);
+    setRestRotate(tiltFor(1));
+    const raf = requestAnimationFrame(() => setRestRotate(0));
+    return () => cancelAnimationFrame(raf);
   }, [top?.id]);
 
   useEffect(() => {
@@ -74,12 +82,12 @@ export function SwipeStack({
           disabled={!flipped}
           onClick={() => gesture.commitProgrammatically("disliked")}
           aria-label="Pass on this idea"
-          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-red-500/90 text-2xl text-white shadow-lg shadow-black/30 transition-all duration-150 hover:scale-105 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:scale-100"
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-b from-red-400 to-red-600 text-white shadow-lg shadow-red-900/40 ring-1 ring-inset ring-white/20 transition-all duration-150 hover:scale-105 hover:shadow-red-900/60 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:scale-100"
         >
-          ✕
+          <CrossIcon />
         </button>
 
-        <div className="relative aspect-[3/4] w-[72vw] max-w-[280px] sm:w-[60vw] sm:max-w-sm">
+        <div className="relative aspect-[2/3] w-[72vw] max-w-[280px] sm:w-[60vw] sm:max-w-sm">
           {fillers.map((item, i) => (
             <FillerCard key={item.id} item={item} index={fillers.length - i} />
           ))}
@@ -87,6 +95,8 @@ export function SwipeStack({
             item={top}
             flipped={flipped}
             offset={gesture.offset}
+            rotation={gesture.rotation}
+            restRotate={restRotate}
             isDragging={gesture.isDragging}
             showFlipHint={showFlipHint}
             onPointerDown={gesture.handlePointerDown}
@@ -104,9 +114,9 @@ export function SwipeStack({
           disabled={!flipped}
           onClick={() => gesture.commitProgrammatically("liked")}
           aria-label="Like this idea"
-          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-emerald-400/90 text-2xl text-black shadow-lg shadow-black/30 transition-all duration-150 hover:scale-105 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:scale-100"
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-b from-emerald-300 to-emerald-500 text-black shadow-lg shadow-emerald-900/40 ring-1 ring-inset ring-white/30 transition-all duration-150 hover:scale-105 hover:shadow-emerald-900/60 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:scale-100"
         >
-          ✓
+          <CheckIcon />
         </button>
       </div>
 
