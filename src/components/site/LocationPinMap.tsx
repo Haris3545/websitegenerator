@@ -15,7 +15,7 @@ import { PoofEffectProvider, useTriggerPoof } from "@/hooks/usePoofEffect";
 import { TourGlobe, type TourGlobePoint } from "@/components/site/TourGlobe";
 import type { LocationPin, LocationPinTag } from "@/lib/database.types";
 
-const MINI_GLOBE_SIZE = 116;
+const MINI_GLOBE_SIZE = 150;
 
 const MAP_HEIGHT = 340;
 const UK_CENTER: [number, number] = [54.5, -3.2];
@@ -61,17 +61,37 @@ const PRESET_COLORS = [
 // on top of it instead of disappearing behind its tiles.
 const ABOVE_MAP_Z = 2000;
 
+// Leaflet's built-in panes (tilePane 200 ... markerPane 600 ... popupPane
+// 700) aren't isolated into their own stacking context — .leaflet-container
+// only sets position:relative, no z-index — so a plain z-index on the
+// globe overlay sibling below genuinely interleaves with them: above the
+// tiles, below the markers/popups, letting oversized pins visually poke out
+// over the globe wherever the two overlap instead of being hidden by it.
+const GLOBE_OVERLAY_Z = 550;
+
+function shadeColor(hex: string, percent: number): string {
+  const clean = hex.replace("#", "");
+  const num = parseInt(clean, 16);
+  const r = Math.max(0, Math.min(255, ((num >> 16) & 0xff) + percent));
+  const g = Math.max(0, Math.min(255, ((num >> 8) & 0xff) + percent));
+  const b = Math.max(0, Math.min(255, (num & 0xff) + percent));
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+}
+
+// A chunky, glossy "3D" pin — a shaded sphere with a highlight plus a
+// pointed base — sized to read clearly even against the globe overlay it
+// sometimes sits above.
 function pinIcon(color: string, justAdded: boolean): L.DivIcon {
-  return L.divIcon({
-    className: "",
-    html: `<div class="${justAdded ? "animate-pin-drop-in" : ""}" style="width:26px;height:26px;border-radius:9999px;background:${color};border:3px solid white;box-shadow:0 0 0 2px rgba(0,0,0,0.35),0 3px 8px rgba(0,0,0,0.6);"></div>`,
-    // A fixed pixel size — Leaflet never scales a divIcon with zoom (only
-    // its screen position updates), so this is already the same size at
-    // every zoom level.
-    iconSize: [26, 26],
-    iconAnchor: [13, 13],
-    popupAnchor: [0, -14],
-  });
+  const dark = shadeColor(color, -60);
+  const html = `
+    <div class="${justAdded ? "animate-pin-drop-in" : ""}" style="position:relative;width:38px;height:48px;filter:drop-shadow(0 4px 7px rgba(0,0,0,0.6));">
+      <div style="position:absolute;left:2px;top:0;width:34px;height:34px;border-radius:9999px;
+        background:radial-gradient(circle at 33% 28%, #ffffff, ${color} 45%, ${dark} 100%);
+        border:2px solid rgba(255,255,255,0.9);"></div>
+      <div style="position:absolute;left:50%;top:30px;width:0;height:0;transform:translateX(-50%);
+        border-left:8px solid transparent;border-right:8px solid transparent;border-top:12px solid ${dark};"></div>
+    </div>`;
+  return L.divIcon({ className: "", html, iconSize: [38, 48], iconAnchor: [19, 46], popupAnchor: [0, -44] });
 }
 
 function ColorSwatchRow({ value, onChange }: { value: string; onChange: (c: string) => void }) {
@@ -169,24 +189,51 @@ function TagManageRow({
   );
 }
 
+const PinGlyph = ({ color = "var(--accent)" }: { color?: string }) => (
+  <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" style={{ color }} aria-hidden>
+    <path
+      d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21Z"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinejoin="round"
+    />
+    <circle cx="12" cy="9.5" r="2.4" stroke="currentColor" strokeWidth={1.8} />
+  </svg>
+);
+
+const TagGlyph = () => (
+  <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" style={{ color: "var(--accent)" }} aria-hidden>
+    <path
+      d="M11.5 4h-5A2.5 2.5 0 0 0 4 6.5v5c0 .53.21 1.04.59 1.41l8.5 8.5a2 2 0 0 0 2.82 0l5-5a2 2 0 0 0 0-2.82l-8.5-8.5A2 2 0 0 0 11.5 4Z"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinejoin="round"
+    />
+    <circle cx="8.5" cy="8.5" r="1.4" fill="currentColor" />
+  </svg>
+);
+
 /** The custom-pin half of the Locations tab's 2D map — a real pan/zoomable
- * colour map (Leaflet + free CartoDB Voyager tiles) sitting above the
- * existing 3D globe, for freeform points a team wants to mark themselves
- * (distinct from the Ticketmaster/web-search tour dates the globe shows).
- * "Pin" arms a single map click to drop a new pin, prompting for a name,
- * colour, and any tags; the UK-cities dropdown just re-centers the view to
- * help find a spot; the top filter row lists every tag and narrows the map
- * to pins carrying whichever ones are clicked on. */
+ * colour map (Leaflet + free CartoDB Voyager tiles) with a small spinning
+ * 3D globe overlaid in the corner (the same globe that used to sit as its
+ * own full-size section below — folded in here so the map and globe read
+ * as one system). "Pin" arms a single map click to drop a new pin,
+ * prompting for a name, colour, and any tags; the UK-cities dropdown just
+ * re-centers the view to help find a spot; the top filter row lists every
+ * tag and narrows the map (and the corner globe) to pins carrying
+ * whichever ones are clicked on. */
 function LocationPinMapInner({
   artistId,
   slug,
   initialPins,
   initialTags,
+  tourPoints,
 }: {
   artistId: string;
   slug: string;
   initialPins: LocationPin[];
   initialTags: LocationPinTag[];
+  tourPoints: TourGlobePoint[];
 }) {
   const [pins, setPins] = useState(initialPins);
   const [tags, setTags] = useState(initialTags);
@@ -352,13 +399,17 @@ function LocationPinMapInner({
     }
   }
 
-  // The mini corner globe mirrors whatever's currently visible on the 2D
-  // map — same pins, same colours, same tag filter — so dropping a new pin
-  // (or toggling a filter) updates it live rather than needing its own
-  // separate state.
-  const globePoints: TourGlobePoint[] = pins
-    .filter((pin) => activeTagIds.size === 0 || pin.tag_ids.some((id) => activeTagIds.has(id)))
-    .map((pin) => ({ lat: pin.lat, lng: pin.lng, label: pin.name, color: pin.color }));
+  // The corner globe mirrors whatever's currently visible on the 2D map —
+  // same pins, same colours, same tag filter — plus the tour-date points
+  // that used to live in their own separate globe below the map, so
+  // dropping a new pin (or toggling a filter) updates it live without a
+  // second, disconnected globe.
+  const globePoints: TourGlobePoint[] = [
+    ...tourPoints,
+    ...pins
+      .filter((pin) => activeTagIds.size === 0 || pin.tag_ids.some((id) => activeTagIds.has(id)))
+      .map((pin) => ({ lat: pin.lat, lng: pin.lng, label: pin.name, color: pin.color })),
+  ];
 
   return (
     <div className="location-pin-map">
@@ -372,7 +423,8 @@ function LocationPinMapInner({
               : "border border-white/20 text-white/80 hover:-translate-y-0.5 hover:border-white/40"
           }`}
         >
-          📍 {placing ? "Tap the map…" : "Pin"}
+          <PinGlyph color={placing ? "black" : "var(--accent)"} />
+          {placing ? "Tap the map…" : "Pin"}
         </button>
 
         <div className="relative">
@@ -422,7 +474,7 @@ function LocationPinMapInner({
           className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/60 transition-colors hover:border-white/30 hover:text-white"
           aria-label="Manage tags"
         >
-          🏷️ Manage
+          <TagGlyph /> Manage
         </button>
 
         {tags.length > 0 && (
@@ -449,28 +501,40 @@ function LocationPinMapInner({
         )}
       </div>
 
-      <div
-        className="relative overflow-hidden shadow-lg shadow-black/30"
-        style={{
-          borderRadius: "var(--card-radius, 12px)",
-          border: "1px solid rgba(255,255,255,var(--card-border-opacity, 0.15))",
-          // A faint accent-coloured glow around the edge, echoing the
-          // globe's own atmosphere halo just below it, so the two read as
-          // one system rather than two unrelated views.
-          boxShadow: "inset 0 0 40px rgba(0,0,0,0.25), 0 0 24px -4px var(--accent)",
-        }}
-      >
-        <div ref={mapDivRef} style={{ height: MAP_HEIGHT, width: "100%" }} />
-
-        {/* A small spinning globe overlaid in the corner, echoing the full
-            3D globe below — same pins/colours, updating live as pins are
-            added or filtered, so the map and globe read as one system
-            instead of two disconnected views. */}
+      {/* The outer wrapper deliberately has no overflow-hidden of its own —
+          that lives on the inner map div below instead — so the corner
+          globe can genuinely overlap/spill outside the card's rounded edge
+          rather than being clipped by it. */}
+      <div className="relative">
         <div
-          className="pointer-events-none absolute bottom-3 right-3 overflow-hidden rounded-full border-2 border-white/25 bg-black/30 shadow-2xl shadow-black/60"
-          style={{ height: MINI_GLOBE_SIZE, width: MINI_GLOBE_SIZE, zIndex: ABOVE_MAP_Z - 1000 }}
+          ref={mapDivRef}
+          className="overflow-hidden shadow-lg shadow-black/30"
+          style={{
+            height: MAP_HEIGHT,
+            width: "100%",
+            borderRadius: "var(--card-radius, 12px)",
+            border: "1px solid rgba(255,255,255,var(--card-border-opacity, 0.15))",
+            // A faint accent-coloured glow around the edge, echoing the
+            // globe's own atmosphere halo, so the two read as one system
+            // rather than two unrelated views.
+            boxShadow: "inset 0 0 40px rgba(0,0,0,0.25), 0 0 24px -4px var(--accent)",
+          }}
+        />
+
+        {/* A spinning globe overlaid at the top-right, deliberately
+            overlapping the card's edge — same pins/colours (plus the
+            tour-date points a separate, full-size globe used to show
+            below), updating live as pins are added or filtered. Sits above
+            the tile layer but below Leaflet's marker pane (see
+            GLOBE_OVERLAY_Z) so oversized pins that land in this corner
+            visually poke out over the globe instead of being hidden by
+            it — and it's still fully interactive, so a visitor can drag to
+            spin it same as the old standalone globe. */}
+        <div
+          className="absolute -right-5 -top-5 overflow-hidden rounded-full border-2 border-white/25 bg-black/30 shadow-2xl shadow-black/60"
+          style={{ height: MINI_GLOBE_SIZE, width: MINI_GLOBE_SIZE, zIndex: GLOBE_OVERLAY_Z }}
         >
-          <TourGlobe points={globePoints} height={MINI_GLOBE_SIZE} interactive={false} />
+          <TourGlobe points={globePoints} height={MINI_GLOBE_SIZE} />
         </div>
 
         {pendingCoords && (
@@ -620,6 +684,7 @@ export function LocationPinMap(props: {
   slug: string;
   initialPins: LocationPin[];
   initialTags: LocationPinTag[];
+  tourPoints: TourGlobePoint[];
 }) {
   return (
     <PoofEffectProvider>

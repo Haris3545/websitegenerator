@@ -3,7 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getSiteArtist } from "@/lib/getSiteArtist";
 import { refreshEventsForArtist, refreshEventsIfStale } from "@/lib/events";
 import { EventList } from "@/components/site/EventList";
-import { TourGlobe, type TourGlobePoint } from "@/components/site/TourGlobe";
+import type { TourGlobePoint } from "@/components/site/TourGlobe";
 import { LocationPinMapLoader as LocationPinMap } from "@/components/site/LocationPinMapLoader";
 import { TabHeading } from "@/components/site/TabHeading";
 import { SiteFooter } from "@/components/site/SiteFooter";
@@ -73,6 +73,7 @@ export default async function LocationsPage({ params }: { params: Promise<{ slug
           slug={slug}
           initialPins={pins ?? []}
           initialTags={pinTags ?? []}
+          tourPoints={globePoints}
         />
       </div>
 
@@ -83,21 +84,9 @@ export default async function LocationsPage({ params }: { params: Promise<{ slug
           broader coverage.
         </p>
       ) : (
-        <>
-          {globePoints.length ? (
-            <div className="mt-4">
-              <TourGlobe points={globePoints} />
-            </div>
-          ) : (
-            <p className="mt-4 text-xs text-white/30">
-              Globe view needs location data for at least one date — this fills in as tour dates
-              are found.
-            </p>
-          )}
-          <div className="mt-6">
-            <EventList events={events} groupBy="city" />
-          </div>
-        </>
+        <div className="mt-6">
+          <EventList events={events} groupBy="city" />
+        </div>
       )}
 
       <SiteFooter

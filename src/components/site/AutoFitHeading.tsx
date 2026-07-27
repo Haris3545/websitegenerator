@@ -47,7 +47,28 @@ export function AutoFitHeading({
     fit();
     const resizeObserver = new ResizeObserver(fit);
     resizeObserver.observe(container);
-    return () => resizeObserver.disconnect();
+
+    // The very first fit() run measures scrollWidth using whatever font is
+    // actually painted at that instant — almost always a fallback system
+    // font, since the artist's Google Font is still loading via the <link>
+    // tag in the layout. Once that swaps in, character widths change (this
+    // is what was showing as the title being "off-centre" or overflowing
+    // until a resize/refresh forced a re-measure): a resize event never
+    // fires just because a font finished loading, so nothing re-triggered
+    // fit() on its own. document.fonts.ready resolves once every requested
+    // font face has either loaded or failed, so this re-fits against the
+    // real, final metrics without waiting on user interaction.
+    let cancelled = false;
+    if (typeof document !== "undefined" && "fonts" in document) {
+      document.fonts.ready.then(() => {
+        if (!cancelled) fit();
+      });
+    }
+
+    return () => {
+      cancelled = true;
+      resizeObserver.disconnect();
+    };
   }, [children, maxFontSizePx, minFontSizePx]);
 
   return (
