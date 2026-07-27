@@ -1,9 +1,10 @@
 "use client";
 
-import { useId, useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import imageCompression from "browser-image-compression";
 import { addIdeaCard, updateIdeaCard } from "@/app/s/[slug]/actions";
 import { useClosableOverlay } from "@/hooks/useClosableOverlay";
+import { PasteImageField } from "@/components/site/PasteImageField";
 import type { BoardItem } from "@/lib/database.types";
 
 const IMAGE_MAX_DIMENSION = 1600;
@@ -38,7 +39,6 @@ export function IdeaFormModal({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const fileRef = useRef<File | null>(null);
-  const inputId = useId();
   const { closing, requestClose } = useClosableOverlay(onClose);
 
   async function handleFileChange(file: File) {
@@ -113,32 +113,7 @@ export function IdeaFormModal({
         <div className="custom-scrollbar flex flex-col gap-4 overflow-y-auto px-6 py-5">
           <label className="flex flex-col gap-1.5 text-sm">
             <span className={labelClass}>Image</span>
-            <div className="flex items-center gap-3">
-              {preview ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={preview} alt="" className="h-16 w-16 shrink-0 rounded-lg object-cover" />
-              ) : (
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-white/5 text-[10px] text-white/30">
-                  No image
-                </div>
-              )}
-              <label
-                htmlFor={inputId}
-                className="cursor-pointer rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/10"
-              >
-                {compressing ? "Compressing…" : preview ? "Replace photo" : "Choose photo"}
-              </label>
-              <input
-                id={inputId}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) void handleFileChange(file);
-                }}
-              />
-            </div>
+            <PasteImageField preview={preview} compressing={compressing} onFile={(file) => void handleFileChange(file)} />
           </label>
 
           <label className="flex flex-col gap-1.5 text-sm">

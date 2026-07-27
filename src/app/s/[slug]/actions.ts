@@ -15,6 +15,14 @@ import { refreshConversationThemesForArtist } from "@/lib/conversationThemes";
 import { computeArtistPassword, artistAccessCookieName } from "@/lib/artistAccess";
 import { artistCacheTag } from "@/lib/getSiteArtist";
 import { ALL_TAB_KEYS } from "@/lib/tabs";
+import {
+  TACTIC_CHANNELS,
+  TACTIC_PILLARS,
+  TACTIC_STATUSES,
+  type TacticChannel,
+  type TacticPillar,
+  type TacticStatus,
+} from "@/lib/tacticFields";
 import type { ThemeOverrides } from "@/lib/theme";
 import type {
   AestheticParams,
@@ -389,13 +397,18 @@ export async function deleteCalendarEvent(eventId: string, slug: string) {
   revalidatePath(`/s/${slug}/ideas`);
 }
 
-async function uploadIdeaImage(
+/** Shared upload helper behind both the Ideas and Tactics card images —
+ * `folder` just namespaces the storage path per feature (mirrors the
+ * `${slug}/events/...` path addManualEvent already uses for the same
+ * bucket). */
+async function uploadBoardImage(
   supabase: ReturnType<typeof createServiceRoleClient>,
   slug: string,
+  folder: string,
   file: File
 ): Promise<{ url: string } | { error: string }> {
   const ext = file.name.split(".").pop() || "webp";
-  const path = `${slug}/ideas/${crypto.randomUUID()}.${ext}`;
+  const path = `${slug}/${folder}/${crypto.randomUUID()}.${ext}`;
   const bytes = await file.arrayBuffer();
   const { error } = await supabase.storage
     .from("artist-media")
@@ -428,7 +441,7 @@ export async function addIdeaCard(
 
   let imageUrl: string | null = null;
   if (file instanceof File && file.size > 0) {
-    const result = await uploadIdeaImage(supabase, slug, file);
+    const result = await uploadBoardImage(supabase, slug, "ideas", file);
     if ("error" in result) return { ok: false, error: result.error };
     imageUrl = result.url;
   }
@@ -475,7 +488,7 @@ export async function updateIdeaCard(
   };
 
   if (file instanceof File && file.size > 0) {
-    const result = await uploadIdeaImage(supabase, slug, file);
+    const result = await uploadBoardImage(supabase, slug, "ideas", file);
     if ("error" in result) return { ok: false, error: result.error };
     update.image_url = result.url;
   }
@@ -523,6 +536,132 @@ export async function deleteIdeaCard(itemId: string, slug: string) {
   updateTag(artistCacheTag(slug));
   revalidatePath(`/s/${slug}/ideas`);
   revalidatePath(`/s/${slug}/calendar`);
+}
+
+type TacticFields = {
+  title: string;
+  body: string;
+  channel: "Social" | "OOH" | "PPC" | "Audio" | "Video" | "Experiential" | null;
+  pillar: "tease" | "launch" | "sustain" | null;
+  tactic_status: "planned" | "approved" | "booked" | "archived" | null;
+  objective: string | null;
+  kpi: string | null;
+  role_in_mix: string | null;
+  audience: string[];
+  audience_detail: string | null;
+  format: string | null;
+  phase: string | null;
+  budget: string | null;
+  campaign_start_date: string | null;
+  campaign_end_date: string | null;
+};
+
+function parseTacticFormData(formData: FormData): { ok: true; fields: TacticFields } | { ok: false; error: string } {
+  const title = String(formData.get("title") ?? "").trim();
+  if (!title) return { ok: false, error: "Give the tactic a title." };
+
+  const channelRaw = String(formData.get("channel") ?? "").trim();
+  if (!TACTIC_CHANNELS.includes(channelRaw as TacticChannel)) return { ok: false, error: "Choose a channel." };
+  const channel = channelRaw as TacticChannel;
+
+  const pillarRaw = String(formData.get("pillar") ?? "").trim();
+  const pillar = (TACTIC_PILLARS.some((p) => p.value === pillarRaw) ? pillarRaw : null) as TacticPillar | null;
+
+  const tacticStatusRaw = String(formData.get("tactic_status") ?? "").trim();
+  const tactic_status = (
+    TACTIC_STATUSES.some((s) => s.value === tacticStatusRaw) ? tacticStatusRaw : null
+  ) as TacticStatus | null;
+
+  const audienceRaw = String(formData.get("audience") ?? "").trim();
+  const audience = audienceRaw ? audienceRaw.split("|").map((a) => a.trim()).filter(Boolean) : [];
+
+  const str = (key: string) => {
+    const v = String(formData.get(key) ?? "").trim();
+    return v || null;
+  };
+
+  return {
+    ok: true,
+    fields: {
+      title,
+      body: String(formData.get("body") ?? "").trim(),
+      channel,
+      pillar,
+      tactic_status,
+      objective: str("objective"),
+      kpi: str("kpi"),
+      role_in_mix: str("role_in_mix"),
+      audience,
+      audience_detail: str("audience_detail"),
+      format: str("format"),
+      phase: str("phase"),
+      budget: str("budget"),
+      campaign_start_date: str("campaign_start_date"),
+      campaign_end_date: str("campaign_end_date"),
+    },
+  };
+}
+
+/** Adds a card to the Tactics board — like addBoardItem but with the much
+ * richer field set the Tactics tab specifically needs (see
+ * 035_board_items_tactics.sql). Image upload follows the same server-side,
+ * service-role pattern as addIdeaCard, for the same reason (the live site
+ * is only gated by an artist password cookie, not a Supabase Auth session
+ * storage.objects' RLS would otherwise require). */
+export async function addTacticCard(
+  artistId: string,
+  slug: string,
+  formData: FormData
+): Promise<{ ok: true; item: BoardItem } | { ok: false; error: string }> {
+  const parsed = parseTacticFormData(formData);
+  if (!parsed.ok) return parsed;
+
+  const supabase = createServiceRoleClient();
+
+  let imageUrl: string | null = null;
+  const file = formData.get("image");
+  if (file instanceof File && file.size > 0) {
+    const result = await uploadBoardImage(supabase, slug, "tactics", file);
+    if ("error" in result) return { ok: false, error: result.error };
+    imageUrl = result.url;
+  }
+
+  const { data, error } = await supabase
+    .from("board_items")
+    .insert({ artist_id: artistId, board_key: "tactics", image_url: imageUrl, ...parsed.fields })
+    .select()
+    .single();
+
+  if (error) return { ok: false, error: error.message };
+  updateTag(artistCacheTag(slug));
+  revalidatePath(`/s/${slug}/tactics`);
+  return { ok: true, item: data };
+}
+
+/** Edits a tactic's fields and optionally replaces its image. */
+export async function updateTacticCard(
+  itemId: string,
+  slug: string,
+  formData: FormData
+): Promise<{ ok: true; item: BoardItem } | { ok: false; error: string }> {
+  const parsed = parseTacticFormData(formData);
+  if (!parsed.ok) return parsed;
+
+  const supabase = createServiceRoleClient();
+  const update: TacticFields & { image_url?: string } = { ...parsed.fields };
+
+  const file = formData.get("image");
+  if (file instanceof File && file.size > 0) {
+    const result = await uploadBoardImage(supabase, slug, "tactics", file);
+    if ("error" in result) return { ok: false, error: result.error };
+    update.image_url = result.url;
+  }
+
+  const { data, error } = await supabase.from("board_items").update(update).eq("id", itemId).select().single();
+  if (error) return { ok: false, error: error.message };
+  updateTag(artistCacheTag(slug));
+  revalidatePath(`/s/${slug}/tactics`);
+  return { ok: true, item: data };
 }
 
 /** Builds the artist_events description for an idea-derived event — folds
