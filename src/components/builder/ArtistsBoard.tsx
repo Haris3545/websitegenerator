@@ -8,7 +8,6 @@ import {
   deleteFolder,
   moveArtist,
   deleteArtist,
-  recaptureScreenshot,
 } from "@/app/builder/actions";
 
 type ArtistLite = {
@@ -19,7 +18,7 @@ type ArtistLite = {
   folder_id: string | null;
   sort_order: number;
   primary_color?: string | null;
-  gate_screenshot_url?: string | null;
+  background_image_url?: string | null;
 };
 type FolderLite = { id: string; name: string; position: number };
 
@@ -34,22 +33,27 @@ function FolderGlyph() {
   );
 }
 
-/** Shows the artist's cached gate-page screenshot (see src/lib/screenshot.ts
- * — captured once server-side and re-hosted in our own storage, not a live
- * third-party render on every paint), falling back to a plain tinted glyph
- * before that first capture has happened or if the image ever fails to
- * load. */
-function SiteGlyph({ color, screenshotUrl }: { color: string; screenshotUrl?: string }) {
+/** Shows the artist's own uploaded background image (the same asset the
+ * real dashboard renders behind everything — see background_image_url in
+ * the (app) layout), cropped/scaled to fit this small icon, falling back to
+ * a plain tinted glyph if there's no image yet or it fails to load (e.g. a
+ * video background — an <img> tag can't render those, which is an
+ * acceptable icon-only degradation). No screenshot service involved: this
+ * used to depend on a third-party renderer (thum.io, then WordPress
+ * mShots) capturing a purpose-built preview page, which repeatedly proved
+ * unreliable — using an asset already sitting in Storage is instant and
+ * can never come back blank. */
+function SiteGlyph({ color, imageUrl }: { color: string; imageUrl?: string }) {
   const [failed, setFailed] = useState(false);
 
-  if (screenshotUrl && !failed) {
+  if (imageUrl && !failed) {
     return (
       <div className="h-10 w-16 overflow-hidden rounded-xl border border-black/10 bg-neutral-800 shadow-sm dark:border-white/10">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={screenshotUrl}
+          src={imageUrl}
           alt=""
-          className="h-full w-full object-cover object-top"
+          className="h-full w-full object-cover"
           onError={() => setFailed(true)}
         />
       </div>
@@ -332,9 +336,9 @@ export function ArtistsBoard({
               }`}
             >
               <SiteGlyph
-                key={artist.gate_screenshot_url ?? "none"}
+                key={artist.background_image_url ?? "none"}
                 color={artist.primary_color || "#eab308"}
-                screenshotUrl={artist.gate_screenshot_url ?? undefined}
+                imageUrl={artist.background_image_url ?? undefined}
               />
               <span className="w-full truncate text-xs font-medium text-neutral-800 dark:text-white/90">
                 {artist.name}
@@ -365,25 +369,6 @@ export function ArtistsBoard({
               >
                 Edit
               </Link>
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuFor(null);
-                  startTransition(async () => {
-                    const result = await recaptureScreenshot(artist.id, artist.slug);
-                    if (result.ok) {
-                      setArtists((prev) =>
-                        prev.map((a) => (a.id === artist.id ? { ...a, gate_screenshot_url: result.url } : a))
-                      );
-                    } else {
-                      setError(result.error);
-                    }
-                  });
-                }}
-                className="block w-full px-3 py-2 text-left text-sm font-medium hover:bg-neutral-50 dark:hover:bg-white/5"
-              >
-                Recapture thumbnail
-              </button>
               <button
                 type="button"
                 onClick={() => {

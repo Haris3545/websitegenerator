@@ -15,7 +15,7 @@ import { PoofEffectProvider, useTriggerPoof } from "@/hooks/usePoofEffect";
 import { TourGlobe, type TourGlobePoint } from "@/components/site/TourGlobe";
 import type { LocationPin, LocationPinTag } from "@/lib/database.types";
 
-const MINI_GLOBE_SIZE = 150;
+const MINI_GLOBE_SIZE = 190;
 
 const MAP_HEIGHT = 340;
 const UK_CENTER: [number, number] = [54.5, -3.2];
@@ -69,29 +69,21 @@ const ABOVE_MAP_Z = 2000;
 // over the globe wherever the two overlap instead of being hidden by it.
 const GLOBE_OVERLAY_Z = 550;
 
-function shadeColor(hex: string, percent: number): string {
-  const clean = hex.replace("#", "");
-  const num = parseInt(clean, 16);
-  const r = Math.max(0, Math.min(255, ((num >> 16) & 0xff) + percent));
-  const g = Math.max(0, Math.min(255, ((num >> 8) & 0xff) + percent));
-  const b = Math.max(0, Math.min(255, (num & 0xff) + percent));
-  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
-}
-
-// A chunky, glossy "3D" pin — a shaded sphere with a highlight plus a
-// pointed base — sized to read clearly even against the globe overlay it
-// sometimes sits above.
+// A simple, highly-visible flat circle marker — the oversized "3D" pin
+// look now lives on the globe overlay instead (see TourGlobe.tsx), planted
+// on the globe's surface at each point; this map keeps the plainer circle
+// it had before that moved.
 function pinIcon(color: string, justAdded: boolean): L.DivIcon {
-  const dark = shadeColor(color, -60);
-  const html = `
-    <div class="${justAdded ? "animate-pin-drop-in" : ""}" style="position:relative;width:38px;height:48px;filter:drop-shadow(0 4px 7px rgba(0,0,0,0.6));">
-      <div style="position:absolute;left:2px;top:0;width:34px;height:34px;border-radius:9999px;
-        background:radial-gradient(circle at 33% 28%, #ffffff, ${color} 45%, ${dark} 100%);
-        border:2px solid rgba(255,255,255,0.9);"></div>
-      <div style="position:absolute;left:50%;top:30px;width:0;height:0;transform:translateX(-50%);
-        border-left:8px solid transparent;border-right:8px solid transparent;border-top:12px solid ${dark};"></div>
-    </div>`;
-  return L.divIcon({ className: "", html, iconSize: [38, 48], iconAnchor: [19, 46], popupAnchor: [0, -44] });
+  return L.divIcon({
+    className: "",
+    html: `<div class="${justAdded ? "animate-pin-drop-in" : ""}" style="width:26px;height:26px;border-radius:9999px;background:${color};border:3px solid white;box-shadow:0 0 0 2px rgba(0,0,0,0.35),0 3px 8px rgba(0,0,0,0.6);"></div>`,
+    // A fixed pixel size — Leaflet never scales a divIcon with zoom (only
+    // its screen position updates), so this is already the same size at
+    // every zoom level.
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+    popupAnchor: [0, -14],
+  });
 }
 
 function ColorSwatchRow({ value, onChange }: { value: string; onChange: (c: string) => void }) {
@@ -413,11 +405,14 @@ function LocationPinMapInner({
 
   return (
     <div className="location-pin-map">
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+      {/* Extra bottom margin (vs. a plain mb-3) deliberately leaves room
+          above the map for the corner globe to poke up into without
+          overlapping these controls. */}
+      <div className="mb-14 flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => setPlacing((v) => !v)}
-          className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-wide transition-all duration-150 ease-out ${
+          className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-wide transition-all duration-150 ease-out ${
             placing
               ? "animate-hint-pulse bg-[var(--accent)] text-black"
               : "border border-white/20 text-white/80 hover:-translate-y-0.5 hover:border-white/40"
@@ -471,7 +466,7 @@ function LocationPinMapInner({
         <button
           type="button"
           onClick={() => setManageOpen(true)}
-          className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/60 transition-colors hover:border-white/30 hover:text-white"
+          className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/60 transition-colors hover:border-white/30 hover:text-white"
           aria-label="Manage tags"
         >
           <TagGlyph /> Manage
@@ -531,7 +526,7 @@ function LocationPinMapInner({
             it — and it's still fully interactive, so a visitor can drag to
             spin it same as the old standalone globe. */}
         <div
-          className="absolute -right-5 -top-5 overflow-hidden rounded-full border-2 border-white/25 bg-black/30 shadow-2xl shadow-black/60"
+          className="absolute -right-6 -top-14 overflow-hidden rounded-full border-2 border-white/25 bg-black/30 shadow-2xl shadow-black/60"
           style={{ height: MINI_GLOBE_SIZE, width: MINI_GLOBE_SIZE, zIndex: GLOBE_OVERLAY_Z }}
         >
           <TourGlobe points={globePoints} height={MINI_GLOBE_SIZE} />

@@ -1,6 +1,5 @@
 "use server";
 
-import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { revalidatePath, updateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
@@ -15,7 +14,6 @@ import {
 } from "@/lib/publish";
 import { parseAudienceFile, storeAudienceUpload } from "@/lib/audience";
 import { resolveYoutubeChannel, type YoutubeChannelLookup } from "@/lib/youtube";
-import { captureGateScreenshot, gateVisualsChanged } from "@/lib/screenshot";
 import { ALL_TAB_KEYS } from "@/lib/tabs";
 import { artistCacheTag } from "@/lib/getSiteArtist";
 import type { AestheticParams, TabKey } from "@/lib/database.types";
@@ -95,12 +93,6 @@ export async function upsertArtist(
       font_family: input.font_family,
     };
 
-    // A brand-new artist has nothing cached yet, worth an eager first
-    // capture; an existing one only needs re-capturing if this save
-    // actually touched something the gate page renders — an unrelated
-    // change (say, a new YouTube channel ID) shouldn't invalidate an
-    // otherwise still-accurate screenshot.
-    let shouldRecapture = !input.id;
     // Re-parsing on every save would blow away whatever AestheticPanel's
     // manual sliders had set, since this free-text box is usually just
     // sitting there unchanged — only worth a fresh Gemini call when the
@@ -110,12 +102,9 @@ export async function upsertArtist(
     if (input.id) {
       const { data: existing } = await supabase
         .from("artists")
-        .select(
-          "secondary_color, accent_color, gate_background_url, project_title, tagline, font_family, aesthetic_prompt, aesthetic_params"
-        )
+        .select("aesthetic_prompt, aesthetic_params")
         .eq("id", input.id)
         .maybeSingle();
-      if (existing && gateVisualsChanged(existing, gateVisuals)) shouldRecapture = true;
       if (existing && existing.aesthetic_prompt === input.aesthetic_prompt) {
         aesthetic_params = existing.aesthetic_params;
       }
@@ -136,7 +125,6 @@ export async function upsertArtist(
       theme_overrides: input.theme_overrides,
       enabled_tabs,
       updated_at: new Date().toISOString(),
-      ...(shouldRecapture ? { gate_screenshot_url: null } : {}),
     };
 
     let id = input.id;
@@ -152,11 +140,6 @@ export async function upsertArtist(
     revalidatePath("/builder/artists");
     revalidatePath(`/builder/artists/${id}`);
     updateTag(artistCacheTag(input.slug));
-
-    if (shouldRecapture) {
-      const capturedId = id;
-      after(() => captureGateScreenshot(capturedId, input.slug));
-    }
 
     return { ok: true, id };
   } catch (err) {
@@ -199,29 +182,6 @@ export async function deleteArtist(id: string): Promise<{ ok: true } | { ok: fal
 
   revalidatePath("/builder/artists");
   return { ok: true };
-}
-
-/** Manually re-captures an artist's icon thumbnail — for artists that
- * predate the preview-snapshot screenshot pipeline (see
- * src/lib/screenshot.ts), or whose capture just came back blank/broken and
- * never gets automatically retried since captureGateScreenshot only fires
- * on creation, a save that changes gate-visual fields, or the first time
- * a gate page loads with nothing cached yet. */
-export async function recaptureScreenshot(
-  artistId: string,
-  slug: string
-): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
-  const supabase = await createClient();
-  await supabase.from("artists").update({ gate_screenshot_url: null }).eq("id", artistId);
-  await captureGateScreenshot(artistId, slug);
-
-  const { data } = await supabase.from("artists").select("gate_screenshot_url").eq("id", artistId).maybeSingle();
-  if (!data?.gate_screenshot_url) {
-    return { ok: false, error: "Screenshot capture failed — try again in a moment." };
-  }
-
-  revalidatePath("/builder/artists");
-  return { ok: true, url: data.gate_screenshot_url };
 }
 
 export async function publishArtist(artistId: string): Promise<PublishResult> {

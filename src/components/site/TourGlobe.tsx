@@ -20,6 +20,33 @@ export type TourGlobePoint = { lat: number; lng: number; label: string; color?: 
 
 const DEFAULT_GLOBE_HEIGHT = 420;
 
+function shadeColor(hex: string, percent: number): string {
+  const clean = hex.replace("#", "");
+  const num = parseInt(clean, 16);
+  const r = Math.max(0, Math.min(255, ((num >> 16) & 0xff) + percent));
+  const g = Math.max(0, Math.min(255, ((num >> 8) & 0xff) + percent));
+  const b = Math.max(0, Math.min(255, (num & 0xff) + percent));
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+}
+
+// A chunky, glossy "3D" pin planted on the globe's surface at each point's
+// lat/lng — the same look the Locations map used to use for its own
+// markers before that moved here (per feedback, the 2D map went back to
+// plain flat circles; the oversized 3D pin belongs on the globe itself).
+function pinElement(color: string): HTMLDivElement {
+  const dark = shadeColor(color, -60);
+  const el = document.createElement("div");
+  el.style.cssText =
+    "position:relative;width:22px;height:28px;transform:translate(-50%,-100%);filter:drop-shadow(0 2px 4px rgba(0,0,0,0.6));pointer-events:none;";
+  el.innerHTML = `
+    <div style="position:absolute;left:1px;top:0;width:20px;height:20px;border-radius:9999px;
+      background:radial-gradient(circle at 33% 28%, #ffffff, ${color} 45%, ${dark} 100%);
+      border:1.5px solid rgba(255,255,255,0.9);"></div>
+    <div style="position:absolute;left:50%;top:17px;width:0;height:0;transform:translateX(-50%);
+      border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid ${dark};"></div>`;
+  return el;
+}
+
 function isDarkColor(hex: string): boolean {
   const clean = hex.replace("#", "");
   if (clean.length !== 6) return true;
@@ -121,13 +148,11 @@ export function TourGlobe({
           showAtmosphere
           atmosphereColor={atmosphereGlowColor}
           atmosphereAltitude={0.18}
-          pointsData={points}
-          pointLat="lat"
-          pointLng="lng"
-          pointColor={(d) => (d as TourGlobePoint).color ?? accentColor}
-          pointAltitude={0.012}
-          pointRadius={0.4}
-          pointLabel="label"
+          htmlElementsData={points}
+          htmlLat="lat"
+          htmlLng="lng"
+          htmlAltitude={0.015}
+          htmlElement={(d) => pinElement((d as TourGlobePoint).color ?? accentColor)}
           animateIn={!reducedMotion}
           enablePointerInteraction={interactive}
           rendererConfig={{ antialias: true, alpha: true, powerPreference: "low-power" }}
