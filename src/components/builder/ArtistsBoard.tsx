@@ -8,6 +8,7 @@ import {
   deleteFolder,
   moveArtist,
   deleteArtist,
+  recaptureScreenshot,
 } from "@/app/builder/actions";
 
 type ArtistLite = {
@@ -331,6 +332,7 @@ export function ArtistsBoard({
               }`}
             >
               <SiteGlyph
+                key={artist.gate_screenshot_url ?? "none"}
                 color={artist.primary_color || "#eab308"}
                 screenshotUrl={artist.gate_screenshot_url ?? undefined}
               />
@@ -363,6 +365,25 @@ export function ArtistsBoard({
               >
                 Edit
               </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuFor(null);
+                  startTransition(async () => {
+                    const result = await recaptureScreenshot(artist.id, artist.slug);
+                    if (result.ok) {
+                      setArtists((prev) =>
+                        prev.map((a) => (a.id === artist.id ? { ...a, gate_screenshot_url: result.url } : a))
+                      );
+                    } else {
+                      setError(result.error);
+                    }
+                  });
+                }}
+                className="block w-full px-3 py-2 text-left text-sm font-medium hover:bg-neutral-50 dark:hover:bg-white/5"
+              >
+                Recapture thumbnail
+              </button>
               <button
                 type="button"
                 onClick={() => {

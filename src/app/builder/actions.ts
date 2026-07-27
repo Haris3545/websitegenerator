@@ -182,6 +182,29 @@ export async function deleteArtist(id: string): Promise<{ ok: true } | { ok: fal
   return { ok: true };
 }
 
+/** Manually re-captures an artist's icon thumbnail — for artists that
+ * predate the preview-snapshot screenshot pipeline (see
+ * src/lib/screenshot.ts), or whose capture just came back blank/broken and
+ * never gets automatically retried since captureGateScreenshot only fires
+ * on creation, a save that changes gate-visual fields, or the first time
+ * a gate page loads with nothing cached yet. */
+export async function recaptureScreenshot(
+  artistId: string,
+  slug: string
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  await supabase.from("artists").update({ gate_screenshot_url: null }).eq("id", artistId);
+  await captureGateScreenshot(artistId, slug);
+
+  const { data } = await supabase.from("artists").select("gate_screenshot_url").eq("id", artistId).maybeSingle();
+  if (!data?.gate_screenshot_url) {
+    return { ok: false, error: "Screenshot capture failed — try again in a moment." };
+  }
+
+  revalidatePath("/builder/artists");
+  return { ok: true, url: data.gate_screenshot_url };
+}
+
 export async function publishArtist(artistId: string): Promise<PublishResult> {
   const result = await publishArtistSite(artistId);
   if (result.ok) {

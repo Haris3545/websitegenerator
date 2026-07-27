@@ -68,21 +68,44 @@ export default async function PreviewSnapshotPage({ params }: { params: Promise<
             </span>
           </div>
 
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 40px" }}>
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+              padding: "0 clamp(16px, 5vw, 40px)",
+              minWidth: 0,
+            }}
+          >
             <h1
               style={{
                 margin: 0,
-                fontSize: 42,
+                // A fluid clamp instead of a fixed px size — this page gets
+                // captured at whatever width the screenshot service (or
+                // someone checking it directly) happens to render it at,
+                // and a fixed size doesn't shrink to fit a long title on a
+                // narrow viewport the way the real dashboard header does.
+                fontSize: "clamp(20px, 6vw, 42px)",
                 fontWeight: 700,
                 color: accent,
                 lineHeight: 1.1,
-                maxWidth: "80%",
+                maxWidth: "100%",
+                overflowWrap: "break-word",
               }}
             >
               {artist.project_title || "The Recording Studio"}
             </h1>
             {artist.tagline && (
-              <p style={{ marginTop: 10, fontSize: 16, color: "rgba(255,255,255,0.55)", maxWidth: "70%" }}>
+              <p
+                style={{
+                  marginTop: 10,
+                  fontSize: "clamp(12px, 2.2vw, 16px)",
+                  color: "rgba(255,255,255,0.55)",
+                  maxWidth: "100%",
+                  overflowWrap: "break-word",
+                }}
+              >
                 {artist.tagline}
               </p>
             )}

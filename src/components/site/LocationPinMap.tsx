@@ -3,10 +3,16 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { createLocationPin, deleteLocationPin } from "@/app/s/[slug]/actions";
+import {
+  createLocationPin,
+  deleteLocationPin,
+  createLocationPinTag,
+  updateLocationPinTag,
+  deleteLocationPinTag,
+} from "@/app/s/[slug]/actions";
 import { useClosableOverlay } from "@/hooks/useClosableOverlay";
 import { PoofEffectProvider, useTriggerPoof } from "@/hooks/usePoofEffect";
-import type { LocationPin } from "@/lib/database.types";
+import type { LocationPin, LocationPinTag } from "@/lib/database.types";
 
 const MAP_HEIGHT = 340;
 const UK_CENTER: [number, number] = [54.5, -3.2];
@@ -47,40 +53,150 @@ const PRESET_COLORS = [
   "#eab308", "#ef4444", "#22c55e", "#3b82f6", "#a855f7", "#ec4899", "#14b8a6", "#f97316",
 ];
 
+// A high z-index (above Leaflet's own panes/controls, which otherwise run
+// up to ~1000) so dropdowns/overlays anchored above the map always paint
+// on top of it instead of disappearing behind its tiles.
+const ABOVE_MAP_Z = 2000;
+
 function pinIcon(color: string, justAdded: boolean): L.DivIcon {
   return L.divIcon({
     className: "",
-    html: `<div class="${justAdded ? "animate-pin-drop-in" : ""}" style="width:18px;height:18px;border-radius:9999px;background:${color};border:2px solid rgba(255,255,255,0.9);box-shadow:0 2px 6px rgba(0,0,0,0.5);"></div>`,
-    iconSize: [18, 18],
-    iconAnchor: [9, 9],
-    popupAnchor: [0, -10],
+    html: `<div class="${justAdded ? "animate-pin-drop-in" : ""}" style="width:26px;height:26px;border-radius:9999px;background:${color};border:3px solid white;box-shadow:0 0 0 2px rgba(0,0,0,0.35),0 3px 8px rgba(0,0,0,0.6);"></div>`,
+    // A fixed pixel size — Leaflet never scales a divIcon with zoom (only
+    // its screen position updates), so this is already the same size at
+    // every zoom level.
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+    popupAnchor: [0, -14],
   });
 }
 
+function ColorSwatchRow({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {PRESET_COLORS.map((c) => (
+        <button
+          key={c}
+          type="button"
+          onClick={() => onChange(c)}
+          aria-label={`Colour ${c}`}
+          className={`h-6 w-6 rounded-full transition-transform duration-150 ease-out hover:scale-110 ${
+            value === c ? "scale-110 ring-2 ring-white ring-offset-2 ring-offset-neutral-950" : ""
+          }`}
+          style={{ backgroundColor: c }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** One row in the "Manage tags" panel — a tag's own name/colour can be
+ * edited or the tag deleted entirely (which strips it from every pin that
+ * had it, see deleteLocationPinTag). */
+function TagManageRow({
+  tag,
+  slug,
+  onUpdated,
+  onDeleted,
+}: {
+  tag: LocationPinTag;
+  slug: string;
+  onUpdated: (id: string, patch: { name: string; color: string }) => void;
+  onDeleted: (id: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(tag.name);
+  const [color, setColor] = useState(tag.color);
+  const triggerPoof = useTriggerPoof();
+
+  async function save() {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setEditing(false);
+    onUpdated(tag.id, { name: trimmed, color });
+    await updateLocationPinTag(tag.id, slug, { name: trimmed, color });
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-white/10 p-2.5">
+      <div className="flex items-center gap-2">
+        <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+        {editing ? (
+          <input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && save()}
+            className="min-w-0 flex-1 rounded-md border border-white/15 bg-white/5 px-2 py-1 text-sm text-white focus:border-[var(--accent)] focus:outline-none"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="min-w-0 flex-1 truncate text-left text-sm text-white/80 hover:text-white"
+          >
+            {tag.name}
+          </button>
+        )}
+        {editing ? (
+          <button
+            type="button"
+            onClick={save}
+            className="shrink-0 rounded-full bg-[var(--accent)] px-2.5 py-1 text-[11px] font-semibold text-black"
+          >
+            Save
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={(e) => {
+              triggerPoof(e.clientX, e.clientY);
+              onDeleted(tag.id);
+              deleteLocationPinTag(tag.id, slug);
+            }}
+            aria-label={`Delete tag ${tag.name}`}
+            className="shrink-0 text-xs font-medium text-red-400/70 transition-colors hover:text-red-400"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+      {editing && <ColorSwatchRow value={color} onChange={setColor} />}
+    </div>
+  );
+}
+
 /** The custom-pin half of the Locations tab's 2D map — a real pan/zoomable
- * OpenStreetMap view (Leaflet; free, keyless tiles) sitting above the
+ * colour map (Leaflet + free CartoDB Voyager tiles) sitting above the
  * existing 3D globe, for freeform points a team wants to mark themselves
  * (distinct from the Ticketmaster/web-search tour dates the globe shows).
- * "Pin" arms a single map click to drop a new pin, prompting for a label
- * and colour; the UK-cities dropdown just re-centers the view to help find
- * a spot; the filter row toggles which labelled groups of pins are shown. */
+ * "Pin" arms a single map click to drop a new pin, prompting for a name,
+ * colour, and any tags; the UK-cities dropdown just re-centers the view to
+ * help find a spot; the top filter row lists every tag and narrows the map
+ * to pins carrying whichever ones are clicked on. */
 function LocationPinMapInner({
   artistId,
   slug,
   initialPins,
+  initialTags,
 }: {
   artistId: string;
   slug: string;
   initialPins: LocationPin[];
+  initialTags: LocationPinTag[];
 }) {
   const [pins, setPins] = useState(initialPins);
+  const [tags, setTags] = useState(initialTags);
   const [placing, setPlacing] = useState(false);
   const [pendingCoords, setPendingCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [newLabel, setNewLabel] = useState("");
+  const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState(PRESET_COLORS[0]);
+  const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
+  const [inlineTagName, setInlineTagName] = useState("");
   const [cityOpen, setCityOpen] = useState(false);
   const [cityClosing, setCityClosing] = useState(false);
-  const [excludedLabels, setExcludedLabels] = useState<Set<string>>(new Set());
+  const [manageOpen, setManageOpen] = useState(false);
+  const [activeTagIds, setActiveTagIds] = useState<Set<string>>(new Set());
   const [, startTransition] = useTransition();
   const lastAddedIdRef = useRef<string | null>(null);
   const triggerPoof = useTriggerPoof();
@@ -94,6 +210,7 @@ function LocationPinMapInner({
   }, [placing]);
 
   const { closing: formClosing, requestClose: closeForm } = useClosableOverlay(() => setPendingCoords(null));
+  const { closing: manageClosing, requestClose: closeManage } = useClosableOverlay(() => setManageOpen(false));
 
   function closeCityDropdown() {
     if (cityClosing) return;
@@ -110,9 +227,15 @@ function LocationPinMapInner({
   useEffect(() => {
     if (!mapDivRef.current || mapRef.current) return;
     const map = L.map(mapDivRef.current, { center: UK_CENTER, zoom: 6, scrollWheelZoom: true });
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "&copy; OpenStreetMap contributors",
-      maxZoom: 18,
+    // CartoDB Voyager — free, keyless, and far less cluttered than raw OSM
+    // (fewer POI icons/labels), with blue water and light land closer to
+    // the 3D globe's vivid blue-sea/green-land palette than a plain grey
+    // basemap; the saturate/contrast boost below pushes it further toward
+    // that same vividness.
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+      attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; OpenStreetMap contributors',
+      maxZoom: 19,
+      subdomains: "abcd",
     }).addTo(map);
     map.on("click", (e: L.LeafletMouseEvent) => {
       if (!placingRef.current) return;
@@ -143,14 +266,15 @@ function LocationPinMapInner({
     markersRef.current.clear();
 
     for (const pin of pins) {
-      if (excludedLabels.has(pin.label)) continue;
+      const visible = activeTagIds.size === 0 || pin.tag_ids.some((id) => activeTagIds.has(id));
+      if (!visible) continue;
       const marker = L.marker([pin.lat, pin.lng], { icon: pinIcon(pin.color, pin.id === lastAddedIdRef.current) });
       marker.bindPopup(() => {
         const el = document.createElement("div");
         el.style.minWidth = "130px";
         const title = document.createElement("p");
         title.style.cssText = "margin:0 0 8px;font-weight:600;font-size:13px;";
-        title.textContent = pin.label;
+        title.textContent = pin.name;
         const btn = document.createElement("button");
         btn.type = "button";
         btn.textContent = "Remove pin";
@@ -173,28 +297,57 @@ function LocationPinMapInner({
       markersRef.current.set(pin.id, marker);
     }
     lastAddedIdRef.current = null;
-  }, [pins, excludedLabels, slug, triggerPoof]);
+  }, [pins, activeTagIds, slug, triggerPoof]);
 
   function flyToCity(city: { lat: number; lng: number }) {
     mapRef.current?.flyTo([city.lat, city.lng], 11, { duration: 0.8 });
   }
 
+  function toggleActiveTag(id: string) {
+    setActiveTagIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectedTag(id: string) {
+    setSelectedTagIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleAddInlineTag() {
+    const name = inlineTagName.trim();
+    if (!name) return;
+    setInlineTagName("");
+    const result = await createLocationPinTag(artistId, slug, { name, color: newColor });
+    if (result.ok) {
+      setTags((prev) => [...prev, result.tag]);
+      setSelectedTagIds((prev) => new Set(prev).add(result.tag.id));
+    }
+  }
+
   async function handleCreatePin(e: React.FormEvent) {
     e.preventDefault();
-    if (!pendingCoords || !newLabel.trim()) return;
-    const label = newLabel.trim();
+    if (!pendingCoords || !newName.trim()) return;
+    const name = newName.trim();
     const color = newColor;
+    const tagIds = Array.from(selectedTagIds);
     const { lat, lng } = pendingCoords;
     closeForm();
-    setNewLabel("");
-    const result = await createLocationPin(artistId, slug, { label, color, lat, lng });
+    setNewName("");
+    setSelectedTagIds(new Set());
+    const result = await createLocationPin(artistId, slug, { name, color, lat, lng, tagIds });
     if (result.ok) {
       lastAddedIdRef.current = result.pin.id;
       setPins((prev) => [...prev, result.pin]);
     }
   }
-
-  const distinctLabels = Array.from(new Map(pins.map((p) => [p.label, p.color])).entries());
 
   return (
     <div className="location-pin-map">
@@ -227,11 +380,12 @@ function LocationPinMapInner({
           </button>
           {cityOpen && (
             <>
-              <div className="fixed inset-0 z-40" onClick={closeCityDropdown} />
+              <div className="fixed inset-0" style={{ zIndex: ABOVE_MAP_Z - 1 }} onClick={closeCityDropdown} />
               <div
-                className={`custom-scrollbar absolute left-0 top-full z-50 mt-2 max-h-64 w-48 overflow-y-auto rounded-xl border border-white/15 bg-neutral-900 p-1.5 shadow-2xl shadow-black/50 ${
+                className={`custom-scrollbar absolute left-0 top-full mt-2 max-h-64 w-48 overflow-y-auto rounded-xl border border-white/15 bg-neutral-900 p-1.5 shadow-2xl shadow-black/50 ${
                   cityClosing ? "animate-dropdown-furl" : "animate-dropdown-unfurl"
                 }`}
+                style={{ zIndex: ABOVE_MAP_Z }}
               >
                 {UK_CITIES.map((city) => (
                   <button
@@ -251,28 +405,32 @@ function LocationPinMapInner({
           )}
         </div>
 
-        {distinctLabels.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setManageOpen(true)}
+          className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/60 transition-colors hover:border-white/30 hover:text-white"
+          aria-label="Manage tags"
+        >
+          🏷️ Manage
+        </button>
+
+        {tags.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5 border-l border-white/10 pl-2">
-            {distinctLabels.map(([label, color]) => {
-              const active = !excludedLabels.has(label);
+            {tags.map((tag) => {
+              const active = activeTagIds.has(tag.id);
               return (
                 <button
-                  key={label}
+                  key={tag.id}
                   type="button"
-                  onClick={() =>
-                    setExcludedLabels((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(label)) next.delete(label);
-                      else next.add(label);
-                      return next;
-                    })
-                  }
+                  onClick={() => toggleActiveTag(tag.id)}
                   className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all duration-150 ${
-                    active ? "bg-white/10 text-white" : "bg-transparent text-white/30 line-through"
+                    active
+                      ? "bg-[var(--accent)] text-black"
+                      : "border border-white/15 text-white/60 hover:border-white/30 hover:text-white"
                   }`}
                 >
-                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-                  {label}
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: tag.color }} />
+                  {tag.name}
                 </button>
               );
             })}
@@ -291,7 +449,8 @@ function LocationPinMapInner({
 
         {pendingCoords && (
           <div
-            className="absolute inset-0 z-[1000] flex items-end justify-center bg-black/50 p-4 backdrop-blur-[2px] sm:items-center"
+            className="absolute inset-0 flex items-end justify-center bg-black/50 p-4 backdrop-blur-[2px] sm:items-center"
+            style={{ zIndex: ABOVE_MAP_Z }}
             onClick={closeForm}
           >
             <form
@@ -304,26 +463,60 @@ function LocationPinMapInner({
               <p className="mb-3 text-sm font-semibold text-white">Name this pin</p>
               <input
                 autoFocus
-                value={newLabel}
-                onChange={(e) => setNewLabel(e.target.value)}
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
                 placeholder="e.g. Merch pop-up"
                 className="mb-3 w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white focus:border-[var(--accent)] focus:outline-none"
               />
-              <div className="mb-4 flex flex-wrap gap-2">
-                {PRESET_COLORS.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setNewColor(c)}
-                    aria-label={`Colour ${c}`}
-                    className={`h-7 w-7 rounded-full transition-transform duration-150 ease-out hover:scale-110 ${
-                      newColor === c ? "scale-110 ring-2 ring-white ring-offset-2 ring-offset-neutral-950" : ""
-                    }`}
-                    style={{ backgroundColor: c }}
-                  />
-                ))}
+              <ColorSwatchRow value={newColor} onChange={setNewColor} />
+
+              {tags.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {tags.map((tag) => {
+                    const selected = selectedTagIds.has(tag.id);
+                    return (
+                      <button
+                        key={tag.id}
+                        type="button"
+                        onClick={() => toggleSelectedTag(tag.id)}
+                        className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all duration-150 ${
+                          selected
+                            ? "bg-[var(--accent)] text-black"
+                            : "border border-white/15 text-white/60 hover:border-white/30"
+                        }`}
+                      >
+                        <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: tag.color }} />
+                        {tag.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="mt-2 flex gap-1.5">
+                <input
+                  value={inlineTagName}
+                  onChange={(e) => setInlineTagName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddInlineTag();
+                    }
+                  }}
+                  placeholder="+ new tag"
+                  className="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-white focus:border-[var(--accent)] focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddInlineTag}
+                  disabled={!inlineTagName.trim()}
+                  className="rounded-lg border border-white/15 px-2.5 py-1 text-xs font-medium text-white/70 transition-colors hover:border-white/30 hover:text-white disabled:pointer-events-none disabled:opacity-40"
+                >
+                  Add
+                </button>
               </div>
-              <div className="flex justify-end gap-2">
+
+              <div className="mt-4 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={closeForm}
@@ -333,7 +526,7 @@ function LocationPinMapInner({
                 </button>
                 <button
                   type="submit"
-                  disabled={!newLabel.trim()}
+                  disabled={!newName.trim()}
                   className="rounded-full bg-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-black transition-transform duration-150 ease-out hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-50"
                 >
                   Add pin
@@ -342,12 +535,66 @@ function LocationPinMapInner({
             </form>
           </div>
         )}
+
+        {manageOpen && (
+          <div
+            className="absolute inset-0 flex items-end justify-center bg-black/50 p-4 backdrop-blur-[2px] sm:items-center"
+            style={{ zIndex: ABOVE_MAP_Z }}
+            onClick={closeManage}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className={`flex max-h-[70%] w-full max-w-xs flex-col overflow-hidden rounded-2xl border border-white/15 bg-neutral-950 shadow-2xl shadow-black/50 ${
+                manageClosing ? "animate-modal-out" : "animate-modal-in"
+              }`}
+            >
+              <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+                <p className="text-sm font-semibold text-white">Manage tags</p>
+                <button
+                  type="button"
+                  onClick={closeManage}
+                  aria-label="Close"
+                  className="text-lg text-white/40 hover:text-white"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="custom-scrollbar flex flex-col gap-2 overflow-y-auto p-3">
+                {tags.length === 0 && <p className="text-xs text-white/40">No tags yet.</p>}
+                {tags.map((tag) => (
+                  <TagManageRow
+                    key={tag.id}
+                    tag={tag}
+                    slug={slug}
+                    onUpdated={(id, patch) =>
+                      setTags((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)))
+                    }
+                    onDeleted={(id) => {
+                      setTags((prev) => prev.filter((t) => t.id !== id));
+                      setActiveTagIds((prev) => {
+                        const next = new Set(prev);
+                        next.delete(id);
+                        return next;
+                      });
+                      setPins((prev) => prev.map((p) => ({ ...p, tag_ids: p.tag_ids.filter((t) => t !== id) })));
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-export function LocationPinMap(props: { artistId: string; slug: string; initialPins: LocationPin[] }) {
+export function LocationPinMap(props: {
+  artistId: string;
+  slug: string;
+  initialPins: LocationPin[];
+  initialTags: LocationPinTag[];
+}) {
   return (
     <PoofEffectProvider>
       <LocationPinMapInner {...props} />

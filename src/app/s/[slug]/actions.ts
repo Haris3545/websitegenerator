@@ -16,7 +16,15 @@ import { computeArtistPassword, artistAccessCookieName } from "@/lib/artistAcces
 import { artistCacheTag } from "@/lib/getSiteArtist";
 import { ALL_TAB_KEYS } from "@/lib/tabs";
 import type { ThemeOverrides } from "@/lib/theme";
-import type { AestheticParams, SentimentFilter, BoardItem, TabKey, ArtistEvent, LocationPin } from "@/lib/database.types";
+import type {
+  AestheticParams,
+  SentimentFilter,
+  BoardItem,
+  TabKey,
+  ArtistEvent,
+  LocationPin,
+  LocationPinTag,
+} from "@/lib/database.types";
 
 /** Deliberately excludes anything that calls Gemini (sentiment analysis,
  * dashboard insights, the web-search half of tour-date discovery) and the
@@ -650,17 +658,24 @@ export async function unscheduleIdeaFromCalendar(itemId: string, slug: string): 
 }
 
 /** Adds a custom pin to the Locations tab's 2D map — a freeform point (with
- * its own label + colour) distinct from the Ticketmaster/web-search tour
- * dates that drive the globe + event list. */
+ * its own name, colour, and any number of tags) distinct from the
+ * Ticketmaster/web-search tour dates that drive the globe + event list. */
 export async function createLocationPin(
   artistId: string,
   slug: string,
-  input: { label: string; color: string; lat: number; lng: number }
+  input: { name: string; color: string; lat: number; lng: number; tagIds: string[] }
 ): Promise<{ ok: true; pin: LocationPin } | { ok: false; error: string }> {
   const supabase = createServiceRoleClient();
   const { data, error } = await supabase
     .from("location_pins")
-    .insert({ artist_id: artistId, label: input.label, color: input.color, lat: input.lat, lng: input.lng })
+    .insert({
+      artist_id: artistId,
+      name: input.name,
+      color: input.color,
+      lat: input.lat,
+      lng: input.lng,
+      tag_ids: input.tagIds,
+    })
     .select()
     .single();
   if (error) return { ok: false, error: error.message };
@@ -672,6 +687,63 @@ export async function createLocationPin(
 export async function deleteLocationPin(id: string, slug: string): Promise<{ ok: true } | { ok: false; error: string }> {
   const supabase = createServiceRoleClient();
   const { error } = await supabase.from("location_pins").delete().eq("id", id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/s/${slug}/locations`);
+  return { ok: true };
+}
+
+/** Reusable, per-artist tag definitions for location pins — created,
+ * renamed, and deleted independently of any one pin (see the "Manage tags"
+ * panel in LocationPinMap.tsx). */
+export async function createLocationPinTag(
+  artistId: string,
+  slug: string,
+  input: { name: string; color: string }
+): Promise<{ ok: true; tag: LocationPinTag } | { ok: false; error: string }> {
+  const supabase = createServiceRoleClient();
+  const { data, error } = await supabase
+    .from("location_pin_tags")
+    .insert({ artist_id: artistId, name: input.name, color: input.color })
+    .select()
+    .single();
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/s/${slug}/locations`);
+  return { ok: true, tag: data };
+}
+
+export async function updateLocationPinTag(
+  id: string,
+  slug: string,
+  input: { name: string; color: string }
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = createServiceRoleClient();
+  const { error } = await supabase
+    .from("location_pin_tags")
+    .update({ name: input.name, color: input.color })
+    .eq("id", id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/s/${slug}/locations`);
+  return { ok: true };
+}
+
+/** Deletes a tag definition and strips it from every pin that had it —
+ * without this, a deleted tag's id would linger in location_pins.tag_ids
+ * arrays forever, silently orphaned. */
+export async function deleteLocationPinTag(id: string, slug: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = createServiceRoleClient();
+
+  const { data: affectedPins } = await supabase.from("location_pins").select("id, tag_ids").contains("tag_ids", [id]);
+  for (const pin of affectedPins ?? []) {
+    await supabase
+      .from("location_pins")
+      .update({ tag_ids: pin.tag_ids.filter((t) => t !== id) })
+      .eq("id", pin.id);
+  }
+
+  const { error } = await supabase.from("location_pin_tags").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
 
   revalidatePath(`/s/${slug}/locations`);

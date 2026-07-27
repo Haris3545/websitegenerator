@@ -44,11 +44,18 @@ export default async function LocationsPage({ params }: { params: Promise<{ slug
       label: `${e.venue} — ${[e.city, e.country].filter(Boolean).join(", ")}`,
     }));
 
-  const { data: pins } = await supabase
-    .from("location_pins")
-    .select("*")
-    .eq("artist_id", artist.id)
-    .order("created_at", { ascending: true });
+  const [{ data: pins }, { data: pinTags }] = await Promise.all([
+    supabase
+      .from("location_pins")
+      .select("*")
+      .eq("artist_id", artist.id)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("location_pin_tags")
+      .select("*")
+      .eq("artist_id", artist.id)
+      .order("created_at", { ascending: true }),
+  ]);
 
   return (
     <div>
@@ -61,7 +68,12 @@ export default async function LocationsPage({ params }: { params: Promise<{ slug
       />
 
       <div className="mt-4">
-        <LocationPinMap artistId={artist.id} slug={slug} initialPins={pins ?? []} />
+        <LocationPinMap
+          artistId={artist.id}
+          slug={slug}
+          initialPins={pins ?? []}
+          initialTags={pinTags ?? []}
+        />
       </div>
 
       {!events?.length ? (

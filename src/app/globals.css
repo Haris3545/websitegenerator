@@ -274,6 +274,14 @@ body {
   color: rgba(255, 255, 255, 0.7);
 }
 
+/* Pushes the CartoDB Voyager basemap's fairly muted default colours toward
+   the vividness of the 3D globe's blue-sea/green-land texture — scoped to
+   just the tile pane (not the whole map) so it doesn't also wash out pin
+   markers or popups sitting in the same DOM subtree. */
+.location-pin-map .leaflet-tile-pane {
+  filter: saturate(1.6) contrast(1.08);
+}
+
 /* The custom month-picker panel (see MonthDropdown.tsx) unfurling open /
    furling shut from its trigger button, rather than a native <select>
    popup that can't be animated. */

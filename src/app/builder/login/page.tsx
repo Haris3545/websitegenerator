@@ -22,19 +22,25 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [transitioning, setTransitioning] = useState(false);
   const navigatedRef = useRef(false);
+  // Flips true once the client has actually confirmed a readable session
+  // (not just that signInWithPassword resolved) — see the polling loop in
+  // handleSubmit below.
+  const sessionReadyRef = useRef(false);
 
   function proceedToArtists() {
     if (navigatedRef.current) return;
+    if (!sessionReadyRef.current) {
+      // Still confirming the session client-side — try again shortly
+      // rather than racing a hard navigation against it.
+      window.setTimeout(proceedToArtists, 150);
+      return;
+    }
     navigatedRef.current = true;
     // A hard navigation rather than router.push — the artists list is a
-    // Server Component reading the session from cookies, and right after
-    // signInWithPassword those cookies can still be mid-write when a
-    // client-side route transition fires, occasionally landing on the
-    // list before the session is visible server-side (RLS then quietly
-    // returns zero rows instead of an error, so it looks like "no artist
-    // sites"). A full reload only ever fires once the sign-in animation
-    // has already finished, and forces a fresh request that reads
-    // whatever cookies are actually on disk at that point.
+    // Server Component reading the session from cookies. Waiting on
+    // sessionReadyRef above means this only fires once the client itself
+    // can read back a session, so the server request that follows reads
+    // whatever cookies are actually on disk by then.
     window.location.href = searchParams.get("next") ?? "/builder";
   }
 
@@ -62,6 +68,21 @@ function LoginForm() {
     // stuck looking at a frozen login form.
     setTransitioning(true);
     window.setTimeout(proceedToArtists, 2500);
+
+    // Confirms the session is actually retrievable client-side before
+    // proceedToArtists is allowed to navigate — signInWithPassword
+    // resolving doesn't guarantee the auth cookies have finished being
+    // written yet, and that race was still occasionally landing on the
+    // artists list with no session visible server-side (RLS then quietly
+    // returns zero rows, looking like "no artist sites" until a manual
+    // reload). Gives up and proceeds anyway after ~3s so a genuine failure
+    // here can never strand a signed-in admin on a frozen screen.
+    for (let i = 0; i < 20; i++) {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) break;
+      await new Promise((resolve) => window.setTimeout(resolve, 150));
+    }
+    sessionReadyRef.current = true;
   }
 
   if (transitioning) {

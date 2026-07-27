@@ -335,22 +335,42 @@ export interface Database {
         Row: {
           id: string;
           artist_id: string;
-          label: string;
+          name: string;
           color: string;
           lat: number;
           lng: number;
+          tag_ids: string[];
           created_at: string;
         };
         Insert: {
           id?: string;
           artist_id: string;
-          label: string;
+          name: string;
           color?: string;
           lat: number;
           lng: number;
+          tag_ids?: string[];
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["location_pins"]["Insert"]>;
+        Relationships: [];
+      };
+      location_pin_tags: {
+        Row: {
+          id: string;
+          artist_id: string;
+          name: string;
+          color: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          artist_id: string;
+          name: string;
+          color?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["location_pin_tags"]["Insert"]>;
         Relationships: [];
       };
       social_mentions: {
@@ -537,6 +557,7 @@ export type MediaArticle = Database["public"]["Tables"]["media_articles"]["Row"]
 export type BoardItem = Database["public"]["Tables"]["board_items"]["Row"];
 export type ArtistEvent = Database["public"]["Tables"]["artist_events"]["Row"];
 export type LocationPin = Database["public"]["Tables"]["location_pins"]["Row"];
+export type LocationPinTag = Database["public"]["Tables"]["location_pin_tags"]["Row"];
 export type YoutubeStats = Database["public"]["Tables"]["youtube_stats"]["Row"];
 export type SocialMention = Database["public"]["Tables"]["social_mentions"]["Row"];
 export type MusicStats = Database["public"]["Tables"]["music_stats"]["Row"];
