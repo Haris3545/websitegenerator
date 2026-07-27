@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useClosableOverlay } from "@/hooks/useClosableOverlay";
+import { useTriggerPoof } from "@/hooks/usePoofEffect";
 import type { BoardItem } from "@/lib/database.types";
 
 const DRAG_UP_COMMIT_PX = 80;
@@ -86,6 +87,7 @@ function IdeaDetailSheet({
   onMove: (status: "pending" | "liked" | "disliked") => void;
 }) {
   const { closing, requestClose } = useClosableOverlay(onClose);
+  const triggerPoof = useTriggerPoof();
 
   return (
     <div
@@ -142,7 +144,10 @@ function IdeaDetailSheet({
             </button>
             <button
               type="button"
-              onClick={onDelete}
+              onClick={(e) => {
+                triggerPoof(e.clientX, e.clientY);
+                onDelete();
+              }}
               aria-label="Delete idea"
               className="flex h-9 w-9 items-center justify-center rounded-full border border-red-500/40 text-red-400 transition-colors hover:bg-red-500/10"
             >

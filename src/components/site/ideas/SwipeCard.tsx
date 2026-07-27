@@ -1,5 +1,6 @@
 "use client";
 
+import { useTriggerPoof } from "@/hooks/usePoofEffect";
 import type { BoardItem } from "@/lib/database.types";
 
 // A stable "messy stack" tilt sequence, cycled by stack position, rather
@@ -160,6 +161,7 @@ export function TopCard({
   const rotate = flipped ? rotation : restRotate;
   const likeOpacity = flipped ? Math.min(Math.max(offset.x / 90, 0), 1) : 0;
   const passOpacity = flipped ? Math.min(Math.max(-offset.x / 90, 0), 1) : 0;
+  const triggerPoof = useTriggerPoof();
 
   return (
     <div
@@ -232,6 +234,7 @@ export function TopCard({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
+                  triggerPoof(e.clientX, e.clientY);
                   onDelete();
                 }}
                 aria-label="Delete idea"

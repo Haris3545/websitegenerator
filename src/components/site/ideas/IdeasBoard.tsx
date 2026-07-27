@@ -6,6 +6,7 @@ import { SwipeStack } from "@/components/site/ideas/SwipeStack";
 import { IdeaFolderView } from "@/components/site/ideas/IdeaFolderView";
 import { IdeaFormModal } from "@/components/site/ideas/IdeaFormModal";
 import { ScheduleModal } from "@/components/site/ideas/ScheduleModal";
+import { PoofEffectProvider } from "@/hooks/usePoofEffect";
 import type { SwipeDirection } from "@/hooks/useSwipeGesture";
 import type { BoardItem } from "@/lib/database.types";
 
@@ -113,6 +114,7 @@ export function IdeasBoard({
   const folderItems = openFolder === "liked" ? liked : openFolder === "disliked" ? disliked : [];
 
   return (
+    <PoofEffectProvider>
     <div className="flex flex-col gap-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <button
@@ -194,5 +196,6 @@ export function IdeasBoard({
         />
       )}
     </div>
+    </PoofEffectProvider>
   );
 }

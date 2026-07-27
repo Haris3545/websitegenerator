@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ThemeToggle } from "@/components/builder/ThemeToggle";
 import { BrandLogoAnimation } from "@/components/BrandLogoAnimation";
@@ -15,7 +15,6 @@ export default function LoginPage() {
 }
 
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -27,8 +26,16 @@ function LoginForm() {
   function proceedToArtists() {
     if (navigatedRef.current) return;
     navigatedRef.current = true;
-    router.push(searchParams.get("next") ?? "/builder");
-    router.refresh();
+    // A hard navigation rather than router.push — the artists list is a
+    // Server Component reading the session from cookies, and right after
+    // signInWithPassword those cookies can still be mid-write when a
+    // client-side route transition fires, occasionally landing on the
+    // list before the session is visible server-side (RLS then quietly
+    // returns zero rows instead of an error, so it looks like "no artist
+    // sites"). A full reload only ever fires once the sign-in animation
+    // has already finished, and forces a fresh request that reads
+    // whatever cookies are actually on disk at that point.
+    window.location.href = searchParams.get("next") ?? "/builder";
   }
 
   async function handleSubmit(e: React.FormEvent) {

@@ -43,7 +43,7 @@ function SiteGlyph({ color, screenshotUrl }: { color: string; screenshotUrl?: st
 
   if (screenshotUrl && !failed) {
     return (
-      <div className="h-12 w-14 overflow-hidden rounded-xl border border-black/10 bg-neutral-800 shadow-sm dark:border-white/10">
+      <div className="h-10 w-16 overflow-hidden rounded-xl border border-black/10 bg-neutral-800 shadow-sm dark:border-white/10">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={screenshotUrl}
@@ -57,7 +57,7 @@ function SiteGlyph({ color, screenshotUrl }: { color: string; screenshotUrl?: st
 
   return (
     <div
-      className="flex h-12 w-14 items-center justify-center rounded-xl shadow-sm"
+      className="flex h-10 w-16 items-center justify-center rounded-xl shadow-sm"
       style={{ backgroundColor: color }}
     >
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className="opacity-90">

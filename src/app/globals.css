@@ -191,12 +191,33 @@ body {
    a slightly different animation-delay (see IdeaFolderView.tsx) so they
    don't all rock in perfect unison. */
 @keyframes jiggle {
-  0%, 100% { transform: rotate(-1deg); }
-  50% { transform: rotate(1deg); }
+  0%, 100% { transform: rotate(-0.5deg); }
+  50% { transform: rotate(0.5deg); }
 }
 
 .animate-jiggle {
-  animation: jiggle 0.22s ease-in-out infinite;
+  animation: jiggle 0.26s ease-in-out infinite;
+}
+
+/* A quick "poof" when a card is deleted — scales up slightly then shrinks
+   away while fading, instead of just vanishing instantly. */
+@keyframes poof {
+  0% { transform: scale(1); opacity: 1; }
+  30% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(0.4); opacity: 0; }
+}
+
+.animate-poof {
+  animation: poof 0.32s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+@keyframes poof-particle {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  100% { transform: translate(var(--poof-x), var(--poof-y)) scale(0); opacity: 0; }
+}
+
+.animate-poof-particle {
+  animation: poof-particle 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* A slow, gentle breathing pulse for the "tap to read" idle hint — a soft

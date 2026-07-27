@@ -14,33 +14,32 @@ export async function getSiteBaseUrl(): Promise<string> {
   return `${proto}://${host}`;
 }
 
-/** Captures a screenshot of the artist's gate page via a free, keyless
- * third-party rendering service (thum.io), then re-hosts the resulting
- * image in our own Supabase Storage — so every later view of the icon in
- * the builder is a fast, direct image load instead of a live
- * render-on-demand request to a third party (slow, occasionally
- * rate-limited, and previously wired straight into an <img src>, meaning
- * it fired on every single builder page load). This only ever needs to run
- * once per artist: triggered the first time their gate page loads with no
- * cached screenshot yet, and re-triggered by clearGateScreenshotIfStale
- * when a builder save changes something the gate page actually renders.
- * A localhost host can't be reached by an external service, so this is a
- * no-op there — it only does anything once actually deployed. */
+/** Captures a screenshot of the artist's branded /preview-snapshot page
+ * (a small, public, purpose-built stand-in for "what this dashboard looks
+ * like" — see that page for why it's not a literal authenticated-dashboard
+ * capture) via a free, keyless third-party rendering service (thum.io),
+ * then re-hosts the resulting image in our own Supabase Storage — so every
+ * later view of the icon in the builder is a fast, direct image load
+ * instead of a live render-on-demand request to a third party (slow,
+ * occasionally rate-limited, and previously wired straight into an
+ * <img src>, meaning it fired on every single builder page load). Runs
+ * once right after an artist is created (see builder/actions.ts), with a
+ * lazy fallback the first time the gate page loads with nothing cached yet,
+ * and re-triggered by clearGateScreenshotIfStale when a builder save
+ * changes something the preview actually renders. A localhost host can't
+ * be reached by an external service, so this is a no-op there — it only
+ * does anything once actually deployed. */
 export async function captureGateScreenshot(artistId: string, slug: string): Promise<void> {
   try {
     const siteBaseUrl = await getSiteBaseUrl();
     if (siteBaseUrl.includes("localhost") || siteBaseUrl.includes("127.0.0.1")) return;
 
-    // The builder's icon renders this at a tiny 56x48px (see SiteGlyph in
-    // ArtistsBoard.tsx) — 480x640 was both ~10x too much resolution for
-    // that and the wrong aspect ratio entirely (portrait vs. the icon's
-    // landscape box), so object-cover was cropping a narrow vertical sliver
-    // out of the middle rather than showing a sensible thumbnail. This
-    // matches the icon's own 7:6 aspect ratio at a reasonable 4x for
-    // retina. wait/3 gives the gate's background video/fonts a few seconds
-    // to actually render a frame before the shot is taken — without it,
-    // thum.io was capturing the page before the video started playing.
-    const shotUrl = `https://image.thum.io/get/width/224/crop/192/wait/3/noanimate/${siteBaseUrl}/s/${slug}/gate`;
+    // The builder's icon renders this at a small wide "browser window" box
+    // (see SiteGlyph in ArtistsBoard.tsx, an 8:5 box) — width/crop below
+    // match that ratio at a reasonable 4x for retina, so object-cover shows
+    // the whole preview rather than cropping into it. wait/2 gives the
+    // Google Font a moment to actually load before the shot is taken.
+    const shotUrl = `https://image.thum.io/get/width/320/crop/200/wait/2/noanimate/${siteBaseUrl}/s/${slug}/preview-snapshot`;
     const res = await fetch(shotUrl, { headers: { "User-Agent": "websitegenerator:screenshot:v1.0" } });
     if (!res.ok) return;
     const contentType = res.headers.get("content-type") ?? "image/jpeg";

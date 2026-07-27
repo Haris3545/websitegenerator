@@ -23,8 +23,17 @@ export async function middleware(request: NextRequest) {
   const siteMatch = path.match(/^\/s\/([^/]+)(\/.*)?$/);
   if (siteMatch) {
     const [, slug, rest] = siteMatch;
+    // preview-snapshot is a standalone public page purpose-built for the
+    // builder's icon screenshot (see src/lib/screenshot.ts) — never gated,
+    // and unlike /gate it never redirects away once a visitor happens to
+    // already hold an access cookie either.
+    const isPreviewSnapshot = rest === "/preview-snapshot";
     const isSiteGate = rest === "/gate";
     const hasArtistAccess = request.cookies.get(`artist_access_${slug}`)?.value === "granted";
+
+    if (isPreviewSnapshot) {
+      return NextResponse.next();
+    }
 
     if (!isSiteGate && hasArtistAccess) {
       return NextResponse.next();
