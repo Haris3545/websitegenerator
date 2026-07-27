@@ -98,8 +98,14 @@ function LoginForm() {
 
   return (
     <div className="flex min-h-screen justify-center bg-white text-neutral-900 dark:bg-neutral-950 dark:text-white">
-      <div className="flex w-full max-w-sm flex-col justify-center px-4">
-        <div className="mb-10 mt-6 flex flex-col items-center text-center">
+      {/* Anchored from the top with a fixed offset rather than vertically
+          centered — centering meant every "move it down" nudge only shifted
+          the title by half of whatever margin was added (the rest of that
+          margin's height gets absorbed by the centering math itself), which
+          is why previous small nudges kept undershooting. A fixed top
+          offset moves it down by exactly the amount it's increased by. */}
+      <div className="flex w-full max-w-sm flex-col px-4 pt-32 sm:pt-40">
+        <div className="mb-10 flex flex-col items-center text-center">
           <div className="flex items-center gap-2.5">
             <BrandLogoAnimation className="h-9 w-9 dark:invert" />
             <p className="text-sm font-semibold uppercase tracking-wider text-neutral-700 dark:text-white/80">

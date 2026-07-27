@@ -21,9 +21,17 @@ export type TourGlobePoint = { lat: number; lng: number; label: string; color?: 
 
 const DEFAULT_GLOBE_HEIGHT = 420;
 
-const PIN_HEAD_RADIUS = 6;
-const PIN_NEEDLE_LENGTH = 11;
-const PIN_NEEDLE_RADIUS = 2.1;
+// Shrunk from an earlier, chunkier pass (head 6 / needle 11) — at this
+// globe's scale (radius 100 units ~= Earth's 6371km, so 1 unit ~= 64km),
+// even two cities 50-100km apart sit only ~1-1.5 units apart on the
+// surface, far closer together than a 12-unit-diameter head can avoid
+// overlapping. Shrinking the geometry is the main lever that actually
+// reduces overlap for a tight cluster like nearby UK cities; the tilt/jitter
+// below help the remaining unavoidable overlap read as "layered" rather
+// than "glitched" instead of eliminating it outright.
+const PIN_HEAD_RADIUS = 3.6;
+const PIN_NEEDLE_LENGTH = 7;
+const PIN_NEEDLE_RADIUS = 1.3;
 
 // How far a pin's farthest point (the far edge of its head) reaches beyond
 // its own contact point on the surface — used both to fit the camera so
@@ -40,7 +48,15 @@ const PIN_REACH = (PIN_NEEDLE_LENGTH + PIN_HEAD_RADIUS * 1.35) * 1.15;
 // pure-radial, by a fixed amount derived from the point's own lat/lng/label
 // rather than random per render, fans clustered pins apart while keeping
 // each pin's own tilt stable across re-renders.
-const PIN_TILT_MAX_RAD = THREE.MathUtils.degToRad(16);
+const PIN_TILT_MAX_RAD = THREE.MathUtils.degToRad(28);
+
+// A small deterministic altitude jitter (in units of globe radius) on top
+// of the base contact altitude — nearby pins in a tight cluster get
+// staggered slightly along their own "pop out" direction as well as tilted,
+// so a cluster reads as several layered pins at slightly different heights
+// rather than a single coincident blob.
+const PIN_ALTITUDE_BASE = 0.001;
+const PIN_ALTITUDE_JITTER = 0.006;
 
 function hashSeed(seed: string): number {
   let hash = 0;
@@ -207,7 +223,11 @@ export function TourGlobe({
           objectsData={points}
           objectLat="lat"
           objectLng="lng"
-          objectAltitude={0.001}
+          objectAltitude={(d) => {
+            const point = d as TourGlobePoint;
+            const hash = hashSeed(`${point.lat},${point.lng},${point.label}`);
+            return PIN_ALTITUDE_BASE + (hash % 1000) / 1000 * PIN_ALTITUDE_JITTER;
+          }}
           objectThreeObject={(d) => {
             const point = d as TourGlobePoint;
             return buildPinObject(point.color ?? accentColor, `${point.lat},${point.lng},${point.label}`);
@@ -247,7 +267,14 @@ export function TourGlobe({
             const globeRadius = globe.getGlobeRadius();
             const effectiveRadius = globeRadius + PIN_REACH;
             const fitAltitude = effectiveRadius / (globeRadius * Math.sin(halfFovRad)) - 1;
-            globe.pointOfView({ altitude: fitAltitude }, 0);
+            // OrbitControls' autoRotate only changes the camera's azimuth
+            // (longitude), not its polar angle (latitude) — so whatever
+            // latitude the camera starts at is the one it keeps sweeping at
+            // forever. Left at the default (the equator), the spin mostly
+            // shows open ocean; centering on ~44°N instead — roughly midway
+            // between the UK (~54°N) and the continental US (~40°N) — puts
+            // both landmasses in that sweep as it rotates through longitudes.
+            globe.pointOfView({ lat: 44, lng: -30, altitude: fitAltitude }, 0);
 
             const controls = globe.controls();
             controls.autoRotate = !reducedMotion;
