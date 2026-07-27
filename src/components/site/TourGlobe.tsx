@@ -16,9 +16,9 @@ const Globe = dynamicImport(() => import("react-globe.gl"), {
   ),
 });
 
-export type TourGlobePoint = { lat: number; lng: number; label: string };
+export type TourGlobePoint = { lat: number; lng: number; label: string; color?: string };
 
-const GLOBE_HEIGHT = 420;
+const DEFAULT_GLOBE_HEIGHT = 420;
 
 function isDarkColor(hex: string): boolean {
   const clean = hex.replace("#", "");
@@ -29,7 +29,18 @@ function isDarkColor(hex: string): boolean {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.5;
 }
 
-export function TourGlobe({ points }: { points: TourGlobePoint[] }) {
+export function TourGlobe({
+  points,
+  height = DEFAULT_GLOBE_HEIGHT,
+  interactive = true,
+}: {
+  points: TourGlobePoint[];
+  height?: number;
+  /** false for the small corner overlay on the Locations map — spins on
+   * its own (autoRotate) as ambient decoration without also fighting the
+   * Leaflet map underneath for drag/scroll gestures. */
+  interactive?: boolean;
+}) {
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -97,14 +108,14 @@ export function TourGlobe({ points }: { points: TourGlobePoint[] }) {
   return (
     <div
       ref={containerRef}
-      className="overflow-hidden rounded-xl border border-white/10 bg-black/20"
-      style={{ height: GLOBE_HEIGHT }}
+      className={interactive ? "overflow-hidden rounded-xl border border-white/10 bg-black/20" : "h-full w-full"}
+      style={{ height }}
     >
       {width > 0 && (
         <Globe
           ref={globeRef}
           width={width}
-          height={GLOBE_HEIGHT}
+          height={height}
           globeImageUrl="/globe/earth-vivid.jpg"
           backgroundColor="rgba(0,0,0,0)"
           showAtmosphere
@@ -113,11 +124,12 @@ export function TourGlobe({ points }: { points: TourGlobePoint[] }) {
           pointsData={points}
           pointLat="lat"
           pointLng="lng"
-          pointColor={() => accentColor}
+          pointColor={(d) => (d as TourGlobePoint).color ?? accentColor}
           pointAltitude={0.012}
           pointRadius={0.4}
           pointLabel="label"
           animateIn={!reducedMotion}
+          enablePointerInteraction={interactive}
           rendererConfig={{ antialias: true, alpha: true, powerPreference: "low-power" }}
           onGlobeReady={() => {
             const globe = globeRef.current;
@@ -128,8 +140,9 @@ export function TourGlobe({ points }: { points: TourGlobePoint[] }) {
             globe.renderer().setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
             const controls = globe.controls();
             controls.autoRotate = !reducedMotion;
-            controls.autoRotateSpeed = 0.5;
+            controls.autoRotateSpeed = interactive ? 0.5 : 1.1;
             controls.enableDamping = true;
+            controls.enableZoom = interactive;
           }}
         />
       )}

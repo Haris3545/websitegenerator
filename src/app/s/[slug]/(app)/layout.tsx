@@ -77,7 +77,7 @@ export default async function ArtistSiteLayout({
     <EditModeProvider editingAllowed={!process.env.PINNED_ARTIST_SLUG}>
     <div
       id="site-root"
-      className="relative min-h-screen text-white"
+      className="relative min-h-screen overflow-x-hidden text-white"
       style={
         {
           "--primary": artist.primary_color,

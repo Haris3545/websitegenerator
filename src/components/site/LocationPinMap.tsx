@@ -12,7 +12,10 @@ import {
 } from "@/app/s/[slug]/actions";
 import { useClosableOverlay } from "@/hooks/useClosableOverlay";
 import { PoofEffectProvider, useTriggerPoof } from "@/hooks/usePoofEffect";
+import { TourGlobe, type TourGlobePoint } from "@/components/site/TourGlobe";
 import type { LocationPin, LocationPinTag } from "@/lib/database.types";
+
+const MINI_GLOBE_SIZE = 116;
 
 const MAP_HEIGHT = 340;
 const UK_CENTER: [number, number] = [54.5, -3.2];
@@ -349,6 +352,14 @@ function LocationPinMapInner({
     }
   }
 
+  // The mini corner globe mirrors whatever's currently visible on the 2D
+  // map — same pins, same colours, same tag filter — so dropping a new pin
+  // (or toggling a filter) updates it live rather than needing its own
+  // separate state.
+  const globePoints: TourGlobePoint[] = pins
+    .filter((pin) => activeTagIds.size === 0 || pin.tag_ids.some((id) => activeTagIds.has(id)))
+    .map((pin) => ({ lat: pin.lat, lng: pin.lng, label: pin.name, color: pin.color }));
+
   return (
     <div className="location-pin-map">
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -443,9 +454,24 @@ function LocationPinMapInner({
         style={{
           borderRadius: "var(--card-radius, 12px)",
           border: "1px solid rgba(255,255,255,var(--card-border-opacity, 0.15))",
+          // A faint accent-coloured glow around the edge, echoing the
+          // globe's own atmosphere halo just below it, so the two read as
+          // one system rather than two unrelated views.
+          boxShadow: "inset 0 0 40px rgba(0,0,0,0.25), 0 0 24px -4px var(--accent)",
         }}
       >
         <div ref={mapDivRef} style={{ height: MAP_HEIGHT, width: "100%" }} />
+
+        {/* A small spinning globe overlaid in the corner, echoing the full
+            3D globe below — same pins/colours, updating live as pins are
+            added or filtered, so the map and globe read as one system
+            instead of two disconnected views. */}
+        <div
+          className="pointer-events-none absolute bottom-3 right-3 overflow-hidden rounded-full border-2 border-white/25 bg-black/30 shadow-2xl shadow-black/60"
+          style={{ height: MINI_GLOBE_SIZE, width: MINI_GLOBE_SIZE, zIndex: ABOVE_MAP_Z - 1000 }}
+        >
+          <TourGlobe points={globePoints} height={MINI_GLOBE_SIZE} interactive={false} />
+        </div>
 
         {pendingCoords && (
           <div

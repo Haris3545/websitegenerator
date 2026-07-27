@@ -27,6 +27,25 @@ export async function signOut() {
   redirect("/builder/login");
 }
 
+/** Signs in server-side rather than from the browser Supabase client —
+ * cookies get written via this same request/response cycle (createClient's
+ * cookie adapter calls cookieStore.set as part of signInWithPassword
+ * itself), so there's no cross-boundary timing gap left to race against.
+ * The previous client-side signInWithPassword + hard-reload (+ later, a
+ * session-poll) approach was still occasionally landing on the artists
+ * list before the session was visible server-side, because the browser
+ * client and the server's cookie-reading code are on two different clocks;
+ * moving the sign-in itself onto the server removes that gap entirely. */
+export async function signInAction(
+  email: string,
+  password: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 /** Resolves whatever's pasted into the builder's YouTube field (a channel
  * URL, a video URL, a bare @handle) into the actual channel ID, so nobody
  * has to go find and copy that string by hand. */

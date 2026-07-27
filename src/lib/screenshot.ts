@@ -14,44 +14,65 @@ export async function getSiteBaseUrl(): Promise<string> {
   return `${proto}://${host}`;
 }
 
+// WordPress's mShots is used instead of a service like thum.io: it's been
+// free and keyless for well over a decade with no signup/authKey required
+// at any volume, where several "free tier" screenshot APIs turned out to
+// throttle or reject unauthenticated requests entirely once their public
+// quota was exhausted (which is what repeated blank/never-populated
+// captures pointed to here) — thum.io among them. mShots renders a new URL
+// asynchronously: the very first request for a URL it hasn't seen before
+// returns a small "generating…" placeholder immediately, with the real
+// screenshot only ready a few seconds later, hence the retry loop.
+const MSHOTS_PLACEHOLDER_MAX_BYTES = 2500;
+const MSHOTS_MAX_ATTEMPTS = 3;
+const MSHOTS_RETRY_DELAY_MS = 2000;
+
+async function fetchScreenshot(targetUrl: string): Promise<{ bytes: ArrayBuffer; contentType: string } | null> {
+  const shotUrl = `https://s.wordpress.com/mshots/v1/${encodeURIComponent(targetUrl)}?w=320&h=200`;
+
+  for (let attempt = 0; attempt < MSHOTS_MAX_ATTEMPTS; attempt++) {
+    const res = await fetch(shotUrl, { headers: { "User-Agent": "websitegenerator:screenshot:v1.0" } });
+    if (res.ok) {
+      const contentType = res.headers.get("content-type") ?? "image/png";
+      const bytes = await res.arrayBuffer();
+      // Still the "generating" placeholder — real screenshots run well
+      // past this. Keep waiting rather than caching that placeholder.
+      if (bytes.byteLength > MSHOTS_PLACEHOLDER_MAX_BYTES) return { bytes, contentType };
+    }
+    if (attempt < MSHOTS_MAX_ATTEMPTS - 1) {
+      await new Promise((resolve) => setTimeout(resolve, MSHOTS_RETRY_DELAY_MS));
+    }
+  }
+  return null;
+}
+
 /** Captures a screenshot of the artist's branded /preview-snapshot page
  * (a small, public, purpose-built stand-in for "what this dashboard looks
  * like" — see that page for why it's not a literal authenticated-dashboard
- * capture) via a free, keyless third-party rendering service (thum.io),
- * then re-hosts the resulting image in our own Supabase Storage — so every
- * later view of the icon in the builder is a fast, direct image load
- * instead of a live render-on-demand request to a third party (slow,
- * occasionally rate-limited, and previously wired straight into an
- * <img src>, meaning it fired on every single builder page load). Runs
- * once right after an artist is created (see builder/actions.ts), with a
- * lazy fallback the first time the gate page loads with nothing cached yet,
- * and re-triggered by clearGateScreenshotIfStale when a builder save
- * changes something the preview actually renders. A localhost host can't
- * be reached by an external service, so this is a no-op there — it only
- * does anything once actually deployed. */
+ * capture), then re-hosts the resulting image in our own Supabase Storage —
+ * so every later view of the icon in the builder is a fast, direct image
+ * load instead of a live render-on-demand request to a third party (slow,
+ * and if the third party's free tier is throttled, occasionally coming
+ * back blank forever). Runs once right after an artist is created (see
+ * builder/actions.ts), with a lazy fallback the first time the gate page
+ * loads with nothing cached yet, and re-triggered by gateVisualsChanged
+ * when a builder save changes something the preview actually renders. A
+ * localhost host can't be reached by an external service, so this is a
+ * no-op there — it only does anything once actually deployed. */
 export async function captureGateScreenshot(artistId: string, slug: string): Promise<void> {
   try {
     const siteBaseUrl = await getSiteBaseUrl();
     if (siteBaseUrl.includes("localhost") || siteBaseUrl.includes("127.0.0.1")) return;
 
-    // The builder's icon renders this at a small wide "browser window" box
-    // (see SiteGlyph in ArtistsBoard.tsx, an 8:5 box) — width/crop below
-    // match that ratio at a reasonable 4x for retina, so object-cover shows
-    // the whole preview rather than cropping into it. wait/2 gives the
-    // Google Font a moment to actually load before the shot is taken.
-    const shotUrl = `https://image.thum.io/get/width/320/crop/200/wait/2/noanimate/${siteBaseUrl}/s/${slug}/preview-snapshot`;
-    const res = await fetch(shotUrl, { headers: { "User-Agent": "websitegenerator:screenshot:v1.0" } });
-    if (!res.ok) return;
-    const contentType = res.headers.get("content-type") ?? "image/jpeg";
-    const bytes = await res.arrayBuffer();
-    if (bytes.byteLength < 500) return; // thum.io returns a tiny placeholder/error image on failure
+    const shot = await fetchScreenshot(`${siteBaseUrl}/s/${slug}/preview-snapshot`);
+    if (!shot) return;
 
-    const ext = contentType.includes("png") ? "png" : "jpg";
+    const ext = shot.contentType.includes("jpeg") || shot.contentType.includes("jpg") ? "jpg" : "png";
     const path = `gate-screenshots/${artistId}.${ext}`;
     const supabase = createServiceRoleClient();
     const { error: uploadError } = await supabase.storage
       .from(BUCKET)
-      .upload(path, bytes, { contentType, upsert: true });
+      .upload(path, shot.bytes, { contentType: shot.contentType, upsert: true });
     if (uploadError) {
       console.error(`captureGateScreenshot: upload failed for ${slug}:`, uploadError);
       return;

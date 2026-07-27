@@ -2,7 +2,7 @@
 
 import { Suspense, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { signInAction } from "@/app/builder/actions";
 import { ThemeToggle } from "@/components/builder/ThemeToggle";
 import { BrandLogoAnimation } from "@/components/BrandLogoAnimation";
 
@@ -22,25 +22,14 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [transitioning, setTransitioning] = useState(false);
   const navigatedRef = useRef(false);
-  // Flips true once the client has actually confirmed a readable session
-  // (not just that signInWithPassword resolved) — see the polling loop in
-  // handleSubmit below.
-  const sessionReadyRef = useRef(false);
 
   function proceedToArtists() {
     if (navigatedRef.current) return;
-    if (!sessionReadyRef.current) {
-      // Still confirming the session client-side — try again shortly
-      // rather than racing a hard navigation against it.
-      window.setTimeout(proceedToArtists, 150);
-      return;
-    }
     navigatedRef.current = true;
-    // A hard navigation rather than router.push — the artists list is a
-    // Server Component reading the session from cookies. Waiting on
-    // sessionReadyRef above means this only fires once the client itself
-    // can read back a session, so the server request that follows reads
-    // whatever cookies are actually on disk by then.
+    // A hard navigation — sign-in itself now happens in signInAction (a
+    // Server Action), which sets the session cookie in the same
+    // request/response cycle, so by the time this runs the cookie is
+    // already on disk. No client-side race left to wait out.
     window.location.href = searchParams.get("next") ?? "/builder";
   }
 
@@ -49,14 +38,9 @@ function LoginForm() {
     setLoading(true);
     setError(null);
 
-    const supabase = createClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (signInError) {
-      setError(signInError.message);
+    const result = await signInAction(email, password);
+    if (!result.ok) {
+      setError(result.error);
       setLoading(false);
       return;
     }
@@ -68,21 +52,6 @@ function LoginForm() {
     // stuck looking at a frozen login form.
     setTransitioning(true);
     window.setTimeout(proceedToArtists, 2500);
-
-    // Confirms the session is actually retrievable client-side before
-    // proceedToArtists is allowed to navigate — signInWithPassword
-    // resolving doesn't guarantee the auth cookies have finished being
-    // written yet, and that race was still occasionally landing on the
-    // artists list with no session visible server-side (RLS then quietly
-    // returns zero rows, looking like "no artist sites" until a manual
-    // reload). Gives up and proceeds anyway after ~3s so a genuine failure
-    // here can never strand a signed-in admin on a frozen screen.
-    for (let i = 0; i < 20; i++) {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) break;
-      await new Promise((resolve) => window.setTimeout(resolve, 150));
-    }
-    sessionReadyRef.current = true;
   }
 
   if (transitioning) {
