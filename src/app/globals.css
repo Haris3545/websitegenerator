@@ -232,6 +232,48 @@ body {
   animation: hint-pulse 1.8s ease-in-out infinite;
 }
 
+/* A new map pin (see LocationPinMap.tsx) dropping/popping into place
+   instead of just appearing. */
+@keyframes pin-drop-in {
+  0% { transform: scale(0) translateY(-14px); opacity: 0; }
+  60% { transform: scale(1.25) translateY(0); opacity: 1; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.animate-pin-drop-in {
+  animation: pin-drop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* The custom Leaflet tile layer needs a fixed line-height reset the site's
+   own typography doesn't otherwise apply, so its default popups/attribution
+   don't inherit oversized site text — and Leaflet's popup chrome defaults
+   to a plain white card, which would clash with the site's dark theme. */
+.location-pin-map .leaflet-popup-content,
+.location-pin-map .leaflet-control-attribution {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.location-pin-map .leaflet-popup-content-wrapper,
+.location-pin-map .leaflet-popup-tip {
+  background: #171717;
+  color: #fff;
+}
+
+.location-pin-map .leaflet-popup-content-wrapper {
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.location-pin-map .leaflet-control-attribution {
+  background: rgba(0, 0, 0, 0.55);
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.location-pin-map .leaflet-control-attribution a {
+  color: rgba(255, 255, 255, 0.7);
+}
+
 /* The custom month-picker panel (see MonthDropdown.tsx) unfurling open /
    furling shut from its trigger button, rather than a native <select>
    popup that can't be animated. */

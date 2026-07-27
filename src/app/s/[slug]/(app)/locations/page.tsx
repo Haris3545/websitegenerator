@@ -4,6 +4,7 @@ import { getSiteArtist } from "@/lib/getSiteArtist";
 import { refreshEventsForArtist, refreshEventsIfStale } from "@/lib/events";
 import { EventList } from "@/components/site/EventList";
 import { TourGlobe, type TourGlobePoint } from "@/components/site/TourGlobe";
+import { LocationPinMapLoader as LocationPinMap } from "@/components/site/LocationPinMapLoader";
 import { TabHeading } from "@/components/site/TabHeading";
 import { SiteFooter } from "@/components/site/SiteFooter";
 
@@ -43,6 +44,12 @@ export default async function LocationsPage({ params }: { params: Promise<{ slug
       label: `${e.venue} — ${[e.city, e.country].filter(Boolean).join(", ")}`,
     }));
 
+  const { data: pins } = await supabase
+    .from("location_pins")
+    .select("*")
+    .eq("artist_id", artist.id)
+    .order("created_at", { ascending: true });
+
   return (
     <div>
       <TabHeading
@@ -52,6 +59,10 @@ export default async function LocationsPage({ params }: { params: Promise<{ slug
         title="Locations"
         subtitle="Upcoming tour dates by city"
       />
+
+      <div className="mt-4">
+        <LocationPinMap artistId={artist.id} slug={slug} initialPins={pins ?? []} />
+      </div>
 
       {!events?.length ? (
         <p className="mt-4 rounded-lg border border-dashed border-white/20 p-8 text-center text-white/50">
