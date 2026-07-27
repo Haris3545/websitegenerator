@@ -85,7 +85,7 @@ export function GateForm({
         />
       )}
 
-      <div className="relative z-10 flex w-full max-w-4xl flex-col items-center px-4 text-center">
+      <div className="relative z-10 mt-16 flex w-full max-w-4xl flex-col items-center px-4 text-center sm:mt-24">
         <p className="text-sm font-semibold uppercase tracking-[0.35em] text-white/70 sm:text-base">{tagline}</p>
         <AutoFitHeading
           maxFontSizePx={112}

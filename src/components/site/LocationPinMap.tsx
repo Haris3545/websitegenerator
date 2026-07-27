@@ -69,6 +69,15 @@ const ABOVE_MAP_Z = 2000;
 // over the globe wherever the two overlap instead of being hidden by it.
 const GLOBE_OVERLAY_Z = 550;
 
+// The pin-form/manage-tags backdrops used to be one single "dim + blur +
+// catch outside clicks" div at ABOVE_MAP_Z, which meant it painted over the
+// globe overlay (z 550) too, muddying it every time either modal opened.
+// Splitting the dim into its own layer below the globe (but still above the
+// map tiles) keeps the globe crisp and undimmed, while a separate
+// transparent click-catcher above everything still closes the modal on an
+// outside click exactly as before.
+const BACKDROP_DIM_Z = 400;
+
 // A simple, highly-visible flat circle marker — the oversized "3D" pin
 // look now lives on the globe overlay instead (see TourGlobe.tsx), planted
 // on the globe's surface at each point; this map keeps the plainer circle
@@ -533,11 +542,13 @@ function LocationPinMapInner({
         </div>
 
         {pendingCoords && (
-          <div
-            className="absolute inset-0 flex items-end justify-center bg-black/50 p-4 backdrop-blur-[2px] sm:items-center"
-            style={{ zIndex: ABOVE_MAP_Z }}
-            onClick={closeForm}
-          >
+          <>
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" style={{ zIndex: BACKDROP_DIM_Z }} />
+            <div
+              className="absolute inset-0 flex items-end justify-center p-4 sm:items-center"
+              style={{ zIndex: ABOVE_MAP_Z }}
+              onClick={closeForm}
+            >
             <form
               onSubmit={handleCreatePin}
               onClick={(e) => e.stopPropagation()}
@@ -618,56 +629,60 @@ function LocationPinMapInner({
                 </button>
               </div>
             </form>
-          </div>
+            </div>
+          </>
         )}
 
         {manageOpen && (
-          <div
-            className="absolute inset-0 flex items-end justify-center bg-black/50 p-4 backdrop-blur-[2px] sm:items-center"
-            style={{ zIndex: ABOVE_MAP_Z }}
-            onClick={closeManage}
-          >
+          <>
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" style={{ zIndex: BACKDROP_DIM_Z }} />
             <div
-              onClick={(e) => e.stopPropagation()}
-              className={`flex max-h-[70%] w-full max-w-xs flex-col overflow-hidden rounded-2xl border border-white/15 bg-neutral-950 shadow-2xl shadow-black/50 ${
-                manageClosing ? "animate-modal-out" : "animate-modal-in"
-              }`}
+              className="absolute inset-0 flex items-end justify-center p-4 sm:items-center"
+              style={{ zIndex: ABOVE_MAP_Z }}
+              onClick={closeManage}
             >
-              <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-                <p className="text-sm font-semibold text-white">Manage tags</p>
-                <button
-                  type="button"
-                  onClick={closeManage}
-                  aria-label="Close"
-                  className="text-lg text-white/40 hover:text-white"
-                >
-                  ×
-                </button>
-              </div>
-              <div className="custom-scrollbar flex flex-col gap-2 overflow-y-auto p-3">
-                {tags.length === 0 && <p className="text-xs text-white/40">No tags yet.</p>}
-                {tags.map((tag) => (
-                  <TagManageRow
-                    key={tag.id}
-                    tag={tag}
-                    slug={slug}
-                    onUpdated={(id, patch) =>
-                      setTags((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)))
-                    }
-                    onDeleted={(id) => {
-                      setTags((prev) => prev.filter((t) => t.id !== id));
-                      setActiveTagIds((prev) => {
-                        const next = new Set(prev);
-                        next.delete(id);
-                        return next;
-                      });
-                      setPins((prev) => prev.map((p) => ({ ...p, tag_ids: p.tag_ids.filter((t) => t !== id) })));
-                    }}
-                  />
-                ))}
+              <div
+                onClick={(e) => e.stopPropagation()}
+                className={`flex max-h-[70%] w-full max-w-xs flex-col overflow-hidden rounded-2xl border border-white/15 bg-neutral-950 shadow-2xl shadow-black/50 ${
+                  manageClosing ? "animate-modal-out" : "animate-modal-in"
+                }`}
+              >
+                <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+                  <p className="text-sm font-semibold text-white">Manage tags</p>
+                  <button
+                    type="button"
+                    onClick={closeManage}
+                    aria-label="Close"
+                    className="text-lg text-white/40 hover:text-white"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="custom-scrollbar flex flex-col gap-2 overflow-y-auto p-3">
+                  {tags.length === 0 && <p className="text-xs text-white/40">No tags yet.</p>}
+                  {tags.map((tag) => (
+                    <TagManageRow
+                      key={tag.id}
+                      tag={tag}
+                      slug={slug}
+                      onUpdated={(id, patch) =>
+                        setTags((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)))
+                      }
+                      onDeleted={(id) => {
+                        setTags((prev) => prev.filter((t) => t.id !== id));
+                        setActiveTagIds((prev) => {
+                          const next = new Set(prev);
+                          next.delete(id);
+                          return next;
+                        });
+                        setPins((prev) => prev.map((p) => ({ ...p, tag_ids: p.tag_ids.filter((t) => t !== id) })));
+                      }}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
+          </>
         )}
       </div>
     </div>

@@ -25,6 +25,29 @@ const PIN_HEAD_RADIUS = 6;
 const PIN_NEEDLE_LENGTH = 11;
 const PIN_NEEDLE_RADIUS = 2.1;
 
+// How far a pin's farthest point (the far edge of its head) reaches beyond
+// its own contact point on the surface — used both to fit the camera so
+// pins never get clipped (see onGlobeReady) and, implicitly, to reason
+// about the tilt below. The *1.15 leaves headroom for PIN_TILT_MAX_RAD
+// tipping a pin slightly sideways, which pushes its silhouette a bit
+// further than the pure-radial reach this otherwise measures.
+const PIN_REACH = (PIN_NEEDLE_LENGTH + PIN_HEAD_RADIUS * 1.35) * 1.15;
+
+// Nearby pins (e.g. UK cities a few dozen km apart) sit close enough
+// together at this globe's scale that standing every pin perfectly
+// parallel (straight out from the surface) makes their heads visually mesh
+// into one blob where they cluster. Leaning each one a few degrees off
+// pure-radial, by a fixed amount derived from the point's own lat/lng/label
+// rather than random per render, fans clustered pins apart while keeping
+// each pin's own tilt stable across re-renders.
+const PIN_TILT_MAX_RAD = THREE.MathUtils.degToRad(16);
+
+function hashSeed(seed: string): number {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) hash = (Math.imul(hash, 31) + seed.charCodeAt(i)) | 0;
+  return hash >>> 0;
+}
+
 // A real 3D pushpin mesh (not a DOM overlay), planted on the globe's
 // surface at each point's lat/lng — a metallic needle tip touching the
 // surface with a glossy, coloured, rounded head above it, matching a real
@@ -33,7 +56,7 @@ const PIN_NEEDLE_RADIUS = 2.1;
 // the head genuinely extend past the sphere's silhouette instead of being
 // clipped by the corner overlay's circular CSS mask, which only clips the
 // canvas element itself, not content the canvas renders inside its bounds.
-function buildPinObject(color: string): THREE.Group {
+function buildPinObject(color: string, tiltSeed: string): THREE.Group {
   const group = new THREE.Group();
 
   // Cone apex (the point) starts at local z=0 — the globe surface contact
@@ -69,6 +92,14 @@ function buildPinObject(color: string): THREE.Group {
   );
 
   group.add(needle, head);
+
+  // Rotating the whole group around its own origin (the needle tip, which
+  // every geometry above was translated to sit at) leans the pin sideways
+  // while keeping that tip anchored exactly on the surface contact point.
+  const hash = hashSeed(tiltSeed);
+  const angle = ((hash % 360) / 360) * Math.PI * 2;
+  group.rotation.set(Math.cos(angle) * PIN_TILT_MAX_RAD, Math.sin(angle) * PIN_TILT_MAX_RAD, 0);
+
   return group;
 }
 
@@ -177,7 +208,10 @@ export function TourGlobe({
           objectLat="lat"
           objectLng="lng"
           objectAltitude={0.001}
-          objectThreeObject={(d) => buildPinObject((d as TourGlobePoint).color ?? accentColor)}
+          objectThreeObject={(d) => {
+            const point = d as TourGlobePoint;
+            return buildPinObject(point.color ?? accentColor, `${point.lat},${point.lng},${point.label}`);
+          }}
           animateIn={!reducedMotion}
           enablePointerInteraction={interactive}
           rendererConfig={{ antialias: true, alpha: true, powerPreference: "low-power" }}
@@ -191,17 +225,28 @@ export function TourGlobe({
 
             // globe.gl's own default camera distance (altitude 2.5 globe
             // radii) leaves a visible gap around the sphere inside its
-            // frame. Zoom in until the sphere's silhouette just touches the
-            // (square) frame's edges instead: a sphere viewed from distance
-            // d has angular radius asin(R/d), so the distance at which that
-            // angle equals half the camera's vertical FOV is exactly the
-            // distance where the sphere fills the frame edge-to-edge.
+            // frame. Zoom in until the *pins' own reach* — not just the bare
+            // sphere — touches the (square) frame's edges instead: a sphere
+            // of radius R viewed from distance d has angular radius
+            // asin(R/d), so the distance at which that angle equals half the
+            // camera's vertical FOV is exactly the distance where a sphere
+            // of that radius fills the frame edge-to-edge. Fitting to the
+            // bare globe radius alone (as an earlier version of this did)
+            // put the sphere's silhouette exactly on the frame's edge, which
+            // guaranteed any pin popping out past the surface near the
+            // visible limb got clipped by the corner overlay's circular
+            // mask the moment it went even slightly past the sphere. Fitting
+            // to globe-radius + PIN_REACH instead leaves the bare sphere
+            // just shy of the edge, with exactly enough of a margin for the
+            // tallest pin to pop out into without ever touching the mask.
             // react-globe.gl's exposed camera() is typed as the generic
             // THREE.Camera base, but globe.gl always constructs its scene
             // camera as a PerspectiveCamera under the hood.
             const camera = globe.camera() as THREE.PerspectiveCamera;
             const halfFovRad = THREE.MathUtils.degToRad(camera.fov / 2);
-            const fitAltitude = 1 / Math.sin(halfFovRad) - 1;
+            const globeRadius = globe.getGlobeRadius();
+            const effectiveRadius = globeRadius + PIN_REACH;
+            const fitAltitude = effectiveRadius / (globeRadius * Math.sin(halfFovRad)) - 1;
             globe.pointOfView({ altitude: fitAltitude }, 0);
 
             const controls = globe.controls();
