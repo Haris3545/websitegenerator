@@ -122,6 +122,12 @@ export interface Database {
           gate_background_url: string | null;
           gate_screenshot_url: string | null;
           youtube_channel_id: string | null;
+          background_youtube_id: string | null;
+          background_youtube_start: number;
+          background_youtube_end: number | null;
+          gate_youtube_id: string | null;
+          gate_youtube_start: number;
+          gate_youtube_end: number | null;
           enabled_tabs: TabKey[];
           dashboard_section_order: string[];
           youtube_section_order: string[];
@@ -153,6 +159,12 @@ export interface Database {
           gate_background_url?: string | null;
           gate_screenshot_url?: string | null;
           youtube_channel_id?: string | null;
+          background_youtube_id?: string | null;
+          background_youtube_start?: number;
+          background_youtube_end?: number | null;
+          gate_youtube_id?: string | null;
+          gate_youtube_start?: number;
+          gate_youtube_end?: number | null;
           enabled_tabs?: TabKey[];
           dashboard_section_order?: string[];
           youtube_section_order?: string[];

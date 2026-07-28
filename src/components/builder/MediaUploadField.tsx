@@ -26,10 +26,24 @@ export function MediaUploadField({
 }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pasteFocused, setPasteFocused] = useState(false);
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const isVideoUrl = /\.(mp4|webm|mov|m4v)(\?|$)/i.test(value ?? "");
+
+  function handlePaste(e: React.ClipboardEvent<HTMLDivElement>) {
+    for (const item of e.clipboardData.items) {
+      if (item.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (file) {
+          e.preventDefault();
+          void handleFile(file);
+        }
+        return;
+      }
+    }
+  }
 
   async function handleFile(file: File) {
     setError(null);
@@ -80,43 +94,66 @@ export function MediaUploadField({
       <span className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-white/50">
         {label}
       </span>
-      {value &&
-        (isVideoUrl ? (
-          <video
-            src={value}
-            className="h-32 w-full rounded-lg border border-neutral-200 object-cover dark:border-white/10"
-            muted
-            loop
-            autoPlay
-          />
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={value}
-            alt=""
-            className="h-32 w-full rounded-lg border border-neutral-200 object-cover dark:border-white/10"
-          />
-        ))}
-      <input
-        ref={inputRef}
-        id={inputId}
-        type="file"
-        accept="image/*,video/*"
-        disabled={uploading}
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) handleFile(file);
-        }}
-      />
-      <button
-        type="button"
-        disabled={uploading}
-        onClick={() => inputRef.current?.click()}
-        className="self-start rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
+      {/* Focusable + paste-listening, so clicking here then Cmd/Ctrl+V-ing a
+          copied image uploads it straight in — no save-to-disk-then-browse
+          round trip. Only images can arrive via clipboard paste (browsers
+          don't hand over video files that way), so the file picker below is
+          still how a video background gets in. */}
+      <div
+        tabIndex={0}
+        role="button"
+        onPaste={handlePaste}
+        onFocus={() => setPasteFocused(true)}
+        onBlur={() => setPasteFocused(false)}
+        className={`flex flex-col gap-2 rounded-lg border p-2 transition-colors focus:outline-none ${
+          pasteFocused
+            ? "border-[var(--accent,theme(colors.neutral.400))] bg-neutral-50 dark:bg-white/[0.04]"
+            : "border-transparent"
+        }`}
       >
-        {uploading ? "Uploading..." : value ? "Replace file" : "Choose file"}
-      </button>
+        {value &&
+          (isVideoUrl ? (
+            <video
+              src={value}
+              className="h-32 w-full rounded-lg border border-neutral-200 object-cover dark:border-white/10"
+              muted
+              loop
+              autoPlay
+            />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={value}
+              alt=""
+              className="h-32 w-full rounded-lg border border-neutral-200 object-cover dark:border-white/10"
+            />
+          ))}
+        <input
+          ref={inputRef}
+          id={inputId}
+          type="file"
+          accept="image/*,video/*"
+          disabled={uploading}
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleFile(file);
+          }}
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => inputRef.current?.click()}
+            className="self-start rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
+          >
+            {uploading ? "Uploading..." : value ? "Replace file" : "Choose file"}
+          </button>
+          <span className="text-xs text-neutral-400 dark:text-white/40">
+            or click here and paste an image
+          </span>
+        </div>
+      </div>
       {error && <p className="text-red-600 dark:text-red-400">{error}</p>}
       <p className="text-xs text-neutral-400 dark:text-white/40">
         Accepts an image or a video. Images are auto-compressed to fit {IMAGE_MAX_DIMENSION}px /

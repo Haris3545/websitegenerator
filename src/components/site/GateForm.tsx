@@ -5,10 +5,14 @@ import { verifyArtistAccess } from "@/app/s/[slug]/actions";
 import { googleFontsCssUrl } from "@/lib/fonts";
 import { grainTexture } from "@/lib/grainTexture";
 import { AutoFitHeading } from "@/components/site/AutoFitHeading";
+import { YoutubeBackgroundPlayer } from "@/components/site/YoutubeBackgroundPlayer";
 
 export function GateForm({
   slug,
   backgroundUrl,
+  youtubeVideoId,
+  youtubeStart = 0,
+  youtubeEnd,
   backgroundColor,
   accentColor,
   projectTitle,
@@ -19,6 +23,9 @@ export function GateForm({
 }: {
   slug: string;
   backgroundUrl: string | null;
+  youtubeVideoId?: string | null;
+  youtubeStart?: number;
+  youtubeEnd?: number | null;
   backgroundColor: string;
   accentColor: string;
   projectTitle: string;
@@ -54,7 +61,14 @@ export function GateForm({
     >
       <link rel="stylesheet" href={googleFontsCssUrl(fontFamily)} />
 
-      {backgroundUrl &&
+      {youtubeVideoId ? (
+        <YoutubeBackgroundPlayer
+          videoId={youtubeVideoId}
+          start={youtubeStart}
+          end={youtubeEnd ?? youtubeStart + 10}
+        />
+      ) : (
+        backgroundUrl &&
         (isVideo ? (
           <video
             src={backgroundUrl}
@@ -71,8 +85,9 @@ export function GateForm({
             alt=""
             className="absolute inset-0 h-full w-full object-cover"
           />
-        ))}
-      {backgroundUrl && <div className="absolute inset-0 bg-black/55" />}
+        ))
+      )}
+      {(backgroundUrl || youtubeVideoId) && <div className="absolute inset-0 bg-black/55" />}
       <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/70" />
       {grainIntensity > 0 && (
         <div

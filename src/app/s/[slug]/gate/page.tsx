@@ -7,7 +7,7 @@ export default async function GatePage({ params }: { params: Promise<{ slug: str
   const { data: artist } = await supabase
     .from("artists")
     .select(
-      "id, secondary_color, accent_color, gate_background_url, project_title, tagline, font_family, aesthetic_params"
+      "id, secondary_color, accent_color, gate_background_url, gate_youtube_id, gate_youtube_start, gate_youtube_end, project_title, tagline, font_family, aesthetic_params"
     )
     .eq("slug", slug)
     .maybeSingle();
@@ -16,6 +16,9 @@ export default async function GatePage({ params }: { params: Promise<{ slug: str
     <GateForm
       slug={slug}
       backgroundUrl={artist?.gate_background_url ?? null}
+      youtubeVideoId={artist?.gate_youtube_id ?? null}
+      youtubeStart={artist?.gate_youtube_start ?? 0}
+      youtubeEnd={artist?.gate_youtube_end ?? null}
       backgroundColor={artist?.secondary_color ?? "#0a0a0a"}
       accentColor={artist?.accent_color ?? "#eab308"}
       projectTitle={artist?.project_title ?? "The Recording Studio"}

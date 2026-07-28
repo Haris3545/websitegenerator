@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ColorField } from "@/components/builder/ColorField";
 import { FontPicker } from "@/components/builder/FontPicker";
 import { MediaUploadField } from "@/components/builder/MediaUploadField";
+import { YoutubeClipField } from "@/components/builder/YoutubeClipField";
 import { AudienceUploadField } from "@/components/builder/AudienceUploadField";
 import { TabsChecklist } from "@/components/builder/TabsChecklist";
 import { ThemeEditor } from "@/components/builder/ThemeEditor";
@@ -70,6 +71,12 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
     font_family: artist?.font_family ?? "Inter",
     background_image_url: artist?.background_image_url ?? null,
     gate_background_url: artist?.gate_background_url ?? null,
+    background_youtube_id: artist?.background_youtube_id ?? null,
+    background_youtube_start: artist?.background_youtube_start ?? 0,
+    background_youtube_end: artist?.background_youtube_end ?? null,
+    gate_youtube_id: artist?.gate_youtube_id ?? null,
+    gate_youtube_start: artist?.gate_youtube_start ?? 0,
+    gate_youtube_end: artist?.gate_youtube_end ?? null,
     youtube_channel_id: artist?.youtube_channel_id ?? null,
     aesthetic_prompt: artist?.aesthetic_prompt ?? "",
     tagline: artist?.tagline ?? "VCCP Cultural Intelligence",
@@ -499,6 +506,24 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
               Shown behind every page of the dashboard (not the password page — that&apos;s set
               separately below). An image or a looping muted video, either works.
             </p>
+            <YoutubeClipField
+              label="Or use a YouTube clip instead"
+              videoId={form.background_youtube_id}
+              start={form.background_youtube_start}
+              end={form.background_youtube_end}
+              onChange={(videoId, start, end) => {
+                update("background_youtube_id", videoId);
+                update("background_youtube_start", start);
+                update("background_youtube_end", end);
+              }}
+            />
+            {form.background_youtube_id && (
+              <p className="-mt-2 text-xs text-neutral-500 dark:text-white/40">
+                A YouTube clip takes priority over the uploaded file above while it&apos;s set — remove
+                it to fall back to that upload again.
+              </p>
+            )}
+
             <MediaUploadField
               label="Password page background"
               slotName="gate-background"
@@ -506,6 +531,22 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
               value={form.gate_background_url}
               onChange={(v) => update("gate_background_url", v)}
             />
+            <YoutubeClipField
+              label="Or use a YouTube clip instead"
+              videoId={form.gate_youtube_id}
+              start={form.gate_youtube_start}
+              end={form.gate_youtube_end}
+              onChange={(videoId, start, end) => {
+                update("gate_youtube_id", videoId);
+                update("gate_youtube_start", start);
+                update("gate_youtube_end", end);
+              }}
+            />
+            {form.gate_youtube_id && (
+              <p className="-mt-2 text-xs text-neutral-500 dark:text-white/40">
+                A YouTube clip takes priority over the uploaded file above while it&apos;s set.
+              </p>
+            )}
           </>
         ) : (
           <p className="text-sm text-neutral-500 dark:text-white/40">
