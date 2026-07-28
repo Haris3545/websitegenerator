@@ -77,6 +77,9 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
     gate_youtube_id: artist?.gate_youtube_id ?? null,
     gate_youtube_start: artist?.gate_youtube_start ?? 0,
     gate_youtube_end: artist?.gate_youtube_end ?? null,
+    gate_scrim_opacity: artist?.gate_scrim_opacity ?? 0.55,
+    gate_grain_intensity: artist?.gate_grain_intensity ?? 0,
+    gate_grain_monochrome: artist?.gate_grain_monochrome ?? false,
     youtube_channel_id: artist?.youtube_channel_id ?? null,
     aesthetic_prompt: artist?.aesthetic_prompt ?? "",
     tagline: artist?.tagline ?? "VCCP Cultural Intelligence",
@@ -547,6 +550,53 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
                 A YouTube clip takes priority over the uploaded file above while it&apos;s set.
               </p>
             )}
+
+            <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-3 dark:border-white/10">
+              <span className={labelClass}>Password page darkness &amp; grain</span>
+              <label className="flex flex-col gap-1 text-sm">
+                <span className="flex justify-between">
+                  <span>Darkness overlay</span>
+                  <span className="font-mono text-xs text-neutral-500 dark:text-white/40">
+                    {form.gate_scrim_opacity}
+                  </span>
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={0.85}
+                  step={0.05}
+                  value={form.gate_scrim_opacity}
+                  onChange={(e) => update("gate_scrim_opacity", Number(e.target.value))}
+                  className="accent-builder-accent"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm">
+                <span className="flex justify-between">
+                  <span>Grain intensity</span>
+                  <span className="font-mono text-xs text-neutral-500 dark:text-white/40">
+                    {form.gate_grain_intensity}
+                  </span>
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={form.gate_grain_intensity}
+                  onChange={(e) => update("gate_grain_intensity", Number(e.target.value))}
+                  className="accent-builder-accent"
+                />
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.gate_grain_monochrome}
+                  onChange={(e) => update("gate_grain_monochrome", e.target.checked)}
+                  className="h-4 w-4 rounded border-neutral-300 accent-builder-accent dark:border-white/20"
+                />
+                Monochrome grain
+              </label>
+            </div>
           </>
         ) : (
           <p className="text-sm text-neutral-500 dark:text-white/40">

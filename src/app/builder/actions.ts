@@ -87,6 +87,9 @@ export type ArtistFormInput = {
   gate_youtube_id: string | null;
   gate_youtube_start: number;
   gate_youtube_end: number | null;
+  gate_scrim_opacity: number;
+  gate_grain_intensity: number;
+  gate_grain_monochrome: boolean;
   youtube_channel_id: string | null;
   aesthetic_prompt: string;
   tagline: string;
@@ -117,6 +120,9 @@ export async function upsertArtist(
       gate_youtube_id: input.gate_youtube_id,
       gate_youtube_start: input.gate_youtube_start,
       gate_youtube_end: input.gate_youtube_end,
+      gate_scrim_opacity: input.gate_scrim_opacity,
+      gate_grain_intensity: input.gate_grain_intensity,
+      gate_grain_monochrome: input.gate_grain_monochrome,
       project_title: input.project_title,
       tagline: input.tagline,
       font_family: input.font_family,

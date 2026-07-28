@@ -3,18 +3,26 @@
 import { useEffect, useId, useRef } from "react";
 import { loadYoutubeIframeApi, type YTPlayer } from "@/lib/youtubeIframeApi";
 
-/** Plays a short, looping window of a YouTube video as a full-bleed
- * background — via YouTube's own official embed player, never by
- * downloading/re-encoding the video (which YouTube's Terms of Service
- * prohibit). Loops by reacting to the ENDED state (playerVars.end stops
- * playback there) and a small time-poll as a backstop, since relying on
- * the `end` param alone has occasionally been unreliable across embed API
- * versions in the wild. Cross-origin iframes still fully accept ordinary
- * CSS filter effects from the parent page (that's a rendering operation,
- * not a script-access one), so blur/contrast/saturate keep working the
- * same as they do on the uploaded-video background path — only per-axis
- * pan doesn't translate here, since object-position has no iframe
- * equivalent; this only supports centered zoom. */
+// How far ahead of the clip's own end point to seek back to start — the
+// point is to seek away *before* playback ever reaches the boundary
+// YouTube's own player would treat as "the end", since reaching that
+// natively triggers the ended-state replay-icon overlay, which no embed
+// parameter can suppress. Proactively seeking mid-playback instead is just
+// an ordinary seek during PLAYING state, which doesn't show that overlay.
+const LOOP_LEAD_SECONDS = 0.35;
+const POLL_MS = 150;
+
+// Extra size beyond the ordinary 16:9-cover sizing, biased upward, so
+// YouTube's own title-card overlay (which renders near the top of the
+// frame for the first couple of seconds, and there's no official parameter
+// to suppress it) gets pushed above the visible, clipped window instead of
+// sitting inside it. There's no documented, guaranteed way to fully
+// eliminate YouTube's native UI chrome from a standard embed — this is a
+// best-effort visual crop, the same technique used across the web for
+// "YouTube as an ambient background," not an official suppression.
+const OVERSCAN = 1.22;
+const VERTICAL_BIAS = 0.58; // 0.5 would be dead-center; higher shifts the crop window down (hiding more of the top)
+
 export function YoutubeBackgroundPlayer({
   videoId,
   start,
@@ -52,19 +60,27 @@ export function YoutubeBackgroundPlayer({
           playsinline: 1,
           iv_load_policy: 3,
           start: Math.floor(start),
-          end: Math.ceil(end),
+          // Deliberately no `end` here — letting YouTube's own player
+          // enforce the cutoff means it hard-stops into the ended state
+          // (and its accompanying replay-icon overlay) right at the
+          // boundary. The poll below seeks away just before that ever
+          // happens, so the loop is driven entirely by us instead.
         },
         events: {
           onReady: (e) => {
             e.target.mute();
             e.target.playVideo();
             pollRef.current = window.setInterval(() => {
-              if (playerRef.current && playerRef.current.getCurrentTime() >= end) {
+              if (playerRef.current && playerRef.current.getCurrentTime() >= end - LOOP_LEAD_SECONDS) {
                 playerRef.current.seekTo(start, true);
               }
-            }, 250);
+            }, POLL_MS);
           },
           onStateChange: (e) => {
+            // A fallback only — the poll above should always seek away
+            // before this can naturally fire, but if it's ever missed for
+            // any reason, still recover into the loop rather than sitting
+            // on YouTube's own "video ended" card indefinitely.
             if (e.data === YT.PlayerState.ENDED) {
               e.target.seekTo(start, true);
               e.target.playVideo();
@@ -91,11 +107,11 @@ export function YoutubeBackgroundPlayer({
           position: "absolute",
           top: "50%",
           left: "50%",
-          width: "177.78vh",
-          height: "100vh",
-          minWidth: "100%",
-          minHeight: "56.25vw",
-          transform: `translate(-50%, -50%) scale(${zoom})`,
+          width: `${177.78 * OVERSCAN}vh`,
+          height: `${100 * OVERSCAN}vh`,
+          minWidth: `${100 * OVERSCAN}%`,
+          minHeight: `${56.25 * OVERSCAN}vw`,
+          transform: `translate(-50%, -${VERTICAL_BIAS * 100}%) scale(${zoom})`,
         }}
       />
     </div>

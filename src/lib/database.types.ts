@@ -128,6 +128,9 @@ export interface Database {
           gate_youtube_id: string | null;
           gate_youtube_start: number;
           gate_youtube_end: number | null;
+          gate_scrim_opacity: number;
+          gate_grain_intensity: number;
+          gate_grain_monochrome: boolean;
           enabled_tabs: TabKey[];
           dashboard_section_order: string[];
           youtube_section_order: string[];
@@ -165,6 +168,9 @@ export interface Database {
           gate_youtube_id?: string | null;
           gate_youtube_start?: number;
           gate_youtube_end?: number | null;
+          gate_scrim_opacity?: number;
+          gate_grain_intensity?: number;
+          gate_grain_monochrome?: boolean;
           enabled_tabs?: TabKey[];
           dashboard_section_order?: string[];
           youtube_section_order?: string[];

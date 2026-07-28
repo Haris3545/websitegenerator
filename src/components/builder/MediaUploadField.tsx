@@ -81,7 +81,14 @@ export function MediaUploadField({
       if (uploadError) throw uploadError;
 
       const { data } = supabase.storage.from("artist-media").getPublicUrl(path);
-      onChange(data.publicUrl);
+      // The storage path is fixed per slot (upsert: true overwrites the same
+      // object each time), so getPublicUrl returns the exact same string as
+      // before a replace — nothing about the <img>/<video> src prop changed,
+      // so neither React nor the browser's own image cache had any reason to
+      // re-fetch, and the old file kept showing despite the new one being
+      // uploaded. A cache-busting query param makes every upload produce a
+      // genuinely different URL.
+      onChange(`${data.publicUrl}?t=${Date.now()}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {

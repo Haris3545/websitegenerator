@@ -18,6 +18,7 @@ export function GateForm({
   projectTitle,
   tagline,
   fontFamily,
+  scrimOpacity = 0.55,
   grainIntensity = 0,
   grainMonochrome = false,
 }: {
@@ -31,6 +32,7 @@ export function GateForm({
   projectTitle: string;
   tagline: string;
   fontFamily: string;
+  scrimOpacity?: number;
   grainIntensity?: number;
   grainMonochrome?: boolean;
 }) {
@@ -87,7 +89,9 @@ export function GateForm({
           />
         ))
       )}
-      {(backgroundUrl || youtubeVideoId) && <div className="absolute inset-0 bg-black/55" />}
+      {(backgroundUrl || youtubeVideoId) && (
+        <div className="absolute inset-0" style={{ backgroundColor: `rgba(0,0,0,${scrimOpacity})` }} />
+      )}
       <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/70" />
       {grainIntensity > 0 && (
         <div
