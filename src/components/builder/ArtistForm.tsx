@@ -21,6 +21,7 @@ import {
 import type { Artist } from "@/lib/database.types";
 import { DEFAULT_THEME_OVERRIDES } from "@/lib/theme";
 import { BrandLogoAnimation } from "@/components/BrandLogoAnimation";
+import { ProvisioningOverlay } from "@/components/builder/ProvisioningOverlay";
 
 function slugify(name: string) {
   return name
@@ -153,6 +154,13 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
     "idle"
   );
   const isFirstRender = useRef(true);
+  const [provisioning, setProvisioning] = useState<{
+    artistId: string;
+    slug: string;
+    artistName: string;
+    youtubeChannelId: string | null;
+  } | null>(null);
+  const provisioningCompleteRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     formRef.current = form;
@@ -296,8 +304,17 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
     // Opened synchronously, within the click itself, so the browser trusts
     // it as a real user-initiated tab rather than blocking it as a popup —
     // by the time creation actually finishes below, we're well past the
-    // point where window.open would still count as user-triggered.
+    // point where window.open would still count as user-triggered. Left on
+    // a branded placeholder (not navigated to the real site) until
+    // provisioning finishes, so it's never visibly lagging through empty
+    // tabs while data is still loading.
     const newSiteTab = isNew ? window.open("about:blank", "_blank") : null;
+    if (newSiteTab) {
+      newSiteTab.document.write(
+        `<!DOCTYPE html><html><head><title>${form.name || "Preparing"}</title><style>body{background:#0a0a0a;color:rgba(255,255,255,0.6);font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-size:14px;}</style></head><body>Preparing the dashboard…</body></html>`
+      );
+      newSiteTab.document.close();
+    }
 
     startTransition(async () => {
       const result = await upsertArtist({ ...form, id: idRef.current });
@@ -321,13 +338,31 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
             setFormError(
               `Artist created, but importing the audience file failed: ${audienceResult.error}`
             );
+            newSiteTab?.close();
             return;
           }
         }
+
+        // Rather than dropping a visitor straight onto a live site that
+        // still has to lazily fetch every source (and previously required
+        // a manual "Refresh Everything" click to actually fill in), a
+        // brand-new artist's data gets fetched eagerly right now, with
+        // visible per-step progress — see ProvisioningOverlay.tsx.
+        provisioningCompleteRef.current = () => {
+          if (newSiteTab) newSiteTab.location.href = `/s/${form.slug}`;
+          router.push(`/builder/artists/${result.id}`);
+          setProvisioning(null);
+        };
+        setProvisioning({
+          artistId: result.id,
+          slug: form.slug,
+          artistName: form.name,
+          youtubeChannelId: form.youtube_channel_id,
+        });
+        return;
       }
 
-      if (newSiteTab) newSiteTab.location.href = `/s/${form.slug}`;
-      router.push(isNew ? `/builder/artists/${result.id}` : "/builder/artists");
+      router.push("/builder/artists");
     });
   }
 
@@ -347,6 +382,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
   };
 
   return (
+    <>
     <form onSubmit={handleSubmit} className="flex max-w-2xl flex-col gap-6">
       <div className="flex items-center justify-between gap-3 rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 dark:border-white/10 dark:bg-white/[0.03]">
         <p className={`text-xs font-medium ${saveStatusColor[saveStatus]}`}>{saveStatusText[saveStatus]}</p>
@@ -751,5 +787,15 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
         </Section>
       )}
     </form>
+    {provisioning && (
+      <ProvisioningOverlay
+        artistId={provisioning.artistId}
+        slug={provisioning.slug}
+        artistName={provisioning.artistName}
+        youtubeChannelId={provisioning.youtubeChannelId}
+        onComplete={() => provisioningCompleteRef.current()}
+      />
+    )}
+    </>
   );
 }
