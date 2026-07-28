@@ -4,7 +4,10 @@ import { useId, useState } from "react";
 
 /** An image field that accepts either the usual file picker or a straight
  * clipboard paste — click the box, Cmd/Ctrl+V a copied image straight in,
- * no save-to-disk-then-browse round trip. The parent owns compression and
+ * no save-to-disk-then-browse round trip. One consistently-sized box
+ * either way (rather than a small square preview sitting next to a
+ * differently-shaped upload box), so swapping between "no image yet" and
+ * "here's the image" doesn't jump around. The parent owns compression and
  * the actual preview URL (see IdeaFormModal.tsx/TacticFormModal.tsx for the
  * browser-image-compression step); this only turns either input path into
  * the same `File` and hands it back via onFile. */
@@ -34,33 +37,33 @@ export function PasteImageField({
   }
 
   return (
-    <div className="flex items-start gap-3">
-      {preview ? (
+    <div
+      tabIndex={0}
+      role="button"
+      onPaste={handlePaste}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      className={`relative flex h-28 w-full items-center justify-center overflow-hidden rounded-lg border bg-white/5 transition-colors focus:outline-none ${
+        focused ? "border-[var(--accent)] bg-white/[0.07]" : "border-white/15"
+      }`}
+    >
+      {preview && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={preview} alt="" className="h-16 w-16 shrink-0 rounded-lg object-cover" />
-      ) : (
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-white/5 text-[10px] text-white/30">
-          No image
-        </div>
+        <img src={preview} alt="" className="absolute inset-0 h-full w-full object-cover" />
       )}
-
       <div
-        tabIndex={0}
-        role="button"
-        onPaste={handlePaste}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-lg border border-dashed px-3 py-3 text-center text-xs transition-colors focus:outline-none ${
-          focused ? "border-[var(--accent)] bg-white/[0.07]" : "border-white/15 bg-white/5"
+        className={`relative flex flex-col items-center gap-1 text-center text-xs ${
+          preview ? "bg-black/55 px-3 py-2" : ""
         }`}
+        style={preview ? { borderRadius: "var(--card-radius, 8px)" } : undefined}
       >
-        <span className="font-medium text-white/70">
+        <span className="font-medium text-white/80">
           {compressing ? "Processing…" : "Click here, then paste an image"}
         </span>
-        <span className="text-white/35">or</span>
+        <span className="text-white/40">or</span>
         <label
           htmlFor={inputId}
-          className="cursor-pointer rounded-full border border-white/15 bg-white/5 px-3 py-1 font-medium text-white/70 transition-colors hover:bg-white/10"
+          className="cursor-pointer rounded-full border border-white/20 bg-black/30 px-3 py-1 font-medium text-white/80 transition-colors hover:bg-black/50"
         >
           {preview ? "Replace photo" : "Choose photo"}
         </label>

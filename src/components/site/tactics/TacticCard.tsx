@@ -92,7 +92,7 @@ export function TacticCard({
     e.stopPropagation();
     triggerPoof(e.clientX, e.clientY);
     setRemoving(true);
-    window.setTimeout(onDelete, 320);
+    window.setTimeout(onDelete, 160);
   }
 
   return (
@@ -155,7 +155,7 @@ export function TacticCard({
           )}
         </div>
 
-        <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+        <div className="flex flex-col gap-2">
           <Field label="Objective" value={item.objective} />
           <Field label="Optimised KPI" value={item.kpi} />
           <Field label="Role in the mix" value={item.role_in_mix} />

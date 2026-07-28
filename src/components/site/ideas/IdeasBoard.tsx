@@ -77,6 +77,7 @@ export function IdeasBoard({
   const [editingItem, setEditingItem] = useState<BoardItem | null>(null);
   const [schedulingItem, setSchedulingItem] = useState<BoardItem | null>(null);
   const [openFolder, setOpenFolder] = useState<"liked" | "disliked" | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   const pending = items.filter((i) => i.status === "pending");
@@ -104,11 +105,19 @@ export function IdeasBoard({
     });
   }
 
+  // Deferred by the same duration as .animate-poof (see globals.css) so the
+  // swipe stack's top card can play that shrink-and-fade in place — the
+  // stack's SwipeCard.tsx reads isDeleting off this id and stays the exact
+  // same rendered instance throughout, so there's nothing to remount/race.
   function handleDeleteItem(item: BoardItem) {
-    setItems((prev) => prev.filter((i) => i.id !== item.id));
-    startTransition(() => {
-      deleteIdeaCard(item.id, slug);
-    });
+    setDeletingId(item.id);
+    window.setTimeout(() => {
+      setItems((prev) => prev.filter((i) => i.id !== item.id));
+      setDeletingId(null);
+      startTransition(() => {
+        deleteIdeaCard(item.id, slug);
+      });
+    }, 170);
   }
 
   const folderItems = openFolder === "liked" ? liked : openFolder === "disliked" ? disliked : [];
@@ -137,6 +146,7 @@ export function IdeasBoard({
           onDecision={handleDecision}
           onEdit={(item) => setEditingItem(item)}
           onDelete={handleDeleteItem}
+          deletingId={deletingId}
         />
       </div>
 

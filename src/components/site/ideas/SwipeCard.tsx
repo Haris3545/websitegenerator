@@ -135,6 +135,7 @@ export function TopCard({
   restRotate,
   isDragging,
   showFlipHint,
+  isDeleting,
   onPointerDown,
   onPointerMove,
   onPointerUp,
@@ -150,6 +151,12 @@ export function TopCard({
   restRotate: number;
   isDragging: boolean;
   showFlipHint: boolean;
+  /** True for the brief window between the delete button being clicked and
+   * the item actually leaving `items` upstream — lets this same card
+   * instance play the .animate-poof shrink-and-fade in place instead of
+   * just vanishing the instant state updates (see IdeasBoard.tsx's
+   * deferred handleDeleteItem). */
+  isDeleting?: boolean;
   onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
   onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => void;
   onPointerUp: (e: React.PointerEvent<HTMLDivElement>) => void;
@@ -165,7 +172,7 @@ export function TopCard({
 
   return (
     <div
-      className="absolute inset-0 touch-none select-none"
+      className={`absolute inset-0 touch-none select-none ${isDeleting ? "animate-poof" : ""}`}
       style={{ perspective: "1600px", zIndex: 20 }}
       onPointerDown={(e) => !isInteractiveTarget(e.target) && onPointerDown(e)}
       onPointerMove={onPointerMove}
@@ -232,13 +239,14 @@ export function TopCard({
               </button>
               <button
                 type="button"
+                disabled={isDeleting}
                 onClick={(e) => {
                   e.stopPropagation();
                   triggerPoof(e.clientX, e.clientY);
                   onDelete();
                 }}
                 aria-label="Delete idea"
-                className="flex h-7 w-7 items-center justify-center rounded-full bg-red-500/80 text-white transition-colors hover:bg-red-500"
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-red-500/80 text-white transition-colors hover:bg-red-500 disabled:pointer-events-none disabled:opacity-50"
               >
                 <TrashIcon />
               </button>

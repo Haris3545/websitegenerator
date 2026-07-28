@@ -20,11 +20,13 @@ export function SwipeStack({
   onDecision,
   onEdit,
   onDelete,
+  deletingId,
 }: {
   items: BoardItem[];
   onDecision: (id: string, direction: SwipeDirection) => void;
   onEdit: (item: BoardItem) => void;
   onDelete: (item: BoardItem) => void;
+  deletingId?: string | null;
 }) {
   const top = items[0];
   const [flipped, setFlipped] = useState(false);
@@ -99,6 +101,7 @@ export function SwipeStack({
             restRotate={restRotate}
             isDragging={gesture.isDragging}
             showFlipHint={showFlipHint}
+            isDeleting={top.id === deletingId}
             onPointerDown={gesture.handlePointerDown}
             onPointerMove={gesture.handlePointerMove}
             onPointerUp={gesture.handlePointerUp}

@@ -25,7 +25,7 @@ export function SiteHeader({
           {projectTitle}
         </AutoFitHeading>
       </div>
-      <div className="mt-4 h-1 w-full bg-[var(--accent)]" />
+      <div className="mt-1.5 h-[3.4px] w-full rounded-full bg-[var(--accent)]" />
     </div>
   );
 }

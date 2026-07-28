@@ -197,35 +197,33 @@ export function TacticFormModal({
             </div>
           </label>
 
-          <div className="grid grid-cols-2 gap-3">
-            <label className="flex flex-col gap-1.5 text-sm">
-              <span className={labelClass}>Pillar</span>
-              <div className="flex flex-wrap gap-1.5">
-                {TACTIC_PILLARS.map((p) => (
-                  <ChipToggle
-                    key={p.value}
-                    label={p.label}
-                    active={pillar === p.value}
-                    onClick={() => setPillar(pillar === p.value ? "" : p.value)}
-                  />
-                ))}
-              </div>
-            </label>
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className={labelClass}>Pillar</span>
+            <div className="flex flex-wrap gap-1.5">
+              {TACTIC_PILLARS.map((p) => (
+                <ChipToggle
+                  key={p.value}
+                  label={p.label}
+                  active={pillar === p.value}
+                  onClick={() => setPillar(pillar === p.value ? "" : p.value)}
+                />
+              ))}
+            </div>
+          </label>
 
-            <label className="flex flex-col gap-1.5 text-sm">
-              <span className={labelClass}>Status</span>
-              <div className="flex flex-wrap gap-1.5">
-                {TACTIC_STATUSES.map((s) => (
-                  <ChipToggle
-                    key={s.value}
-                    label={s.label}
-                    active={tacticStatus === s.value}
-                    onClick={() => setTacticStatus(s.value)}
-                  />
-                ))}
-              </div>
-            </label>
-          </div>
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className={labelClass}>Status</span>
+            <div className="flex flex-wrap gap-1.5">
+              {TACTIC_STATUSES.map((s) => (
+                <ChipToggle
+                  key={s.value}
+                  label={s.label}
+                  active={tacticStatus === s.value}
+                  onClick={() => setTacticStatus(s.value)}
+                />
+              ))}
+            </div>
+          </label>
 
           <label className="flex flex-col gap-1.5 text-sm">
             <span className={labelClass}>Objective</span>
@@ -237,26 +235,25 @@ export function TacticFormModal({
             />
           </label>
 
-          <div className="grid grid-cols-2 gap-3">
-            <label className="flex flex-col gap-1.5 text-sm">
-              <span className={labelClass}>Optimised KPI</span>
-              <input
-                value={kpi}
-                onChange={(e) => setKpi(e.target.value)}
-                className={fieldClass}
-                placeholder="e.g. view-through rate"
-              />
-            </label>
-            <label className="flex flex-col gap-1.5 text-sm">
-              <span className={labelClass}>Role in the mix</span>
-              <input
-                value={roleInMix}
-                onChange={(e) => setRoleInMix(e.target.value)}
-                className={fieldClass}
-                placeholder="e.g. reach, reappraisal, proof"
-              />
-            </label>
-          </div>
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className={labelClass}>Optimised KPI</span>
+            <input
+              value={kpi}
+              onChange={(e) => setKpi(e.target.value)}
+              className={fieldClass}
+              placeholder="e.g. view-through rate"
+            />
+          </label>
+
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className={labelClass}>Role in the mix</span>
+            <input
+              value={roleInMix}
+              onChange={(e) => setRoleInMix(e.target.value)}
+              className={fieldClass}
+              placeholder="e.g. reach, reappraisal, proof"
+            />
+          </label>
 
           <label className="flex flex-col gap-1.5 text-sm">
             <span className={labelClass}>Audience</span>
@@ -305,26 +302,25 @@ export function TacticFormModal({
             />
           </label>
 
-          <div className="grid grid-cols-2 gap-3">
-            <label className="flex flex-col gap-1.5 text-sm">
-              <span className={labelClass}>Format</span>
-              <input
-                value={format}
-                onChange={(e) => setFormat(e.target.value)}
-                className={fieldClass}
-                placeholder="e.g. 15s vertical, 6-sheet"
-              />
-            </label>
-            <label className="flex flex-col gap-1.5 text-sm">
-              <span className={labelClass}>Phase</span>
-              <input
-                value={phase}
-                onChange={(e) => setPhase(e.target.value)}
-                className={fieldClass}
-                placeholder="e.g. Tease, Announce, Sustain"
-              />
-            </label>
-          </div>
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className={labelClass}>Format</span>
+            <input
+              value={format}
+              onChange={(e) => setFormat(e.target.value)}
+              className={fieldClass}
+              placeholder="e.g. 15s vertical, 6-sheet"
+            />
+          </label>
+
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className={labelClass}>Phase</span>
+            <input
+              value={phase}
+              onChange={(e) => setPhase(e.target.value)}
+              className={fieldClass}
+              placeholder="e.g. Tease, Announce, Sustain"
+            />
+          </label>
 
           <label className="flex flex-col gap-1.5 text-sm">
             <span className={labelClass}>Budget</span>

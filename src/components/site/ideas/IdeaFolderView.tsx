@@ -7,6 +7,20 @@ import type { BoardItem } from "@/lib/database.types";
 
 const DRAG_UP_COMMIT_PX = 80;
 
+function BinIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6" aria-hidden>
+      <path
+        d="M4 6h16M9 6V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V6m2 0-.7 13.1A2 2 0 0 1 14.3 21H9.7a2 2 0 0 1-2-1.9L7 6"
+        stroke="currentColor"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function IdeaGridCard({
   item,
   selectMode,
@@ -220,7 +234,9 @@ export function IdeaFolderView({
   const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
   const [dragStarted, setDragStarted] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [overBin, setOverBin] = useState(false);
   const wasDraggedRef = useRef(false);
+  const binRef = useRef<HTMLDivElement>(null);
   const { closing, requestClose } = useClosableOverlay(onClose);
 
   function toggleSelect(id: string) {
@@ -274,18 +290,34 @@ export function IdeaFolderView({
       wasDraggedRef.current = true;
     }
     setDragPos({ x: e.clientX, y: e.clientY });
+    if (binRef.current) {
+      const rect = binRef.current.getBoundingClientRect();
+      setOverBin(
+        e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom
+      );
+    }
   }
 
   function endDrag() {
     if (!draggedId) return;
-    const dy = dragPos.y - dragStart.y;
-    const committed = dragStarted && dy <= -DRAG_UP_COMMIT_PX;
-    if (committed) {
-      const ids = selectedIds.has(draggedId) && selectedIds.size > 0 ? Array.from(selectedIds) : [draggedId];
-      commitMove(ids, "pending");
+    const ids = selectedIds.has(draggedId) && selectedIds.size > 0 ? Array.from(selectedIds) : [draggedId];
+
+    if (dragStarted && overBin) {
+      ids
+        .map((id) => items.find((i) => i.id === id))
+        .filter((i): i is BoardItem => !!i)
+        .forEach((item) => onDelete(item));
+      setSelectedIds(new Set());
+      setSelectMode(false);
+    } else {
+      const dy = dragPos.y - dragStart.y;
+      const committed = dragStarted && dy <= -DRAG_UP_COMMIT_PX;
+      if (committed) commitMove(ids, "pending");
     }
+
     setDraggedId(null);
     setDragStarted(false);
+    setOverBin(false);
   }
 
   const isDraggingUp = draggedId !== null && dragStarted;
@@ -416,6 +448,34 @@ export function IdeaFolderView({
               {dragGroupItems.length}
             </span>
           )}
+        </div>
+      )}
+
+      {/* A drop target for deleting a card outright — only shown while a
+          drag is in progress, so it doesn't compete with "drag up to return
+          to stack" the rest of the time. Growing/reddening on hover mirrors
+          the top-of-screen "return to stack" glow's own hover feedback. */}
+      {dragStarted && (
+        <div
+          ref={binRef}
+          className={`pointer-events-none fixed bottom-8 left-1/2 z-[65] flex -translate-x-1/2 flex-col items-center gap-1.5 transition-transform duration-150 ${
+            overBin ? "scale-110" : "scale-100"
+          }`}
+        >
+          <div
+            className={`flex h-16 w-16 items-center justify-center rounded-full border-2 shadow-xl shadow-black/50 backdrop-blur-md transition-colors duration-150 ${
+              overBin ? "border-red-400 bg-red-500/90 text-white" : "border-white/25 bg-black/70 text-white/70"
+            }`}
+          >
+            <BinIcon />
+          </div>
+          <span
+            className={`text-xs font-semibold uppercase tracking-wide transition-colors duration-150 ${
+              overBin ? "text-red-300" : "text-white/50"
+            }`}
+          >
+            Drop to delete
+          </span>
         </div>
       )}
 

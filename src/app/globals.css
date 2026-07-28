@@ -199,28 +199,27 @@ body {
   animation: jiggle 0.26s ease-in-out infinite;
 }
 
-/* A quick "poof" when a card is deleted — scales up slightly then shrinks
-   away while fading, instead of just vanishing instantly. */
+/* A quick "poof" when a card is deleted — shrinks slightly while fading,
+   instead of just vanishing instantly. No overshoot/bounce, kept short so
+   it reads as a snappy dismissal rather than a springy toy animation. */
 @keyframes poof {
   0% { transform: scale(1); opacity: 1; }
-  30% { transform: scale(1.08); opacity: 1; }
-  100% { transform: scale(0.4); opacity: 0; }
+  100% { transform: scale(0.88); opacity: 0; }
 }
 
 .animate-poof {
-  animation: poof 0.32s cubic-bezier(0.4, 0, 1, 1) forwards;
+  animation: poof 0.16s ease-out forwards;
 }
 
 /* The arrival counterpart to .animate-poof above — a freshly-added card
-   pops in with a slight overshoot rather than just appearing. */
+   fades/scales in, same restrained no-bounce feel as the exit. */
 @keyframes poof-in {
-  0% { transform: scale(0.4); opacity: 0; }
-  60% { transform: scale(1.06); opacity: 1; }
+  0% { transform: scale(0.92); opacity: 0; }
   100% { transform: scale(1); opacity: 1; }
 }
 
 .animate-poof-in {
-  animation: poof-in 0.34s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: poof-in 0.18s ease-out;
 }
 
 @keyframes poof-particle {
@@ -277,9 +276,16 @@ body {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
+/* !important because leaflet's own base stylesheet ships an equally
+   specific `.leaflet-container .leaflet-control-attribution { background:
+   #fff }` rule — with a specificity tie, whichever stylesheet's <link>/
+   import lands later in the compiled output wins, and Next.js doesn't
+   guarantee this component-level `import "leaflet/dist/leaflet.css"` loads
+   before globals.css. That's what was leaving a jarring opaque white bar
+   at the bottom of an otherwise dark map regardless of this rule existing. */
 .location-pin-map .leaflet-control-attribution {
-  background: rgba(0, 0, 0, 0.55);
-  color: rgba(255, 255, 255, 0.5);
+  background: rgba(0, 0, 0, 0.55) !important;
+  color: rgba(255, 255, 255, 0.5) !important;
 }
 
 .location-pin-map .leaflet-control-attribution a {
