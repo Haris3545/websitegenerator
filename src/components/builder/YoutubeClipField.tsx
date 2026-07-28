@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { loadYoutubeIframeApi, parseYoutubeVideoId, type YTPlayer } from "@/lib/youtubeIframeApi";
 
 const MAX_CLIP_SECONDS = 10;
@@ -39,18 +39,32 @@ export function YoutubeClipField({
   const [urlError, setUrlError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
-  const mountId = useId().replace(/[:]/g, "");
+  const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
   const previewPollRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!draft) return;
+    const container = containerRef.current;
+    if (!container) return;
     let cancelled = false;
+
+    // Created imperatively rather than as a JSX element, so the YouTube
+    // IFrame API is free to replace it with a live <iframe> (which is what
+    // it does to whatever element it's given) without React ever trying to
+    // remove that same node later. Confirming or cancelling the draft
+    // unmounts this branch, and React reconciling a node that's already
+    // been swapped out from under it threw an uncaught DOM exception
+    // ("Failed to execute 'removeChild'") that crashed the whole page —
+    // removing the stable `container` div instead (which was never itself
+    // replaced) sidesteps that entirely.
+    const mountEl = document.createElement("div");
+    mountEl.className = "h-full w-full";
+    container.appendChild(mountEl);
+
     loadYoutubeIframeApi().then((YT) => {
       if (cancelled) return;
-      const el = document.getElementById(mountId);
-      if (!el) return;
-      playerRef.current = new YT.Player(el, {
+      playerRef.current = new YT.Player(mountEl, {
         videoId: draft.videoId,
         playerVars: { modestbranding: 1, rel: 0, playsinline: 1 },
         events: {
@@ -63,9 +77,10 @@ export function YoutubeClipField({
       if (previewPollRef.current) window.clearInterval(previewPollRef.current);
       playerRef.current?.destroy();
       playerRef.current = null;
+      container.replaceChildren();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only (re)mount the player when the draft's video itself changes
-  }, [draft?.videoId, mountId]);
+  }, [draft?.videoId]);
 
   function beginUrlSubmit() {
     const id = parseYoutubeVideoId(urlInput);
@@ -144,7 +159,7 @@ export function YoutubeClipField({
 
       {draft ? (
         <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-3 dark:border-white/10">
-          <div id={mountId} className="aspect-video w-full overflow-hidden rounded-lg bg-black" />
+          <div ref={containerRef} className="aspect-video w-full overflow-hidden rounded-lg bg-black" />
 
           <div className="flex items-center gap-2 text-xs text-neutral-600 dark:text-white/60">
             <span>Start {formatSeconds(draft.start)}</span>

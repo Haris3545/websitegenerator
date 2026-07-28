@@ -4,7 +4,14 @@ import { useId, useRef, useState } from "react";
 import imageCompression from "browser-image-compression";
 import { createClient } from "@/lib/supabase/client";
 
-const IMAGE_MAX_MB = 10;
+// A clipboard paste hands over the browser's own raw bitmap rendering of
+// the copied image, not the (often already-compressed JPEG) file it
+// originally came from — a photo that's a few MB as a saved file can paste
+// in as a 30-40MB uncompressed PNG. Compression below is exactly what's
+// supposed to bring a file like that back down, so this ceiling only needs
+// to guard against genuinely pathological input, not gate out the ordinary
+// large-paste case compression exists to handle.
+const IMAGE_MAX_MB = 60;
 const IMAGE_MAX_DIMENSION = 2560; // sharp on a large TV, without shipping an oversized file
 const VIDEO_MAX_MB = 100;
 
