@@ -9,6 +9,16 @@ const MIN_K = 0.8;
 const MAX_K = 60;
 const MIN_LABEL_RADIUS = 26; // on-screen px a bubble needs before its label is worth showing
 const ZOOM_TRANSITION = "transform 550ms cubic-bezier(0.22, 1, 0.36, 1)";
+// An artist can have up to 1000 individual comment bubbles (see MAX_COMMENTS
+// in socialListening.ts) — each one a full SVG circle with its own radial
+// gradient fill, mix-blend-mode compositing layer, refs, and four pointer
+// event handlers. Mounting all of them at once, even fully transparent (the
+// stageOpacity fade already hides them below this zoom level), was enough
+// per-element GPU compositing overhead to crash the tab outright on lower-
+// power devices. Comment-level circles are only mounted once zoomed in past
+// this threshold, matching (with a little headroom) the k=6 point where
+// stageOpacity starts fading them in, so nothing pops in visibly late.
+const COMMENT_MOUNT_K = 4.5;
 
 type PackNode = {
   name: string;
@@ -116,6 +126,12 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
 
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
   const [selected, setSelected] = useState<SocialComment | null>(null);
+  // Whether individual comment-level bubbles are mounted at all — see
+  // COMMENT_MOUNT_K above. Updated from applyTransform on every pan/zoom
+  // frame via a functional update that returns the *same* boolean unless it
+  // actually needs to flip, so React bails out without re-rendering except
+  // right at the threshold crossing.
+  const [commentsVisible, setCommentsVisible] = useState(false);
 
   const root = useMemo(() => {
     const data: PackNode = {
@@ -146,6 +162,14 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
 
   function applyTransform(withTransition: boolean) {
     const { x, y, k } = transformRef.current;
+    // A functional update returning the same boolean it was already given
+    // is a documented React no-op — it bails out before re-rendering — so
+    // this is safe to call on every wheel/drag frame and only ever actually
+    // triggers a render right at the threshold crossing.
+    setCommentsVisible((prev) => {
+      const next = k >= COMMENT_MOUNT_K;
+      return prev === next ? prev : next;
+    });
     const g = groupRef.current;
     if (g) {
       g.style.transition = withTransition ? ZOOM_TRANSITION : "none";
@@ -190,6 +214,16 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
     applyTransform(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes]);
+
+  // Comment-level circles mount/unmount as commentsVisible flips (see
+  // COMMENT_MOUNT_K) — re-applying the transform right after immediately
+  // gives freshly-mounted circles their correct opacity/pointer-events
+  // instead of sitting at their default (fully opaque, clickable) state
+  // until the next pan/zoom frame happens to touch them.
+  useEffect(() => {
+    applyTransform(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commentsVisible]);
 
   // The container (h-[28rem] w-full) is never actually square, but the
   // viewBox is — with the SVG default preserveAspectRatio ("xMidYMid
@@ -357,6 +391,14 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
 
           <g ref={groupRef}>
             {nodes.map((node, i) => {
+              // Individual comment bubbles (depth 3) are invisible below
+              // COMMENT_MOUNT_K anyway (see stageOpacity) — not mounting
+              // them at all until then is what keeps up to 1000 of them
+              // from ever existing as live SVG elements (with their own
+              // gradient fill, blend-mode compositing layer, and pointer
+              // handlers) at once, which was enough overhead to crash the
+              // tab outright at the default overview zoom.
+              if (node.depth === 3 && !commentsVisible) return null;
               const categoryName = ancestorCategoryName(node);
               const color = node.depth === 0 ? null : colorFor(categoryName);
               const fillUrl = color ? `url(#glow-${uid}-${slug(color)})` : `url(#glow-root-${uid})`;
@@ -367,6 +409,7 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
                   key={i}
                   ref={(el) => {
                     if (el) circleRefs.current.set(i, el);
+                    else circleRefs.current.delete(i);
                   }}
                   cx={node.x}
                   cy={node.y}
