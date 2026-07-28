@@ -535,7 +535,7 @@ function LocationPinMapInner({
             it — and it's still fully interactive, so a visitor can drag to
             spin it same as the old standalone globe. */}
         <div
-          className="absolute -right-6 -top-14 overflow-hidden rounded-full bg-black/30"
+          className="absolute -right-6 -top-14 overflow-hidden rounded-full"
           style={{ height: MINI_GLOBE_SIZE, width: MINI_GLOBE_SIZE, zIndex: GLOBE_OVERLAY_Z }}
         >
           <TourGlobe points={globePoints} height={MINI_GLOBE_SIZE} />

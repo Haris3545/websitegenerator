@@ -33,6 +33,14 @@ const PIN_HEAD_RADIUS = 3.6;
 const PIN_NEEDLE_LENGTH = 7;
 const PIN_NEEDLE_RADIUS = 1.3;
 
+// How far outside the bare sphere the atmosphere shell's glow shader is
+// visible — react-globe.gl's Fresnel-based atmosphere doesn't cut off sharply
+// at this radius, it fades gradually well past it, so the frame-fit below
+// gives it extra room (ATMOSPHERE_FIT_MARGIN) rather than fitting exactly to
+// the shell's nominal edge.
+const ATMOSPHERE_ALTITUDE = 0.18;
+const ATMOSPHERE_FIT_MARGIN = 1.6;
+
 // How far a pin's farthest point (the far edge of its head) reaches beyond
 // its own contact point on the surface — used both to fit the camera so
 // pins never get clipped (see onGlobeReady) and, implicitly, to reason
@@ -205,11 +213,7 @@ export function TourGlobe({
   }, [isVisible, reducedMotion]);
 
   return (
-    <div
-      ref={containerRef}
-      className={interactive ? "overflow-hidden rounded-xl border border-white/10 bg-black/20" : "h-full w-full"}
-      style={{ height }}
-    >
+    <div ref={containerRef} className="h-full w-full" style={{ height }}>
       {width > 0 && (
         <Globe
           ref={globeRef}
@@ -219,7 +223,7 @@ export function TourGlobe({
           backgroundColor="rgba(0,0,0,0)"
           showAtmosphere
           atmosphereColor={atmosphereGlowColor}
-          atmosphereAltitude={0.18}
+          atmosphereAltitude={ATMOSPHERE_ALTITUDE}
           objectsData={points}
           objectLat="lat"
           objectLng="lng"
@@ -255,17 +259,25 @@ export function TourGlobe({
             // put the sphere's silhouette exactly on the frame's edge, which
             // guaranteed any pin popping out past the surface near the
             // visible limb got clipped by the corner overlay's circular
-            // mask the moment it went even slightly past the sphere. Fitting
-            // to globe-radius + PIN_REACH instead leaves the bare sphere
-            // just shy of the edge, with exactly enough of a margin for the
-            // tallest pin to pop out into without ever touching the mask.
+            // mask the moment it went even slightly past the sphere.
+            // The atmosphere glow needs the same treatment for the opposite
+            // reason: fitting tightly to the pins left the atmosphere's soft
+            // shell — which extends further than the pins and fades
+            // gradually rather than stopping at a hard edge — still
+            // partway-opaque right where the corner overlay's circular
+            // mask cut it off, which read as a visible ring around the
+            // globe instead of a glow fading into the page background.
+            // Fitting to whichever of pins/atmosphere reaches furthest, with
+            // extra headroom for the atmosphere's gradual falloff, leaves
+            // both fully inside the frame with room to fade out.
             // react-globe.gl's exposed camera() is typed as the generic
             // THREE.Camera base, but globe.gl always constructs its scene
             // camera as a PerspectiveCamera under the hood.
             const camera = globe.camera() as THREE.PerspectiveCamera;
             const halfFovRad = THREE.MathUtils.degToRad(camera.fov / 2);
             const globeRadius = globe.getGlobeRadius();
-            const effectiveRadius = globeRadius + PIN_REACH;
+            const atmosphereReach = globeRadius * ATMOSPHERE_ALTITUDE * ATMOSPHERE_FIT_MARGIN;
+            const effectiveRadius = globeRadius + Math.max(PIN_REACH, atmosphereReach);
             const fitAltitude = effectiveRadius / (globeRadius * Math.sin(halfFovRad)) - 1;
             // OrbitControls' autoRotate only changes the camera's azimuth
             // (longitude), not its polar angle (latitude) — so whatever
