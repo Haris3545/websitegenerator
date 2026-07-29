@@ -477,9 +477,9 @@ export function YoutubeCaptureCard({
 
   if (stage === "review") {
     return (
-      <div className="animate-modal-in fixed inset-0 z-[95] flex items-center justify-center bg-black/80 p-6 backdrop-blur-sm sm:p-10">
-        <div className="flex w-full max-w-[1800px] flex-col gap-4">
-          <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black shadow-[0_0_140px_10px_rgba(255,201,49,0.3)]">
+      <div className="animate-modal-in fixed inset-0 z-[95] flex items-center justify-center overflow-y-auto bg-black/80 p-6 backdrop-blur-sm sm:p-10">
+        <div className="flex w-full max-w-[1800px] flex-col gap-4 py-4">
+          <div className="relative mx-auto aspect-video h-[min(65vh,900px)] max-w-full overflow-hidden rounded-2xl bg-black shadow-[0_0_140px_10px_rgba(255,201,49,0.3)]">
             {reviewUrl && (
               <video
                 ref={reviewVideoRef}
@@ -493,8 +493,8 @@ export function YoutubeCaptureCard({
               />
             )}
           </div>
-          <div className="flex flex-col gap-2.5 rounded-xl bg-neutral-900 p-4">
-            <p className="text-sm font-medium text-white/80">
+          <div className="mx-auto flex w-full flex-col gap-2.5 rounded-xl border border-neutral-200 bg-white p-4 shadow-xl dark:border-white/10 dark:bg-neutral-900">
+            <p className="text-sm font-medium text-neutral-800 dark:text-white/80">
               Still see a flash of YouTube&apos;s play button at the very start? Drag to trim it off —
               the preview above jumps to match.
             </p>
@@ -513,17 +513,17 @@ export function YoutubeCaptureCard({
                 }}
                 className="flex-1 accent-builder-accent"
               />
-              <span className="w-14 shrink-0 text-right font-mono text-xs text-white/60">
+              <span className="w-14 shrink-0 text-right font-mono text-xs text-neutral-500 dark:text-white/60">
                 {trimStart.toFixed(2)}s
               </span>
             </div>
-            {cropError && <p className="text-xs text-red-400">{cropError}</p>}
+            {cropError && <p className="text-xs text-red-600 dark:text-red-400">{cropError}</p>}
             <div className="mt-1 flex justify-end gap-2">
               <button
                 type="button"
                 disabled={cropping}
                 onClick={() => finishWith(() => onCancel())}
-                className="rounded-lg px-3 py-1.5 text-xs font-medium text-white/50 hover:text-white/80 disabled:opacity-50"
+                className="rounded-lg px-3 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 disabled:opacity-50 dark:text-white/50 dark:hover:bg-white/5 dark:hover:text-white/80"
               >
                 Discard &amp; cancel
               </button>
@@ -543,15 +543,15 @@ export function YoutubeCaptureCard({
   }
 
   return (
-    <div className="animate-modal-in fixed inset-0 z-[95] flex items-center justify-center bg-black/80 p-6 backdrop-blur-sm sm:p-10">
-      <div className="flex w-full max-w-[1800px] flex-col gap-4">
-        <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black shadow-[0_0_140px_10px_rgba(255,201,49,0.3)]">
+    <div className="animate-modal-in fixed inset-0 z-[95] flex items-center justify-center overflow-y-auto bg-black/80 p-6 backdrop-blur-sm sm:p-10">
+      <div className="flex w-full max-w-[1800px] flex-col gap-4 py-4">
+        <div className="relative mx-auto aspect-video h-[min(65vh,900px)] max-w-full overflow-hidden rounded-2xl bg-black shadow-[0_0_140px_10px_rgba(255,201,49,0.3)]">
           <div ref={mountRef} className="h-full w-full" />
           {/* Eats every pointer event so hovering/clicking anywhere on the
               page can never reach the iframe and nudge playback mid-capture. */}
           <div className="absolute inset-0" />
         </div>
-        <div className="flex items-center justify-between gap-2">
+        <div className="mx-auto flex w-full items-center justify-between gap-2">
           <span className="flex items-center gap-2 text-sm font-medium text-white/80">
             <span className={`h-2 w-2 rounded-full ${priming ? "bg-white/40" : "animate-pulse bg-red-500"}`} />
             {priming
