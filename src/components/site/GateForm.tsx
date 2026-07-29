@@ -6,7 +6,11 @@ import { googleFontsCssUrl } from "@/lib/fonts";
 import { grainTexture } from "@/lib/grainTexture";
 import { AutoFitHeading } from "@/components/site/AutoFitHeading";
 import { YoutubeBackgroundPlayer } from "@/components/site/YoutubeBackgroundPlayer";
-import { hexToRgba } from "@/lib/color";
+
+// Fixed fallback fill for the rare gate with no photo/video background set
+// at all — there's no per-artist secondary colour anymore, so this is just
+// a plain neutral rather than anything configurable.
+const FALLBACK_BACKGROUND = "#0a0a0a";
 
 export function GateForm({
   slug,
@@ -14,7 +18,6 @@ export function GateForm({
   youtubeVideoId,
   youtubeStart = 0,
   youtubeEnd,
-  backgroundColor,
   accentColor,
   projectTitle,
   tagline,
@@ -28,7 +31,6 @@ export function GateForm({
   youtubeVideoId?: string | null;
   youtubeStart?: number;
   youtubeEnd?: number | null;
-  backgroundColor: string;
   accentColor: string;
   projectTitle: string;
   tagline: string;
@@ -60,7 +62,7 @@ export function GateForm({
   return (
     <div
       className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 text-white"
-      style={{ backgroundColor, fontFamily: `"${fontFamily}", sans-serif` }}
+      style={{ backgroundColor: FALLBACK_BACKGROUND, fontFamily: `"${fontFamily}", sans-serif` }}
     >
       <link rel="stylesheet" href={googleFontsCssUrl(fontFamily)} />
 
@@ -90,14 +92,8 @@ export function GateForm({
           />
         ))
       )}
-      {/* A flat black scrim would make the secondary colour picked in the
-          builder invisible on every gate that has a background photo/video
-          set (i.e. almost all of them) — tinting the scrim with that colour
-          instead means it always contributes something to how the page
-          actually looks, rather than only mattering on the rare gate with
-          no media at all. */}
       {(backgroundUrl || youtubeVideoId) && (
-        <div className="absolute inset-0" style={{ backgroundColor: hexToRgba(backgroundColor, scrimOpacity) }} />
+        <div className="absolute inset-0" style={{ backgroundColor: `rgba(0,0,0,${scrimOpacity})` }} />
       )}
       <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/70" />
       {grainIntensity > 0 && (

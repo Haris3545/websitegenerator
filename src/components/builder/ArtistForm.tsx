@@ -27,6 +27,7 @@ import { YOUTUBE_BUTTON_CLASS } from "@/components/builder/mediaActionStyles";
 import { YoutubeIcon } from "@/components/builder/YoutubeIcon";
 import { HelpTooltip } from "@/components/builder/HelpTooltip";
 import { averageColorFromImageUrl } from "@/lib/colorFromImage";
+import { YoutubeBackgroundPlayer } from "@/components/site/YoutubeBackgroundPlayer";
 import type { YoutubeVideoSearchResult } from "@/lib/youtube";
 
 function slugify(name: string) {
@@ -35,6 +36,10 @@ function slugify(name: string) {
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
+}
+
+function isGateVideoUrl(url: string) {
+  return /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url);
 }
 
 const inputClass =
@@ -75,7 +80,6 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
     slug: artist?.slug ?? "",
     name: artist?.name ?? "",
     primary_color: artist?.primary_color ?? "#eab308",
-    secondary_color: artist?.secondary_color ?? "#0f172a",
     accent_color: artist?.accent_color ?? "#eab308",
     font_family: artist?.font_family ?? "Inter",
     background_image_url: artist?.background_image_url ?? null,
@@ -428,8 +432,29 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
     error: "text-red-600 dark:text-red-400",
   };
 
+  // Roughly "how far along is this artist" across the three numbered
+  // sections — deliberately loose thresholds (nothing here blocks saving,
+  // it's just a glanceable signal) rather than an exhaustive field-by-field
+  // checklist.
+  const sectionsComplete = [
+    !!form.name.trim() && !!form.slug.trim() && form.enabled_tabs.length > 0,
+    !!(form.background_image_url || form.background_youtube_id),
+    !!form.project_title.trim() && !!form.tagline.trim(),
+  ].filter(Boolean).length;
+  const formProgress = sectionsComplete / 3;
+
   return (
     <>
+    {/* Very subtle by design — a hairline, not a loud stepper — fixed to
+        the true top of the viewport (above even the builder's own app
+        header) so it reads as "progress through the whole page" rather
+        than being scoped to wherever the form happens to scroll. */}
+    <div className="fixed inset-x-0 top-0 z-[60] h-[2px] bg-transparent">
+      <div
+        className="h-full bg-builder-accent transition-all duration-500 ease-out"
+        style={{ width: `${formProgress * 100}%`, opacity: formProgress > 0 ? 0.7 : 0 }}
+      />
+    </div>
     <form onSubmit={handleSubmit} className="flex w-full max-w-2xl flex-col gap-6 lg:max-w-3xl 2xl:max-w-5xl">
       {/* The builder's own app header (BuilderLayout) is separately sticky
           at top-0 with a higher z-index — offsetting this bar below it
@@ -437,7 +462,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
           flush against, or hidden behind, the very top edge of the window
           once the page scrolls. */}
       <div className="sticky top-16 z-10 flex items-center justify-between gap-3 rounded-full border border-neutral-200/70 bg-white/90 px-4 py-2.5 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-neutral-950/80">
-        <p className={`text-xs font-medium ${saveStatusColor[saveStatus]}`}>{saveStatusText[saveStatus]}</p>
+        <p className={`ml-1.5 text-xs font-medium ${saveStatusColor[saveStatus]}`}>{saveStatusText[saveStatus]}</p>
         {/* A running "where am I" while scrolled through a long form — the
             numbered Section titles alone only orient someone once they've
             already scrolled to one. Hidden below sm since three pills plus
@@ -708,11 +733,6 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
 
         <div className="flex gap-6">
           <ColorField label="Primary" value={form.primary_color} onChange={(v) => update("primary_color", v)} />
-          <ColorField
-            label="Secondary"
-            value={form.secondary_color}
-            onChange={(v) => update("secondary_color", v)}
-          />
           <ColorField label="Accent" value={form.accent_color} onChange={(v) => update("accent_color", v)} />
         </div>
         <FontPicker value={form.font_family} onChange={(v) => update("font_family", v)} />
@@ -721,22 +741,54 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
           <span className={`${labelClass} flex items-center gap-1.5`}>
             Password page preview
             <HelpTooltip>
-              Secondary colour is the plain background when there&apos;s no photo/video set below —
-              and tints the darkness overlay when there is, so it&apos;s never just hidden underneath
-              one. Accent colour is the thin divider line under the title.
+              Shows the actual background photo/video and darkness overlay set below, live. Accent
+              colour is the thin divider line under the title.
             </HelpTooltip>
           </span>
           <div
-            className="flex flex-col items-center justify-center gap-2 rounded-lg px-4 py-8 text-center text-white"
-            style={{ backgroundColor: form.secondary_color, fontFamily: `"${form.font_family}", sans-serif` }}
+            className="relative flex h-40 flex-col items-center justify-center gap-2 overflow-hidden rounded-lg px-4 text-center text-white lg:h-52 2xl:h-64"
+            style={{ backgroundColor: "#0a0a0a", fontFamily: `"${form.font_family}", sans-serif` }}
           >
-            <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-white/70">
+            {form.gate_youtube_id ? (
+              <YoutubeBackgroundPlayer
+                key={form.gate_youtube_id}
+                videoId={form.gate_youtube_id}
+                start={form.gate_youtube_start}
+                end={form.gate_youtube_end ?? form.gate_youtube_start + 10}
+              />
+            ) : (
+              form.gate_background_url &&
+              (isGateVideoUrl(form.gate_background_url) ? (
+                <video
+                  src={form.gate_background_url}
+                  className="absolute inset-0 h-full w-full object-cover"
+                  muted
+                  loop
+                  autoPlay
+                  playsInline
+                />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={form.gate_background_url}
+                  alt=""
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              ))
+            )}
+            {(form.gate_background_url || form.gate_youtube_id) && (
+              <div
+                className="absolute inset-0"
+                style={{ backgroundColor: `rgba(0,0,0,${form.gate_scrim_opacity})` }}
+              />
+            )}
+            <p className="relative z-10 text-[10px] font-semibold uppercase tracking-[0.35em] text-white/70">
               {form.tagline || "Tagline"}
             </p>
-            <p className="text-xl font-bold uppercase leading-none tracking-tight">
+            <p className="relative z-10 text-xl font-bold uppercase leading-none tracking-tight">
               {form.project_title || "Project title"}
             </p>
-            <div className="mt-1 h-px w-16" style={{ backgroundColor: form.accent_color }} />
+            <div className="relative z-10 mt-1 h-px w-16" style={{ backgroundColor: form.accent_color }} />
           </div>
         </div>
 

@@ -76,7 +76,6 @@ export type ArtistFormInput = {
   slug: string;
   name: string;
   primary_color: string;
-  secondary_color: string;
   accent_color: string;
   font_family: string;
   background_image_url: string | null;
@@ -115,7 +114,6 @@ export async function upsertArtist(
     const enabled_tabs = input.enabled_tabs.filter((t) => ALL_TAB_KEYS.includes(t));
 
     const gateVisuals = {
-      secondary_color: input.secondary_color,
       accent_color: input.accent_color,
       gate_background_url: input.gate_background_url,
       gate_youtube_id: input.gate_youtube_id,

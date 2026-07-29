@@ -82,7 +82,6 @@ export default async function ArtistSiteLayout({
       style={
         {
           "--primary": artist.primary_color,
-          "--secondary": artist.secondary_color,
           "--accent": artist.accent_color,
           "--bg-blur": `${blur * 12}px`,
           "--bg-tint-color": tint_color,
@@ -128,7 +127,7 @@ export default async function ArtistSiteLayout({
         </filter>
       </svg>
 
-      <div className="fixed inset-0 -z-20" style={{ backgroundColor: artist.secondary_color }}>
+      <div className="fixed inset-0 -z-20 bg-neutral-950">
         {artist.background_youtube_id ? (
           <YoutubeBackgroundPlayer
             videoId={artist.background_youtube_id}

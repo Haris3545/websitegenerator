@@ -127,15 +127,6 @@ function buildPinObject(color: string, tiltSeed: string): THREE.Group {
   return group;
 }
 
-function isDarkColor(hex: string): boolean {
-  const clean = hex.replace("#", "");
-  if (clean.length !== 6) return true;
-  const r = parseInt(clean.slice(0, 2), 16) / 255;
-  const g = parseInt(clean.slice(2, 4), 16) / 255;
-  const b = parseInt(clean.slice(4, 6), 16) / 255;
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.5;
-}
-
 export function TourGlobe({
   points,
   height = DEFAULT_GLOBE_HEIGHT,
@@ -162,14 +153,10 @@ export function TourGlobe({
   // The atmosphere glow used to just be the artist's accent color, which
   // defaults to gold/orange (#eab308) and read as a jarring orange halo
   // rather than a deliberate design choice. These sites are dark-themed
-  // almost without exception, so a white glow reads as the "atmosphere"
-  // effect it's meant to be; falling back to a dark tone covers the rare
-  // light-background artist instead of a washed-out white-on-white glow.
-  const [atmosphereGlowColor] = useState(() => {
-    if (typeof document === "undefined") return "#ffffff";
-    const secondary = getComputedStyle(document.documentElement).getPropertyValue("--secondary").trim();
-    return isDarkColor(secondary) ? "#ffffff" : "#1e293b";
-  });
+  // almost without exception, so a plain white glow reads as the
+  // "atmosphere" effect it's meant to be, with no per-artist colour to
+  // check against anymore.
+  const atmosphereGlowColor = "#ffffff";
   const [reducedMotion] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(prefers-reduced-motion: reduce)").matches : false
   );
