@@ -27,7 +27,22 @@ function TrendLine({ points }: { points: SearchTrendPoint[] }) {
         opacity={0.12}
         stroke="none"
       />
-      <path d={path} fill="none" stroke="var(--accent)" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+      {/* preserveAspectRatio="none" stretches x/y independently to fill a
+          much-wider-than-tall box, which without this would scale a
+          pre-transform strokeWidth far more vertically than horizontally —
+          turning a thin line into thick, near-solid triangular peaks (as
+          seen with a card ~2.5x wider than 40 units tall stretched to
+          ~12x wider than 96px tall). non-scaling-stroke keeps the stroke a
+          constant screen-pixel width regardless of that anisotropic scale. */}
+      <path
+        d={path}
+        fill="none"
+        stroke="var(--accent)"
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        vectorEffect="non-scaling-stroke"
+      />
     </svg>
   );
 }

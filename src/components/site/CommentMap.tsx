@@ -61,10 +61,14 @@ function clamp(v: number, min: number, max: number) {
   return Math.min(max, Math.max(min, v));
 }
 
+function categoryAncestor(node: Node): Node {
+  let n: Node = node;
+  while (n.depth > 1 && n.parent) n = n.parent;
+  return n;
+}
+
 function ancestorCategoryName(node: Node): string {
-  let n: Node | null = node;
-  while (n && n.depth > 1) n = n.parent;
-  return n?.data.name ?? "";
+  return categoryAncestor(node).data.name ?? "";
 }
 
 // How visible each depth is at a given zoom level k — the "only see the
@@ -330,6 +334,11 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
     }
     if (node.data.kind === "comment" && node.data.comment) {
       setSelected(node.data.comment);
+      // A single comment bubble is too small a target to "fill the screen"
+      // on its own — zoom to the category it belongs to instead, so
+      // selecting a comment also gives full context on the cluster it came
+      // from rather than leaving the view wherever it happened to be.
+      focusOn(categoryAncestor(node));
     } else if (node.depth === 0) {
       // The root "Commentary" blob itself isn't a meaningful zoom target —
       // fitting it to the view is a no-op since it's already what's shown.

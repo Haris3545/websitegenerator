@@ -6,11 +6,6 @@ import type { SocialComment } from "@/lib/database.types";
 
 const STALE_AFTER_MS = 6 * 60 * 60 * 1000; // 6 hours — heavier than a simple mentions fetch
 const MAX_COMMENTS = 1000;
-// Below this many real comments found, an artist is sparse enough (a new
-// or niche act YouTube's own search just doesn't have much on) to be worth
-// spending a Gemini web sweep on — see refreshSocialListeningForArtist's
-// webSweepIfSparse option.
-const SPARSE_THRESHOLD = 15;
 const WEB_SWEEP_MAX_COMMENTS = 100;
 
 const WEB_MENTIONS_SCHEMA = {
@@ -50,19 +45,21 @@ function safeParseJson(text: string | undefined): Record<string, unknown> {
   }
 }
 
-/** For an artist with genuinely little else to show (a new or niche act —
- * YouTube search alone often doesn't have much), spends one Gemini web
- * sweep looking more broadly: Reddit, X, forums, blogs, wherever real
- * discussion actually exists. Same two-step shape as events.ts's tour-date
- * discovery — a free-text research pass via Google Search grounding, then
- * structured extraction from that — and the same honesty requirement:
- * quote real text with real search evidence behind it, never summarize or
- * invent, and say so plainly if nothing turns up. Only worth doing once at
- * creation (see the webSweepIfSparse option below), not on every refresh —
- * this is exactly the Gemini call that used to make social listening
- * routinely blow the (then-20-requests/day) quota; that ceiling is now
- * ~900-1,000/day for gemini-2.5-flash-lite (see gemini.ts), so it's back,
- * gated to only the cases that actually need it. */
+/** Every artist's Social Listening page is meant to pull from Reddit as a
+ * normal, standing source alongside YouTube — not just a fallback for
+ * sparse/niche acts. Reddit's own public search endpoint reliably gets
+ * blocked from a cloud/serverless IP (a known anti-scraping measure, not
+ * anything about our request being malformed), so this sidesteps it by
+ * having Gemini do the searching (Google Search grounding) instead of
+ * fetching reddit.com directly — same two-step shape as events.ts's
+ * tour-date discovery: a free-text research pass, then structured
+ * extraction from that — and the same honesty requirement: quote real
+ * text with real search evidence behind it, never summarize or invent,
+ * and say so plainly if nothing turns up. Broadened past Reddit alone to
+ * X/forums/blogs too, since the same search naturally surfaces those and
+ * there's no reason to throw genuine mentions away. See
+ * refreshSocialListeningForArtist's includeWebSweep option for where this
+ * is (and deliberately isn't) called from. */
 async function fetchWebMentionsViaGemini(artistName: string): Promise<SocialComment[]> {
   const searchRes = await generateContentThrottled({
     model: "gemini-2.5-flash-lite",
@@ -198,14 +195,20 @@ async function fetchYoutubeComments(artistId: string, artistName: string): Promi
  * else that needed Gemini got to run (a hard 20 requests/day at the time —
  * see git history). That ceiling turned out to be stale: gemini-2.5-
  * flash-lite (what every Gemini call in this app actually uses) is
- * ~900-1,000/day, not 20 (see gemini.ts) — real headroom, but a shared
- * project-wide budget still, so this only opts in via webSweepIfSparse
- * (true only from the builder's one-time creation sweep — see
- * provisionActions.ts) rather than running on every repeatable refresh. */
+ * ~900-1,000/day, not 20 (see gemini.ts) — real headroom, so it's back as
+ * a standing part of the pipeline via includeWebSweep, not just a
+ * fallback. Still deliberately opt-in rather than unconditional, though:
+ * it's threaded through from artist creation and from the lazy
+ * staleness-triggered refresh below (both bounded — creation happens once,
+ * staleness refetches at most every STALE_AFTER_MS per artist) but *not*
+ * from refreshEverything() in app/s/[slug]/actions.ts, which backs both
+ * the repeatedly-clickable "Refresh Everything" button and the twice-daily
+ * cron — those stay Gemini-free on purpose, same reasoning as
+ * refreshEverything's own comment about sentiment/insights. */
 export async function refreshSocialListeningForArtist(
   artistId: string,
   artistName: string,
-  opts?: { webSweepIfSparse?: boolean }
+  opts?: { includeWebSweep?: boolean }
 ) {
   const comments: SocialComment[] = [];
   let platformStatus: string;
@@ -221,7 +224,7 @@ export async function refreshSocialListeningForArtist(
     }
   }
 
-  if (opts?.webSweepIfSparse && comments.length < SPARSE_THRESHOLD) {
+  if (opts?.includeWebSweep) {
     try {
       const webComments = await fetchWebMentionsViaGemini(artistName);
       comments.push(...webComments);
@@ -274,6 +277,10 @@ export async function refreshSocialListeningForArtist(
   return trimmed.length;
 }
 
+/** The page's own "keep it fresh" path — runs at most once per
+ * STALE_AFTER_MS per artist (whoever happens to visit next triggers it),
+ * which is what bounds the Gemini web sweep's real-world frequency rather
+ * than anything in this function itself. */
 export async function refreshSocialListeningIfStale(artistId: string, artistName: string) {
   const supabase = createServiceRoleClient();
   const { data } = await supabase
@@ -287,7 +294,7 @@ export async function refreshSocialListeningIfStale(artistId: string, artistName
   if (!isStale) return;
 
   try {
-    await refreshSocialListeningForArtist(artistId, artistName);
+    await refreshSocialListeningForArtist(artistId, artistName, { includeWebSweep: true });
   } catch (err) {
     console.error(`refreshSocialListeningIfStale failed for artist ${artistId}:`, err);
   }

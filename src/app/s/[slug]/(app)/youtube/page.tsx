@@ -49,7 +49,7 @@ export default async function YoutubePage({ params }: { params: Promise<{ slug: 
 
   if (!map?.computed_at && !mapError) {
     try {
-      await refreshSocialListeningForArtist(artist.id, artist.name);
+      await refreshSocialListeningForArtist(artist.id, artist.name, { includeWebSweep: true });
       ({ data: map, error: mapError } = await supabase
         .from("social_comment_map")
         .select("categories, comment_count, last_error, computed_at")

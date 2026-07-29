@@ -62,20 +62,20 @@ export async function provisionYoutube(
   }
 }
 
-/** webSweepIfSparse is only ever passed true from the builder's creation
- * flow (see ProvisioningOverlay.tsx, which threads its own mode="create"
- * check through here) — refreshSocialListeningForArtist only actually
- * spends a Gemini call on it when the YouTube-only pass came back sparse,
- * but repeatable-refresh callers (the "Refresh Everything" button/cron)
- * never even offer the option, so there's no way for this to run
+/** includeWebSweep is only ever passed true from the builder's creation flow
+ * (see ProvisioningOverlay.tsx, which threads its own mode="create" check
+ * through here) — the Reddit/web sweep runs as a standing source on every
+ * artist's site (see refreshSocialListeningForArtist's own comment), but
+ * repeatable-refresh callers (the "Refresh Everything" button/cron) never
+ * even offer the option, so there's no way for creation to make this run
  * repeatedly against the shared Gemini quota. */
 export async function provisionSocialListening(
   artistId: string,
   artistName: string,
-  webSweepIfSparse = false
+  includeWebSweep = false
 ): Promise<ProvisionResult> {
   try {
-    await refreshSocialListeningForArtist(artistId, artistName, { webSweepIfSparse });
+    await refreshSocialListeningForArtist(artistId, artistName, { includeWebSweep });
     return { ok: true };
   } catch (err) {
     return toResult(err);

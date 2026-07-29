@@ -78,10 +78,19 @@ export function BackgroundMediaField({
   const [duration, setDuration] = useState<number | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  // Cancelling the trim draft used to clear `draft`/`panel` synchronously —
+  // a substantial block (video preview + timeline + buttons) vanishing in
+  // one frame, snapping the page straight back up to the collapsed "Add
+  // background" button wherever that happened to land on screen. Collapsing
+  // it first (same grid-rows technique the dropdown menu below uses) and
+  // only clearing draft/panel once that finishes reads as an intentional
+  // close instead of a jump cut.
+  const [draftClosing, setDraftClosing] = useState(false);
 
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const fieldRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
   const previewPollRef = useRef<number | null>(null);
@@ -256,9 +265,16 @@ export function BackgroundMediaField({
   }
 
   function cancelDraft() {
-    setDraft(null);
+    setDraftClosing(true);
     setDownloadError(null);
-    setPanel(null);
+    // Matches the 200ms grid-rows transition below plus a little slack for
+    // the browser to actually paint the collapse before the DOM disappears.
+    window.setTimeout(() => {
+      setDraft(null);
+      setPanel(null);
+      setDraftClosing(false);
+      fieldRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 220);
   }
 
   async function confirmDraft() {
@@ -339,7 +355,7 @@ export function BackgroundMediaField({
   }
 
   return (
-    <div className="flex flex-col gap-2 text-sm">
+    <div ref={fieldRef} className="flex flex-col gap-2 text-sm">
       <span className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-white/50">
         {label}
       </span>
@@ -376,76 +392,88 @@ export function BackgroundMediaField({
       />
 
       {panel === "youtube-draft" && draft ? (
-        <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-3 dark:border-white/10">
-          <div ref={containerRef} className="aspect-video w-full overflow-hidden rounded-lg bg-black" />
+        <div
+          className={`grid transition-[grid-template-rows] duration-200 ease-out ${
+            draftClosing ? "grid-rows-[0fr]" : "grid-rows-[1fr]"
+          }`}
+        >
+          <div className="overflow-hidden">
+            <div
+              className={`flex flex-col gap-3 rounded-lg border border-neutral-200 p-3 transition-opacity duration-150 dark:border-white/10 ${
+                draftClosing ? "opacity-0" : "opacity-100"
+              }`}
+            >
+              <div ref={containerRef} className="aspect-video w-full overflow-hidden rounded-lg bg-black" />
 
-          <VideoTrimTimeline
-            duration={Math.max(duration ?? MAX_CLIP_SECONDS * 10, 1)}
-            start={draft.start}
-            end={draft.end}
-            maxClipSeconds={MAX_CLIP_SECONDS}
-            onStartChange={setDraftStart}
-            onEndChange={setDraftEnd}
-            onWindowShift={setDraftWindowStart}
-          />
+              <VideoTrimTimeline
+                duration={Math.max(duration ?? MAX_CLIP_SECONDS * 10, 1)}
+                start={draft.start}
+                end={draft.end}
+                maxClipSeconds={MAX_CLIP_SECONDS}
+                onStartChange={setDraftStart}
+                onEndChange={setDraftEnd}
+                onWindowShift={setDraftWindowStart}
+              />
 
-          <div className="flex items-center justify-between gap-2 text-xs text-neutral-600 dark:text-white/60">
-            <span>
-              {formatSeconds(draft.start)} – {formatSeconds(draft.end)}
-            </span>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                disabled={downloading}
-                onClick={() => applyCurrentTimeAs("start")}
-                className="shrink-0 rounded border border-neutral-300 px-2 py-1 text-[11px] font-medium hover:bg-neutral-100 disabled:opacity-50 dark:border-white/15 dark:hover:bg-white/5"
-              >
-                Set start to current
-              </button>
-              <button
-                type="button"
-                disabled={downloading}
-                onClick={() => applyCurrentTimeAs("end")}
-                className="shrink-0 rounded border border-neutral-300 px-2 py-1 text-[11px] font-medium hover:bg-neutral-100 disabled:opacity-50 dark:border-white/15 dark:hover:bg-white/5"
-              >
-                Set end to current
-              </button>
+              <div className="flex items-center justify-between gap-2 text-xs text-neutral-600 dark:text-white/60">
+                <span>
+                  {formatSeconds(draft.start)} – {formatSeconds(draft.end)}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={downloading}
+                    onClick={() => applyCurrentTimeAs("start")}
+                    className="shrink-0 rounded border border-neutral-300 px-2 py-1 text-[11px] font-medium hover:bg-neutral-100 disabled:opacity-50 dark:border-white/15 dark:hover:bg-white/5"
+                  >
+                    Set start to current
+                  </button>
+                  <button
+                    type="button"
+                    disabled={downloading}
+                    onClick={() => applyCurrentTimeAs("end")}
+                    className="shrink-0 rounded border border-neutral-300 px-2 py-1 text-[11px] font-medium hover:bg-neutral-100 disabled:opacity-50 dark:border-white/15 dark:hover:bg-white/5"
+                  >
+                    Set end to current
+                  </button>
+                </div>
+              </div>
+
+              <p className="text-xs text-neutral-400 dark:text-white/40">
+                Clip length: {(draft.end - draft.start).toFixed(1)}s (max {MAX_CLIP_SECONDS}s). Confirming
+                downloads and trims exactly this window into a real file — nothing&apos;s uploaded until
+                then.
+              </p>
+
+              {downloadError && <p className="text-xs text-red-600 dark:text-red-400">{downloadError}</p>}
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={downloading}
+                  onClick={previewClip}
+                  className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
+                >
+                  Preview clip
+                </button>
+                <button
+                  type="button"
+                  disabled={downloading}
+                  onClick={cancelDraft}
+                  className="rounded-lg px-3 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100 disabled:opacity-50 dark:text-white/50 dark:hover:bg-white/5"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={downloading}
+                  onClick={() => void confirmDraft()}
+                  className="rounded-lg bg-builder-accent px-3 py-1.5 text-xs font-semibold text-black transition-transform hover:-translate-y-0.5 disabled:opacity-50"
+                >
+                  {downloading ? "Downloading & trimming…" : "Confirm clip"}
+                </button>
+              </div>
             </div>
-          </div>
-
-          <p className="text-xs text-neutral-400 dark:text-white/40">
-            Clip length: {(draft.end - draft.start).toFixed(1)}s (max {MAX_CLIP_SECONDS}s). Confirming
-            downloads and trims exactly this window into a real file — nothing&apos;s uploaded until
-            then.
-          </p>
-
-          {downloadError && <p className="text-xs text-red-600 dark:text-red-400">{downloadError}</p>}
-
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={downloading}
-              onClick={previewClip}
-              className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
-            >
-              Preview clip
-            </button>
-            <button
-              type="button"
-              disabled={downloading}
-              onClick={cancelDraft}
-              className="rounded-lg px-3 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100 disabled:opacity-50 dark:text-white/50 dark:hover:bg-white/5"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              disabled={downloading}
-              onClick={() => void confirmDraft()}
-              className="rounded-lg bg-builder-accent px-3 py-1.5 text-xs font-semibold text-black transition-transform hover:-translate-y-0.5 disabled:opacity-50"
-            >
-              {downloading ? "Downloading & trimming…" : "Confirm clip"}
-            </button>
           </div>
         </div>
       ) : panel === "paste-image" ? (
