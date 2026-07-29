@@ -39,8 +39,12 @@ export function supportsTabCapture(): boolean {
 // buffering chrome (which show right as playback kicks in) to have settled
 // before anything is actually recorded. Trimming a beat off the end avoids
 // a trailing black frame some clips otherwise end on.
-const WARMUP_SECONDS = 3;
+const WARMUP_SECONDS = 3.5;
 const END_TRIM_SECONDS = 0.5;
+// Manual safety net on top of the warmup above — the review step's trim
+// slider goes from 0 up to this many seconds, for whatever residual flash
+// the warmup alone didn't catch.
+const MAX_MANUAL_TRIM_SECONDS = 2;
 
 function pickMimeType(): string {
   const candidates = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
@@ -50,7 +54,79 @@ function pickMimeType(): string {
   return "video/webm";
 }
 
-type Stage = "confirm" | "recording";
+interface CaptureStreamElement extends HTMLVideoElement {
+  captureStream?(): MediaStream;
+}
+
+/** Physically re-encodes a recorded clip starting from `startAt` instead of
+ * 0 — used by the review step's trim slider. Re-encoding (rather than a
+ * byte-level cut) is necessary because webm/matroska containers aren't
+ * safely truncatable without re-muxing; playing the source into a hidden
+ * video element and re-capturing via HTMLVideoElement.captureStream() does
+ * the trim without needing ffmpeg or any server round-trip. */
+function cropBlobStart(blob: Blob, startAt: number): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const video = document.createElement("video") as CaptureStreamElement;
+    video.src = url;
+    video.muted = true;
+    video.playsInline = true;
+
+    function cleanup() {
+      URL.revokeObjectURL(url);
+    }
+
+    video.addEventListener(
+      "loadedmetadata",
+      () => {
+        video.currentTime = Math.min(startAt, Math.max(0, video.duration - 0.1));
+      },
+      { once: true }
+    );
+
+    video.addEventListener(
+      "seeked",
+      () => {
+        const stream = video.captureStream?.();
+        if (!stream) {
+          cleanup();
+          reject(new Error("This browser can't re-crop a recorded clip."));
+          return;
+        }
+        const chunks: Blob[] = [];
+        const recorder = new MediaRecorder(stream, { mimeType: pickMimeType() });
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) chunks.push(e.data);
+        };
+        recorder.onstop = () => {
+          cleanup();
+          resolve(new Blob(chunks, { type: recorder.mimeType }));
+        };
+        recorder.start();
+        video.addEventListener(
+          "ended",
+          () => {
+            if (recorder.state === "recording") recorder.stop();
+          },
+          { once: true }
+        );
+        void video.play();
+      },
+      { once: true }
+    );
+
+    video.addEventListener(
+      "error",
+      () => {
+        cleanup();
+        reject(new Error("Couldn't load the recorded clip for cropping."));
+      },
+      { once: true }
+    );
+  });
+}
+
+type Stage = "confirm" | "recording" | "review";
 
 /** Records a YouTube clip by having the browser share its own current tab
  * back to itself, cropped down (via Region Capture) to just a small
@@ -94,14 +170,36 @@ export function YoutubeCaptureCard({
   // being advisory text, since it's easy to skim past a paragraph.
   const [checklist, setChecklist] = useState({ captionsOff: false, fullscreened: false, staysOnTab: false });
   const allChecked = checklist.captionsOff && checklist.fullscreened && checklist.staysOnTab;
+  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
+  const [reviewUrl, setReviewUrl] = useState<string | null>(null);
+  const [trimStart, setTrimStart] = useState(0);
+  const [cropping, setCropping] = useState(false);
+  const [cropError, setCropError] = useState<string | null>(null);
 
   const mountRef = useRef<HTMLDivElement>(null);
+  const reviewVideoRef = useRef<HTMLVideoElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const countdownIdRef = useRef<number | null>(null);
   const finishedRef = useRef(false);
   const hasBegunRef = useRef(false);
+  // Cleaning up the screen-share stream once recording stops (to move into
+  // the review step) also stops its tracks — which fires the same "ended"
+  // event a person manually stopping mid-recording would, so the "ended"
+  // listener needs to tell the two apart rather than treating every ended
+  // event as a cancellation.
+  const recordingDoneRef = useRef(false);
+
+  useEffect(() => {
+    if (!recordedBlob) {
+      setReviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(recordedBlob);
+    setReviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [recordedBlob]);
 
   function cleanupStream() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -145,6 +243,7 @@ export function YoutubeCaptureCard({
 
     streamRef.current = stream;
     stream.getVideoTracks()[0].addEventListener("ended", () => {
+      if (recordingDoneRef.current) return;
       finishWith(() => onCancel("Screen sharing stopped before the clip finished recording."));
     });
     setStage("recording");
@@ -262,7 +361,11 @@ export function YoutubeCaptureCard({
       if (e.data.size > 0) chunks.push(e.data);
     };
     recorder.onstop = () => {
-      finishWith(() => onDone(new Blob(chunks, { type: recorder.mimeType })));
+      recordingDoneRef.current = true;
+      cleanupStream();
+      setRecordedBlob(new Blob(chunks, { type: recorder.mimeType }));
+      setTrimStart(0);
+      setStage("review");
     };
 
     recorder.start();
@@ -276,6 +379,23 @@ export function YoutubeCaptureCard({
       if (countdownIdRef.current) window.clearInterval(countdownIdRef.current);
       if (recorder.state === "recording") recorder.stop();
     }, durationMs);
+  }
+
+  async function confirmReview() {
+    if (!recordedBlob) return;
+    if (trimStart <= 0) {
+      finishWith(() => onDone(recordedBlob));
+      return;
+    }
+    setCropping(true);
+    setCropError(null);
+    try {
+      const trimmed = await cropBlobStart(recordedBlob, trimStart);
+      finishWith(() => onDone(trimmed));
+    } catch (err) {
+      setCropping(false);
+      setCropError(err instanceof Error ? err.message : "Couldn't crop the clip.");
+    }
   }
 
   if (stage === "confirm") {
@@ -349,6 +469,73 @@ export function YoutubeCaptureCard({
             >
               Share &amp; record
             </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (stage === "review") {
+    return (
+      <div className="animate-modal-in fixed inset-0 z-[95] flex items-center justify-center bg-black/80 p-6 backdrop-blur-sm sm:p-10">
+        <div className="flex w-full max-w-[1800px] flex-col gap-4">
+          <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black shadow-[0_0_140px_10px_rgba(255,201,49,0.3)]">
+            {reviewUrl && (
+              <video
+                ref={reviewVideoRef}
+                src={reviewUrl}
+                muted
+                playsInline
+                className="h-full w-full object-contain"
+                onLoadedMetadata={() => {
+                  if (reviewVideoRef.current) reviewVideoRef.current.currentTime = trimStart;
+                }}
+              />
+            )}
+          </div>
+          <div className="flex flex-col gap-2.5 rounded-xl bg-neutral-900 p-4">
+            <p className="text-sm font-medium text-white/80">
+              Still see a flash of YouTube&apos;s play button at the very start? Drag to trim it off —
+              the preview above jumps to match.
+            </p>
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                min={0}
+                max={MAX_MANUAL_TRIM_SECONDS}
+                step={0.05}
+                value={trimStart}
+                disabled={cropping}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  setTrimStart(v);
+                  if (reviewVideoRef.current) reviewVideoRef.current.currentTime = v;
+                }}
+                className="flex-1 accent-builder-accent"
+              />
+              <span className="w-14 shrink-0 text-right font-mono text-xs text-white/60">
+                {trimStart.toFixed(2)}s
+              </span>
+            </div>
+            {cropError && <p className="text-xs text-red-400">{cropError}</p>}
+            <div className="mt-1 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={cropping}
+                onClick={() => finishWith(() => onCancel())}
+                className="rounded-lg px-3 py-1.5 text-xs font-medium text-white/50 hover:text-white/80 disabled:opacity-50"
+              >
+                Discard &amp; cancel
+              </button>
+              <button
+                type="button"
+                disabled={cropping}
+                onClick={() => void confirmReview()}
+                className="rounded-lg bg-builder-accent px-4 py-1.5 text-xs font-semibold text-black transition-transform hover:-translate-y-0.5 disabled:opacity-50"
+              >
+                {cropping ? "Cropping…" : "Use this clip"}
+              </button>
+            </div>
           </div>
         </div>
       </div>
