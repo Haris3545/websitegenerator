@@ -87,6 +87,13 @@ export function YoutubeCaptureCard({
   const [error, setError] = useState<string | null>(null);
   const [priming, setPriming] = useState(true);
   const [secondsLeft, setSecondsLeft] = useState(WARMUP_SECONDS);
+  // Captions are an account/browser-level YouTube preference — cc_load_policy
+  // and unloadModule('captions') help, but neither is 100% guaranteed to
+  // override it, so this is asked of the person directly rather than only
+  // relied on programmatically. Gates the confirm button rather than just
+  // being advisory text, since it's easy to skim past a paragraph.
+  const [checklist, setChecklist] = useState({ captionsOff: false, fullscreened: false, staysOnTab: false });
+  const allChecked = checklist.captionsOff && checklist.fullscreened && checklist.staysOnTab;
 
   const mountRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
@@ -223,7 +230,16 @@ export function YoutubeCaptureCard({
               if (countdownIdRef.current) window.clearInterval(countdownIdRef.current);
               if (cancelled) return;
               setPriming(false);
-              startRecording(stream);
+              // A couple of paint cycles between "warmup elapsed" and
+              // actually starting the recorder, so MediaRecorder locks onto
+              // a frame the compositor has already fully settled on rather
+              // than whatever was mid-transition the instant the timer fired.
+              requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                  if (cancelled) return;
+                  startRecording(stream);
+                });
+              });
             }, waitMs);
           },
         },
@@ -269,7 +285,7 @@ export function YoutubeCaptureCard({
         onClick={cancelFromDialog}
       >
         <div
-          className={`w-full max-w-sm rounded-xl border border-neutral-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-neutral-900 ${
+          className={`w-full max-w-md rounded-xl border border-neutral-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-neutral-900 ${
             dialogClosing ? "animate-modal-out" : "animate-modal-in"
           }`}
           onClick={(e) => e.stopPropagation()}
@@ -278,13 +294,44 @@ export function YoutubeCaptureCard({
           <p className="mt-2 text-xs leading-relaxed text-neutral-500 dark:text-white/50">
             Your browser will ask you to share this tab — that&apos;s how the clip gets recorded, since YouTube
             blocks automated downloads. Once you allow it, the clip takes over the screen at full size for{" "}
-            {Math.round(end - start)}s to capture it at the best possible quality — don&apos;t switch tabs or
-            close the window until it finishes.
+            {Math.round(end - start)}s.
           </p>
-          <p className="mt-2 rounded-lg bg-builder-accent/10 px-2.5 py-2 text-xs font-medium text-neutral-700 dark:text-white/70">
-            Tip: full-screen this browser window first (F11, or your browser&apos;s maximize button) — the
-            bigger the window, the sharper the capture.
-          </p>
+
+          <div className="mt-3 flex flex-col gap-2 rounded-lg border border-neutral-200 p-3 dark:border-white/10">
+            <p className="text-xs font-semibold text-neutral-700 dark:text-white/70">Before you continue:</p>
+            <label className="flex items-start gap-2 text-xs text-neutral-600 dark:text-white/60">
+              <input
+                type="checkbox"
+                checked={checklist.captionsOff}
+                onChange={(e) => setChecklist((c) => ({ ...c, captionsOff: e.target.checked }))}
+                className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-builder-accent"
+              />
+              <span>
+                Captions/subtitles are off on YouTube (the CC icon on any video) — this is a
+                per-account setting we can&apos;t always force off, and it can flash in the recording
+                otherwise.
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-xs text-neutral-600 dark:text-white/60">
+              <input
+                type="checkbox"
+                checked={checklist.fullscreened}
+                onChange={(e) => setChecklist((c) => ({ ...c, fullscreened: e.target.checked }))}
+                className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-builder-accent"
+              />
+              <span>This browser window is full-screened or maximized, for the sharpest capture.</span>
+            </label>
+            <label className="flex items-start gap-2 text-xs text-neutral-600 dark:text-white/60">
+              <input
+                type="checkbox"
+                checked={checklist.staysOnTab}
+                onChange={(e) => setChecklist((c) => ({ ...c, staysOnTab: e.target.checked }))}
+                className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-builder-accent"
+              />
+              <span>I&apos;ll stay on this tab — not switch away or close it — until it finishes.</span>
+            </label>
+          </div>
+
           {error && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
           <div className="mt-4 flex justify-end gap-2">
             <button
@@ -296,8 +343,9 @@ export function YoutubeCaptureCard({
             </button>
             <button
               type="button"
+              disabled={!allChecked}
               onClick={() => void handleConfirm()}
-              className="rounded-lg bg-builder-accent px-3 py-1.5 text-xs font-semibold text-black transition-transform hover:-translate-y-0.5"
+              className="rounded-lg bg-builder-accent px-3 py-1.5 text-xs font-semibold text-black transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
             >
               Share &amp; record
             </button>
