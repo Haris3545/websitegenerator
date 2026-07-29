@@ -27,6 +27,22 @@ const ASSUMED_FPS = 20;
 
 type ScreencastFrameEvent = { data: string; sessionId: number };
 
+// Same parsing youtubeDownload.ts does for the ytdl-core agent — duplicated
+// rather than imported from there, since that file imports this one for its
+// own fallback (importing back would be a cycle).
+function parseCookieHeader(raw: string): { name: string; value: string }[] {
+  return raw
+    .split(";")
+    .map((pair) => pair.trim())
+    .filter(Boolean)
+    .map((pair) => {
+      const idx = pair.indexOf("=");
+      if (idx === -1) return null;
+      return { name: pair.slice(0, idx).trim(), value: pair.slice(idx + 1).trim() };
+    })
+    .filter((c): c is { name: string; value: string } => !!c?.name && !!c.value);
+}
+
 async function launchBrowser(): Promise<Browser> {
   const executablePath = await chromium.executablePath(CHROMIUM_PACK_URL);
   return puppeteer.launch({
@@ -35,6 +51,23 @@ async function launchBrowser(): Promise<Browser> {
     executablePath,
     headless: true,
   });
+}
+
+/** A fresh, logged-out browser session is exactly what shows YouTube's
+ * "Sign in to confirm you're not a bot" wall in place of the real watch
+ * page — the first attempt at this didn't carry YOUTUBE_COOKIE over into
+ * the browser context at all, so of course it hit the same wall the direct
+ * API path does. Loading the same session cookie here (already required
+ * for the ytdl-core path — see youtubeDownload.ts) at least makes this a
+ * real signed-in browser rather than an anonymous one. */
+async function applySessionCookie(page: import("puppeteer-core").Page) {
+  const raw = process.env.YOUTUBE_COOKIE;
+  if (!raw) return;
+  const cookies = parseCookieHeader(raw);
+  if (!cookies.length) return;
+  await page.setCookie(
+    ...cookies.map((c) => ({ name: c.name, value: c.value, domain: ".youtube.com", path: "/", secure: true }))
+  );
 }
 
 /** Clicks the first button whose text matches one of the given phrases —
@@ -105,6 +138,7 @@ export async function recordYoutubeClipViaBrowser(
   try {
     browser = await launchBrowser();
     const page = await browser.newPage();
+    await applySessionCookie(page);
 
     await page.goto(`https://www.youtube.com/watch?v=${videoId}`, {
       waitUntil: "domcontentloaded",
