@@ -27,6 +27,16 @@ const ASSUMED_FPS = 20;
 
 type ScreencastFrameEvent = { data: string; sessionId: number };
 
+// RFC 6265's cookie-octet excludes control characters, space, quote, comma,
+// semicolon, and backslash — stripping those defensively (rather than
+// trusting the env var's contents are already clean) guards against
+// whatever specific character actually made CDP's Network.setCookies reject
+// the whole batch as "Invalid cookie fields" with no indication of which
+// cookie or byte was the problem.
+function sanitizeCookiePart(s: string): string {
+  return s.replace(/[\x00-\x1F\x7F",;\\]/g, "");
+}
+
 // Same parsing youtubeDownload.ts does for the ytdl-core agent — duplicated
 // rather than imported from there, since that file imports this one for its
 // own fallback (importing back would be a cycle).
@@ -38,7 +48,10 @@ function parseCookieHeader(raw: string): { name: string; value: string }[] {
     .map((pair) => {
       const idx = pair.indexOf("=");
       if (idx === -1) return null;
-      return { name: pair.slice(0, idx).trim(), value: pair.slice(idx + 1).trim() };
+      return {
+        name: sanitizeCookiePart(pair.slice(0, idx).trim()),
+        value: sanitizeCookiePart(pair.slice(idx + 1).trim()),
+      };
     })
     .filter((c): c is { name: string; value: string } => !!c?.name && !!c.value);
 }
@@ -60,14 +73,27 @@ async function launchBrowser(): Promise<Browser> {
  * API path does. Loading the same session cookie here (already required
  * for the ytdl-core path — see youtubeDownload.ts) at least makes this a
  * real signed-in browser rather than an anonymous one. */
-async function applySessionCookie(page: import("puppeteer-core").Page) {
+async function applySessionCookie(page: import("puppeteer-core").Page): Promise<string[]> {
   const raw = process.env.YOUTUBE_COOKIE;
-  if (!raw) return;
+  if (!raw) return [];
   const cookies = parseCookieHeader(raw);
-  if (!cookies.length) return;
-  await page.setCookie(
-    ...cookies.map((c) => ({ name: c.name, value: c.value, domain: ".youtube.com", path: "/", secure: true }))
-  );
+  if (!cookies.length) return [];
+
+  // One bad cookie in a single batched setCookie(...) call throws for the
+  // whole batch (this is what "Invalid cookie fields" was — no indication
+  // of which of the ~20 cookies actually caused it). Applying them one at a
+  // time means a single malformed value only drops that one cookie instead
+  // of the entire session, and the returned failure list says exactly
+  // which name(s) to look at if the recording still doesn't work.
+  const failures: string[] = [];
+  for (const c of cookies) {
+    try {
+      await page.setCookie({ name: c.name, value: c.value, domain: ".youtube.com", path: "/", secure: true });
+    } catch (err) {
+      failures.push(`${c.name}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  return failures;
 }
 
 /** Clicks the first button whose text matches one of the given phrases —
@@ -142,13 +168,16 @@ export async function recordYoutubeClipViaBrowser(
 
     // page.setCookie() falls back to the current page's own URL for any
     // cookie that doesn't specify one itself (see applySessionCookie) — on
-    // a still-blank page that fallback has nothing to work with, which is
-    // what threw "Invalid cookie fields" here. Navigating first so the page
-    // actually has a real youtube.com URL, then reloading once the cookies
-    // are in, is the standard fix (the first load happens logged-out
+    // a still-blank page that fallback has nothing to work with, which was
+    // the first cause of "Invalid cookie fields" here. Navigating first so
+    // the page actually has a real youtube.com URL, then reloading once the
+    // cookies are in, is the standard fix (the first load happens logged-out
     // either way; the reload is what actually carries the session).
     await page.goto(watchUrl, { waitUntil: "domcontentloaded", timeout: 45_000 });
-    await applySessionCookie(page);
+    const cookieFailures = await applySessionCookie(page);
+    if (cookieFailures.length) {
+      console.error(`applySessionCookie: ${cookieFailures.length} cookie(s) rejected:`, cookieFailures);
+    }
     await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
 
     await dismissConsentDialog(page);
@@ -215,7 +244,8 @@ export async function recordYoutubeClipViaBrowser(
         })
         .catch(() => null);
       throw new Error(
-        `Video never reached the requested timestamp: ${(waitErr as Error).message}. ${JSON.stringify(diagnostics)}`
+        `Video never reached the requested timestamp: ${(waitErr as Error).message}. ` +
+          `${JSON.stringify(diagnostics)}. Rejected cookies: ${cookieFailures.length ? cookieFailures.join(" | ") : "none"}`
       );
     }
 
