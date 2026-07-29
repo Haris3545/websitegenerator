@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { loadYoutubeIframeApi, parseYoutubeVideoId, type YTPlayer } from "@/lib/youtubeIframeApi";
 import { YoutubeSearchModal } from "@/components/builder/YoutubeSearchModal";
 import { VideoTrimTimeline } from "@/components/builder/VideoTrimTimeline";
+import { downloadYoutubeClipAction } from "@/app/builder/searchActions";
 import type { YoutubeVideoSearchResult } from "@/lib/youtube";
 import { YOUTUBE_BUTTON_CLASS } from "@/components/builder/mediaActionStyles";
 import { YoutubeIcon } from "@/components/builder/YoutubeIcon";
@@ -19,32 +20,35 @@ function formatSeconds(s: number): string {
 type Draft = { videoId: string; start: number; end: number };
 
 /** Paste a YouTube link, pick a start/end point (max 10s span) from an
- * embedded preview player, then hit Confirm to lock it in — adjusting the
- * sliders is all local "draft" state until then, so scrubbing around
- * doesn't repeatedly commit half-chosen trim points to the saved artist
- * record; Cancel discards the draft and falls back to whatever was already
- * confirmed (or nothing). Stored as just the video id + trim points, never
- * a downloaded file (see YoutubeBackgroundPlayer.tsx for why: that's
- * YouTube's own embed player doing the playback on the live site, not a
- * re-encoded copy). */
+ * embedded preview player, then hit Confirm to download and trim that exact
+ * window server-side into a real mp4 — handed back via onDownload as a
+ * normal hosted file, exactly like a regular upload or a picked search
+ * image. Adjusting the sliders is all local "draft" state until confirmed,
+ * so scrubbing around doesn't kick off a download on every tweak; Cancel
+ * discards the draft with nothing downloaded. Once confirmed, this resets
+ * to its empty state — the result lives in background_image_url/
+ * gate_background_url from here on (see MediaUploadField's preview above
+ * this field), not anything YouTube-specific, since a real downloaded file
+ * plays back with a plain <video> tag with no player chrome to ever flash
+ * captions or a pause icon over. */
 export function YoutubeClipField({
   label,
-  videoId,
-  start,
-  end,
-  onChange,
+  artistSlug,
+  slotName,
+  onDownload,
 }: {
   label: string;
-  videoId: string | null;
-  start: number;
-  end: number | null;
-  onChange: (videoId: string | null, start: number, end: number | null) => void;
+  artistSlug: string;
+  slotName: string;
+  onDownload: (url: string) => void;
 }) {
   const [urlInput, setUrlInput] = useState("");
   const [urlError, setUrlError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
   const [searching, setSearching] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
   const previewPollRef = useRef<number | null>(null);
@@ -123,20 +127,23 @@ export function YoutubeClipField({
     beginUrlOrSearchDraft(id);
   }
 
-  function beginEdit() {
-    if (!videoId) return;
-    setDuration(null);
-    setDraft({ videoId, start, end: end ?? start + MAX_CLIP_SECONDS });
-  }
-
   function cancelDraft() {
     setDraft(null);
+    setDownloadError(null);
   }
 
-  function confirmDraft() {
+  async function confirmDraft() {
     if (!draft) return;
-    onChange(draft.videoId, draft.start, draft.end);
-    setDraft(null);
+    setDownloading(true);
+    setDownloadError(null);
+    const result = await downloadYoutubeClipAction(draft.videoId, draft.start, draft.end, artistSlug, slotName);
+    setDownloading(false);
+    if (result.ok) {
+      onDownload(result.data);
+      setDraft(null);
+    } else {
+      setDownloadError(result.error);
+    }
   }
 
   // Throttled rather than called on every single drag frame — YouTube's
@@ -193,6 +200,7 @@ export function YoutubeClipField({
     setUrlError(null);
     setUrlInput("");
     setDuration(null);
+    setDownloadError(null);
     setDraft({ videoId: id, start: 0, end: MAX_CLIP_SECONDS });
   }
 
@@ -249,15 +257,17 @@ export function YoutubeClipField({
             <div className="flex gap-2">
               <button
                 type="button"
+                disabled={downloading}
                 onClick={() => applyCurrentTimeAs("start")}
-                className="shrink-0 rounded border border-neutral-300 px-2 py-1 text-[11px] font-medium hover:bg-neutral-100 dark:border-white/15 dark:hover:bg-white/5"
+                className="shrink-0 rounded border border-neutral-300 px-2 py-1 text-[11px] font-medium hover:bg-neutral-100 disabled:opacity-50 dark:border-white/15 dark:hover:bg-white/5"
               >
                 Set start to current
               </button>
               <button
                 type="button"
+                disabled={downloading}
                 onClick={() => applyCurrentTimeAs("end")}
-                className="shrink-0 rounded border border-neutral-300 px-2 py-1 text-[11px] font-medium hover:bg-neutral-100 dark:border-white/15 dark:hover:bg-white/5"
+                className="shrink-0 rounded border border-neutral-300 px-2 py-1 text-[11px] font-medium hover:bg-neutral-100 disabled:opacity-50 dark:border-white/15 dark:hover:bg-white/5"
               >
                 Set end to current
               </button>
@@ -266,54 +276,36 @@ export function YoutubeClipField({
 
           <p className="text-xs text-neutral-400 dark:text-white/40">
             Clip length: {(draft.end - draft.start).toFixed(1)}s (max {MAX_CLIP_SECONDS}s — moving one
-            handle drags the other along to stay within that span). Nothing&apos;s saved until you
-            confirm below.
+            handle drags the other along to stay within that span). Confirming downloads and trims
+            exactly this window into a real file — nothing&apos;s uploaded until then.
           </p>
+
+          {downloadError && <p className="text-xs text-red-600 dark:text-red-400">{downloadError}</p>}
 
           <div className="flex gap-2">
             <button
               type="button"
+              disabled={downloading}
               onClick={previewClip}
-              className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-100 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
+              className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
             >
               Preview clip
             </button>
             <button
               type="button"
+              disabled={downloading}
               onClick={cancelDraft}
-              className="rounded-lg px-3 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100 dark:text-white/50 dark:hover:bg-white/5"
+              className="rounded-lg px-3 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100 disabled:opacity-50 dark:text-white/50 dark:hover:bg-white/5"
             >
               Cancel
             </button>
             <button
               type="button"
-              onClick={confirmDraft}
-              className="rounded-lg bg-builder-accent px-3 py-1.5 text-xs font-semibold text-black transition-transform hover:-translate-y-0.5"
+              disabled={downloading}
+              onClick={() => void confirmDraft()}
+              className="rounded-lg bg-builder-accent px-3 py-1.5 text-xs font-semibold text-black transition-transform hover:-translate-y-0.5 disabled:opacity-50"
             >
-              Confirm clip
-            </button>
-          </div>
-        </div>
-      ) : videoId ? (
-        <div className="flex items-center justify-between gap-2 rounded-lg border border-neutral-200 p-3 dark:border-white/10">
-          <p className="text-xs text-neutral-600 dark:text-white/60">
-            Using {formatSeconds(start)}–{formatSeconds(end ?? start + MAX_CLIP_SECONDS)} of{" "}
-            <span className="font-mono">{videoId}</span>
-          </p>
-          <div className="flex shrink-0 gap-2">
-            <button
-              type="button"
-              onClick={beginEdit}
-              className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-100 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
-            >
-              Edit
-            </button>
-            <button
-              type="button"
-              onClick={() => onChange(null, 0, null)}
-              className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-500/30 dark:text-red-400 dark:hover:bg-red-500/10"
-            >
-              Remove
+              {downloading ? "Downloading & trimming…" : "Confirm clip"}
             </button>
           </div>
         </div>

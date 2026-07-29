@@ -2,6 +2,12 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ArtistForm } from "@/components/builder/ArtistForm";
 
+// Downloading + trimming a YouTube clip server-side (see
+// downloadYoutubeClipAction) needs more than the platform's default
+// serverless timeout — this applies to Server Actions invoked from this
+// page too, not just its own render.
+export const maxDuration = 60;
+
 export default async function EditArtistPage({
   params,
 }: {

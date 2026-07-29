@@ -27,7 +27,6 @@ import { YOUTUBE_BUTTON_CLASS } from "@/components/builder/mediaActionStyles";
 import { YoutubeIcon } from "@/components/builder/YoutubeIcon";
 import { HelpTooltip } from "@/components/builder/HelpTooltip";
 import { averageColorFromImageUrl } from "@/lib/colorFromImage";
-import { YoutubeBackgroundPlayer } from "@/components/site/YoutubeBackgroundPlayer";
 import type { YoutubeVideoSearchResult } from "@/lib/youtube";
 
 function slugify(name: string) {
@@ -84,12 +83,6 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
     font_family: artist?.font_family ?? "Inter",
     background_image_url: artist?.background_image_url ?? null,
     gate_background_url: artist?.gate_background_url ?? null,
-    background_youtube_id: artist?.background_youtube_id ?? null,
-    background_youtube_start: artist?.background_youtube_start ?? 0,
-    background_youtube_end: artist?.background_youtube_end ?? null,
-    gate_youtube_id: artist?.gate_youtube_id ?? null,
-    gate_youtube_start: artist?.gate_youtube_start ?? 0,
-    gate_youtube_end: artist?.gate_youtube_end ?? null,
     gate_scrim_opacity: artist?.gate_scrim_opacity ?? 0.55,
     gate_grain_intensity: artist?.gate_grain_intensity ?? 0,
     gate_grain_monochrome: artist?.gate_grain_monochrome ?? false,
@@ -438,7 +431,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
   // checklist.
   const sectionsComplete = [
     !!form.name.trim() && !!form.slug.trim() && form.enabled_tabs.length > 0,
-    !!(form.background_image_url || form.background_youtube_id),
+    !!form.background_image_url,
     !!form.project_title.trim() && !!form.tagline.trim(),
   ].filter(Boolean).length;
   const formProgress = sectionsComplete / 3;
@@ -608,21 +601,11 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
               Shown behind every page of the dashboard (not the password page, set separately below).
             </p>
             <YoutubeClipField
-              label="Or use a YouTube clip instead"
-              videoId={form.background_youtube_id}
-              start={form.background_youtube_start}
-              end={form.background_youtube_end}
-              onChange={(videoId, start, end) => {
-                update("background_youtube_id", videoId);
-                update("background_youtube_start", start);
-                update("background_youtube_end", end);
-              }}
+              label="Or pull one from a YouTube clip"
+              artistSlug={form.slug}
+              slotName="background"
+              onDownload={(url) => update("background_image_url", url)}
             />
-            {form.background_youtube_id && (
-              <p className="-mt-2 text-xs text-neutral-500 dark:text-white/40">
-                Takes priority over the file above while set — remove to fall back to it.
-              </p>
-            )}
 
             <MediaUploadField
               label="Password page background"
@@ -632,21 +615,11 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
               onChange={(v) => update("gate_background_url", v)}
             />
             <YoutubeClipField
-              label="Or use a YouTube clip instead"
-              videoId={form.gate_youtube_id}
-              start={form.gate_youtube_start}
-              end={form.gate_youtube_end}
-              onChange={(videoId, start, end) => {
-                update("gate_youtube_id", videoId);
-                update("gate_youtube_start", start);
-                update("gate_youtube_end", end);
-              }}
+              label="Or pull one from a YouTube clip"
+              artistSlug={form.slug}
+              slotName="gate-background"
+              onDownload={(url) => update("gate_background_url", url)}
             />
-            {form.gate_youtube_id && (
-              <p className="-mt-2 text-xs text-neutral-500 dark:text-white/40">
-                Takes priority over the file above while set.
-              </p>
-            )}
 
             <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-3 dark:border-white/10">
               <span className={labelClass}>Password page darkness &amp; grain</span>
@@ -749,15 +722,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
             className="relative flex h-40 flex-col items-center justify-center gap-2 overflow-hidden rounded-lg px-4 text-center text-white lg:h-52 2xl:h-64"
             style={{ backgroundColor: "#0a0a0a", fontFamily: `"${form.font_family}", sans-serif` }}
           >
-            {form.gate_youtube_id ? (
-              <YoutubeBackgroundPlayer
-                key={form.gate_youtube_id}
-                videoId={form.gate_youtube_id}
-                start={form.gate_youtube_start}
-                end={form.gate_youtube_end ?? form.gate_youtube_start + 10}
-              />
-            ) : (
-              form.gate_background_url &&
+            {form.gate_background_url &&
               (isGateVideoUrl(form.gate_background_url) ? (
                 <video
                   src={form.gate_background_url}
@@ -774,9 +739,8 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
                   alt=""
                   className="absolute inset-0 h-full w-full object-cover"
                 />
-              ))
-            )}
-            {(form.gate_background_url || form.gate_youtube_id) && (
+              ))}
+            {form.gate_background_url && (
               <div
                 className="absolute inset-0"
                 style={{ backgroundColor: `rgba(0,0,0,${form.gate_scrim_opacity})` }}

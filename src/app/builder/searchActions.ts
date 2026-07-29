@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { searchGoogleImages, type ImageSearchResult } from "@/lib/googleImageSearch";
 import { searchYoutubeVideos, type YoutubeVideoSearchResult } from "@/lib/youtube";
+import { downloadYoutubeClip } from "@/lib/youtubeDownload";
 
 export type SearchResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -81,5 +82,39 @@ export async function importImageFromUrl(
     return { ok: true, data: `${data.publicUrl}?t=${Date.now()}` };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Import failed." };
+  }
+}
+
+/** Downloads the trimmed [start, end) window of a YouTube video as a real
+ * mp4 file and hosts it in artist-media, exactly like importImageFromUrl
+ * above does for a picked search-result image — the resulting URL is just
+ * a normal background_image_url/gate_background_url value from here on,
+ * played back with a plain <video loop muted> tag. No YouTube iframe embed
+ * is ever involved in showing it, which is the whole point: an embed
+ * player's own chrome (captions, the pause/play icon) kept flashing
+ * on-screen for a frame around every loop-back seek no matter how that
+ * seek was driven, and there's no embed parameter that fully suppresses it. */
+export async function downloadYoutubeClipAction(
+  videoId: string,
+  start: number,
+  end: number,
+  artistSlug: string,
+  slotName: string
+): Promise<SearchResult<string>> {
+  const result = await downloadYoutubeClip(videoId, start, end);
+  if (!result.ok) return result;
+
+  try {
+    const path = `${artistSlug}/${slotName}.mp4`;
+    const supabase = await createClient();
+    const { error: uploadError } = await supabase.storage
+      .from("artist-media")
+      .upload(path, result.buffer, { upsert: true, contentType: "video/mp4" });
+    if (uploadError) throw new Error(uploadError.message);
+
+    const { data } = supabase.storage.from("artist-media").getPublicUrl(path);
+    return { ok: true, data: `${data.publicUrl}?t=${Date.now()}` };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Upload failed." };
   }
 }

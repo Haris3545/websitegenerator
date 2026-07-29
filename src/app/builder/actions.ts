@@ -80,12 +80,6 @@ export type ArtistFormInput = {
   font_family: string;
   background_image_url: string | null;
   gate_background_url: string | null;
-  background_youtube_id: string | null;
-  background_youtube_start: number;
-  background_youtube_end: number | null;
-  gate_youtube_id: string | null;
-  gate_youtube_start: number;
-  gate_youtube_end: number | null;
   gate_scrim_opacity: number;
   gate_grain_intensity: number;
   gate_grain_monochrome: boolean;
@@ -116,9 +110,6 @@ export async function upsertArtist(
     const gateVisuals = {
       accent_color: input.accent_color,
       gate_background_url: input.gate_background_url,
-      gate_youtube_id: input.gate_youtube_id,
-      gate_youtube_start: input.gate_youtube_start,
-      gate_youtube_end: input.gate_youtube_end,
       gate_scrim_opacity: input.gate_scrim_opacity,
       gate_grain_intensity: input.gate_grain_intensity,
       gate_grain_monochrome: input.gate_grain_monochrome,
@@ -157,9 +148,6 @@ export async function upsertArtist(
       primary_color: input.primary_color,
       ...gateVisuals,
       background_image_url: input.background_image_url,
-      background_youtube_id: input.background_youtube_id,
-      background_youtube_start: input.background_youtube_start,
-      background_youtube_end: input.background_youtube_end,
       youtube_channel_id: input.youtube_channel_id,
       aesthetic_prompt: input.aesthetic_prompt,
       aesthetic_params,

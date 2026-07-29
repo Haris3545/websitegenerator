@@ -12,7 +12,6 @@ import { NavPills } from "@/components/site/NavPills";
 import { PageTransition } from "@/components/site/PageTransition";
 import { EditModeProvider } from "@/components/site/EditModeContext";
 import { AestheticPanel } from "@/components/site/AestheticPanel";
-import { YoutubeBackgroundPlayer } from "@/components/site/YoutubeBackgroundPlayer";
 
 // "Refresh Everything" (a Server Action invoked from a page under this
 // layout) fans out to several external APIs plus multiple Gemini calls —
@@ -128,16 +127,7 @@ export default async function ArtistSiteLayout({
       </svg>
 
       <div className="fixed inset-0 -z-20 bg-neutral-950">
-        {artist.background_youtube_id ? (
-          <YoutubeBackgroundPlayer
-            videoId={artist.background_youtube_id}
-            start={artist.background_youtube_start}
-            end={artist.background_youtube_end ?? artist.background_youtube_start + 10}
-            zoom={theme.bg_zoom}
-            filter={`blur(var(--bg-blur)) contrast(${theme.bg_contrast}) saturate(${theme.bg_saturate}) url(#chroma-filter)`}
-          />
-        ) : (
-          artist.background_image_url &&
+        {artist.background_image_url &&
           (isBackgroundVideo ? (
             <video
               src={artist.background_image_url}
@@ -164,8 +154,7 @@ export default async function ArtistSiteLayout({
                 transform: `scale(${theme.bg_zoom})`,
               }}
             />
-          ))
-        )}
+          ))}
         {/* Fixed dark scrim: always on (strength set via the builder's visual
             editor), independent of the aesthetic tint, so text stays readable
             and the photo reads as punchy rather than washed out. */}

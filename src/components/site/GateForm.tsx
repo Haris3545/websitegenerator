@@ -5,7 +5,6 @@ import { verifyArtistAccess } from "@/app/s/[slug]/actions";
 import { googleFontsCssUrl } from "@/lib/fonts";
 import { grainTexture } from "@/lib/grainTexture";
 import { AutoFitHeading } from "@/components/site/AutoFitHeading";
-import { YoutubeBackgroundPlayer } from "@/components/site/YoutubeBackgroundPlayer";
 
 // Fixed fallback fill for the rare gate with no photo/video background set
 // at all — there's no per-artist secondary colour anymore, so this is just
@@ -15,9 +14,6 @@ const FALLBACK_BACKGROUND = "#0a0a0a";
 export function GateForm({
   slug,
   backgroundUrl,
-  youtubeVideoId,
-  youtubeStart = 0,
-  youtubeEnd,
   accentColor,
   projectTitle,
   tagline,
@@ -28,9 +24,6 @@ export function GateForm({
 }: {
   slug: string;
   backgroundUrl: string | null;
-  youtubeVideoId?: string | null;
-  youtubeStart?: number;
-  youtubeEnd?: number | null;
   accentColor: string;
   projectTitle: string;
   tagline: string;
@@ -66,14 +59,7 @@ export function GateForm({
     >
       <link rel="stylesheet" href={googleFontsCssUrl(fontFamily)} />
 
-      {youtubeVideoId ? (
-        <YoutubeBackgroundPlayer
-          videoId={youtubeVideoId}
-          start={youtubeStart}
-          end={youtubeEnd ?? youtubeStart + 10}
-        />
-      ) : (
-        backgroundUrl &&
+      {backgroundUrl &&
         (isVideo ? (
           <video
             src={backgroundUrl}
@@ -90,9 +76,8 @@ export function GateForm({
             alt=""
             className="absolute inset-0 h-full w-full object-cover"
           />
-        ))
-      )}
-      {(backgroundUrl || youtubeVideoId) && (
+        ))}
+      {backgroundUrl && (
         <div className="absolute inset-0" style={{ backgroundColor: `rgba(0,0,0,${scrimOpacity})` }} />
       )}
       <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/70" />
