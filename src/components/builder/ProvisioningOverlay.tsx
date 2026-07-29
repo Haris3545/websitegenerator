@@ -87,7 +87,11 @@ export function ProvisioningOverlay({
       { key: "media", label: "News & press coverage", checkKey: "media", run: () => provisionMedia(artistId, artistName) },
       { key: "events", label: "Tour dates", checkKey: "events", run: () => provisionEvents(artistId, artistName) },
       { key: "youtube", label: "YouTube channel stats", checkKey: "youtube", run: () => provisionYoutube(artistId, youtubeChannelId) },
-      { key: "social", label: "Social listening", checkKey: "social", run: () => provisionSocialListening(artistId, artistName) },
+      // The extra Gemini web sweep for a sparse-comments artist only ever
+      // fires when mode is "create" — see provisionSocialListening's own
+      // comment on why that's safe to pass unconditionally here rather
+      // than needing its own separate create-only step.
+      { key: "social", label: "Social listening", checkKey: "social", run: () => provisionSocialListening(artistId, artistName, mode === "create") },
       { key: "music", label: "Music & listener stats", checkKey: "music", run: () => provisionMusic(artistId, artistName) },
       { key: "genius", label: "Lyric annotations", run: () => provisionGenius(artistId, artistName) },
       { key: "sentiment", label: "Sentiment overview", run: () => provisionSentiment(artistId, artistName) },
@@ -95,7 +99,7 @@ export function ProvisioningOverlay({
       { key: "wikipedia", label: "Wikipedia trends", run: () => provisionWikipediaTrends(artistId, artistName) },
       { key: "themes", label: "Conversation themes", run: () => provisionConversationThemes(artistId, artistName) },
     ],
-    [artistId, artistName, youtubeChannelId]
+    [artistId, artistName, youtubeChannelId, mode]
   );
   const CREATE_ONLY_KEYS = ["sentiment", "insights", "wikipedia", "themes"];
   const steps = mode === "refresh" ? allSteps.filter((s) => !CREATE_ONLY_KEYS.includes(s.key)) : allSteps;

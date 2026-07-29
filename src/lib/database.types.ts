@@ -43,7 +43,7 @@ export type SentimentSummary = {
 export type ArtistInsight = { headline: string; detail: string; basis: string };
 
 export type SocialComment = {
-  platform: "reddit" | "youtube";
+  platform: "reddit" | "youtube" | "web";
   author: string;
   text: string;
   score: number | null;

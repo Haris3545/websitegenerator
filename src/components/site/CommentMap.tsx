@@ -43,6 +43,12 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 const FALLBACK_COLOR = "#a78bfa";
 
+function platformLabel(platform: SocialComment["platform"]): string {
+  if (platform === "reddit") return "Reddit";
+  if (platform === "youtube") return "YouTube";
+  return "Web";
+}
+
 function colorFor(categoryName: string): string {
   return CATEGORY_COLORS[categoryName] ?? FALLBACK_COLOR;
 }
@@ -474,7 +480,7 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
             {tooltip.node.data.kind === "comment" && tooltip.node.data.comment ? (
               <>
                 <p className="font-semibold">{tooltip.node.data.comment.author}</p>
-                <p className="mt-0.5 opacity-70">{tooltip.node.data.comment.platform === "reddit" ? "Reddit" : "YouTube"}</p>
+                <p className="mt-0.5 opacity-70">{platformLabel(tooltip.node.data.comment.platform)}</p>
                 <p className="mt-1 line-clamp-3 opacity-90">{tooltip.node.data.comment.text}</p>
               </>
             ) : (
@@ -533,7 +539,7 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
               className="flex items-center gap-2 text-xs uppercase tracking-wide opacity-60"
               style={{ color: "var(--card-text-color, #fff)" }}
             >
-              <span>{selected.platform === "reddit" ? "Reddit" : "YouTube"}</span>
+              <span>{platformLabel(selected.platform)}</span>
               <span>· {selected.author}</span>
               {selected.score !== null && <span>· {selected.score} pts</span>}
             </div>

@@ -3,11 +3,17 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 
 export const geminiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// The free tier caps at a strict 20 requests/DAY per model/project — not a
-// per-minute burst limit, so once it's hit, retrying can't succeed again
-// until Google resets it. Configurable in case this project moves to a paid
-// tier with real headroom.
-const DAILY_LIMIT = Number(process.env.GEMINI_DAILY_LIMIT) || 20;
+// The free tier for gemini-2.5-flash-lite (what every call in this app
+// uses) caps at 1,000 requests/DAY per project — not a per-minute burst
+// limit, so once it's hit, retrying can't succeed again until Google
+// resets it (midnight Pacific). Set a bit under that hard cap rather than
+// exactly at it, since this counter is a best-effort estimate (see
+// writeUsage below), not a transactional one. Configurable in case this
+// project moves to a paid tier with more headroom, or Google changes the
+// free-tier limit again (it was cut 50-80% in Dec 2025, so it's worth
+// double-checking https://ai.google.dev/gemini-api/docs/rate-limits before
+// trusting this number blindly in the future).
+const DAILY_LIMIT = Number(process.env.GEMINI_DAILY_LIMIT) || 900;
 
 export class GeminiQuotaExhaustedError extends Error {
   constructor() {

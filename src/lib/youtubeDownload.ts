@@ -19,6 +19,38 @@ const MAX_HEIGHT = 1080;
 const BROWSER_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
+function parseCookieHeader(raw: string): { name: string; value: string }[] {
+  return raw
+    .split(";")
+    .map((pair) => pair.trim())
+    .filter(Boolean)
+    .map((pair) => {
+      const idx = pair.indexOf("=");
+      if (idx === -1) return null;
+      return { name: pair.slice(0, idx).trim(), value: pair.slice(idx + 1).trim() };
+    })
+    .filter((c): c is { name: string; value: string } => !!c?.name && !!c.value);
+}
+
+// Requests from a cloud/serverless IP with no session at all are exactly
+// what triggers YouTube's "Sign in to confirm you're not a bot" check on
+// ytdl.getInfo() — a real browser hitting the same endpoint from a
+// residential IP with a logged-in session doesn't see it. Signing in as a
+// real account and copying that session's cookies (e.g. via a browser
+// extension like "Get cookies.txt") into YOUTUBE_COOKIE as one semicolon-
+// separated string is the standard workaround every ytdl-core-family tool
+// needs for this; without it, this only works for videos YouTube doesn't
+// flag (much of the time, but not reliably). Built lazily rather than at
+// module load so a missing/malformed cookie value fails per-download
+// rather than crashing the whole server on startup.
+function buildAgent() {
+  const raw = process.env.YOUTUBE_COOKIE;
+  if (!raw) return undefined;
+  const cookies = parseCookieHeader(raw);
+  if (!cookies.length) return undefined;
+  return ytdl.createAgent(cookies);
+}
+
 /** Picks the best video-only stream at or under MAX_HEIGHT — video-only
  * (rather than a combined video+audio format) because this is only ever
  * played back muted, so there's no reason to pull down audio data at all.
@@ -67,7 +99,8 @@ export async function downloadYoutubeClip(
 
   let tmpDir: string | null = null;
   try {
-    const info = await ytdl.getInfo(videoId);
+    const agent = buildAgent();
+    const info = await ytdl.getInfo(videoId, agent ? { agent } : undefined);
     const format = pickFormat(info.formats);
     if (!format.url) return { ok: false, error: "Couldn't resolve a downloadable stream for that video." };
 
@@ -105,13 +138,17 @@ export async function downloadYoutubeClip(
     const buffer = await readFile(outputPath);
     return { ok: true, buffer };
   } catch (err) {
-    return {
-      ok: false,
-      error:
-        err instanceof Error
-          ? `Couldn't download/trim that clip: ${err.message}`
-          : "Couldn't download/trim that clip.",
-    };
+    const message = err instanceof Error ? err.message : String(err);
+    if (/sign in to confirm/i.test(message)) {
+      return {
+        ok: false,
+        error:
+          "YouTube is treating this as a bot request (this happens from cloud/server IPs without a " +
+          "logged-in session). Set YOUTUBE_COOKIE to a real signed-in YouTube session's cookie string " +
+          "to fix it — ask whoever manages this app's Vercel project.",
+      };
+    }
+    return { ok: false, error: `Couldn't download/trim that clip: ${message}` };
   } finally {
     if (tmpDir) await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
   }
