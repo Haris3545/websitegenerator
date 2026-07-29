@@ -9,6 +9,7 @@ import { recordYoutubeClipViaBrowser } from "@/lib/youtubeScreenRecord";
 import { resolveYoutubeFormatViaYtDlp } from "@/lib/youtubeDownloadYtDlp";
 import { resolveYoutubeFormatViaPiped } from "@/lib/youtubeDownloadPiped";
 import { resolveYoutubeFormatViaInvidious } from "@/lib/youtubeDownloadInvidious";
+import { resolveYoutubeFormatViaCobalt } from "@/lib/youtubeDownloadCobalt";
 
 const execFileAsync = promisify(execFile);
 
@@ -19,23 +20,27 @@ const MAX_CLIP_SECONDS = 12; // small buffer over the 10s the builder's trimmer 
 const BROWSER_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
-/** yt-dlp, Piped, and Invidious all do the same job — resolve a direct,
- * playable stream URL — via completely different infrastructure: yt-dlp
- * runs here, on this deployment's own IP; Piped's and Invidious's public
- * instances (two separately-run open-source projects, not just two
- * mirrors of one) resolve it on theirs instead. yt-dlp goes first since
- * it's a single fast local call with no network hop to a third party;
- * Piped and Invidious then race each other (Promise.any across every
- * instance of both, not one after the other) as the fallback that
- * sidesteps whatever's blocking direct extraction from this IP entirely —
- * racing rather than trying one whole project before the other matters
- * given how often individual public instances turn out to be down. */
+/** yt-dlp, Piped, Invidious, and Cobalt all do the same job — resolve a
+ * direct, playable stream URL — via completely different infrastructure:
+ * yt-dlp runs here, on this deployment's own IP; the other three's public
+ * instances (three separately-run open-source projects) resolve it on
+ * theirs instead. yt-dlp goes first since it's a single fast local call
+ * with no network hop to a third party; the other three then race each
+ * other (Promise.any across every instance of all three, not one project
+ * after another) as the fallback that sidesteps whatever's blocking direct
+ * extraction from this IP entirely — racing rather than trying one whole
+ * project before the next matters given how often individual public
+ * instances turn out to be down. */
 async function resolveFormat(videoId: string): Promise<{ url: string; headers: Record<string, string> }> {
   try {
     return await resolveYoutubeFormatViaYtDlp(videoId);
   } catch (ytDlpErr) {
     try {
-      return await Promise.any([resolveYoutubeFormatViaPiped(videoId), resolveYoutubeFormatViaInvidious(videoId)]);
+      return await Promise.any([
+        resolveYoutubeFormatViaPiped(videoId),
+        resolveYoutubeFormatViaInvidious(videoId),
+        resolveYoutubeFormatViaCobalt(videoId),
+      ]);
     } catch (aggregate) {
       const ytDlpMsg = ytDlpErr instanceof Error ? ytDlpErr.message : String(ytDlpErr);
       const thirdPartyMsg =
