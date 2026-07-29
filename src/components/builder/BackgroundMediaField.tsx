@@ -9,6 +9,7 @@ import { VideoTrimTimeline } from "@/components/builder/VideoTrimTimeline";
 import { importImageFromUrl, downloadYoutubeClipAction } from "@/app/builder/searchActions";
 import { loadYoutubeIframeApi, parseYoutubeVideoId, type YTPlayer } from "@/lib/youtubeIframeApi";
 import { YoutubeIcon } from "@/components/builder/YoutubeIcon";
+import { YoutubeCaptureCard, supportsTabCapture } from "@/components/builder/YoutubeCaptureCard";
 import type { ImageSearchResult } from "@/lib/googleImageSearch";
 import type { YoutubeVideoSearchResult } from "@/lib/youtube";
 
@@ -78,6 +79,7 @@ export function BackgroundMediaField({
   const [duration, setDuration] = useState<number | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [capturing, setCapturing] = useState(false);
   // Cancelling the trim draft used to clear `draft`/`panel` synchronously —
   // a substantial block (video preview + timeline + buttons) vanishing in
   // one frame, snapping the page straight back up to the collapsed "Add
@@ -279,8 +281,18 @@ export function BackgroundMediaField({
 
   async function confirmDraft() {
     if (!draft) return;
-    setDownloading(true);
     setDownloadError(null);
+    // Server-side extraction is reliably blocked as bot traffic by
+    // YouTube's own IP-reputation checks, so wherever the browser can
+    // support it (Chromium's Region Capture API), the clip is instead
+    // recorded live in this browser — a real human, on a real residential
+    // IP, sharing the tab back to itself. The old server download only
+    // remains as a fallback for browsers that can't do that.
+    if (supportsTabCapture()) {
+      setCapturing(true);
+      return;
+    }
+    setDownloading(true);
     const result = await downloadYoutubeClipAction(draft.videoId, draft.start, draft.end, artistSlug, slotName);
     setDownloading(false);
     if (result.ok) {
@@ -290,6 +302,33 @@ export function BackgroundMediaField({
     } else {
       setDownloadError(result.error);
     }
+  }
+
+  async function handleCaptureDone(blob: Blob) {
+    setCapturing(false);
+    setDownloading(true);
+    setDownloadError(null);
+    try {
+      const supabase = createClient();
+      const path = `${artistSlug}/${slotName}.webm`;
+      const { error: uploadError } = await supabase.storage
+        .from("artist-media")
+        .upload(path, blob, { upsert: true, contentType: "video/webm", cacheControl: "0" });
+      if (uploadError) throw uploadError;
+      const { data } = supabase.storage.from("artist-media").getPublicUrl(path);
+      onChange(`${data.publicUrl}?t=${Date.now()}`);
+      setDraft(null);
+      setPanel(null);
+    } catch (err) {
+      setDownloadError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  function handleCaptureCancel(message?: string) {
+    setCapturing(false);
+    if (message) setDownloadError(message);
   }
 
   const SEEK_THROTTLE_MS = 90;
@@ -441,8 +480,7 @@ export function BackgroundMediaField({
 
               <p className="text-xs text-neutral-400 dark:text-white/40">
                 Clip length: {(draft.end - draft.start).toFixed(1)}s (max {MAX_CLIP_SECONDS}s). Confirming
-                downloads and trims exactly this window into a real file — nothing&apos;s uploaded until
-                then.
+                captures exactly this window into a real file — nothing&apos;s uploaded until it finishes.
               </p>
 
               {downloadError && <p className="text-xs text-red-600 dark:text-red-400">{downloadError}</p>}
@@ -450,7 +488,7 @@ export function BackgroundMediaField({
               <div className="flex gap-2">
                 <button
                   type="button"
-                  disabled={downloading}
+                  disabled={downloading || capturing}
                   onClick={previewClip}
                   className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
                 >
@@ -458,7 +496,7 @@ export function BackgroundMediaField({
                 </button>
                 <button
                   type="button"
-                  disabled={downloading}
+                  disabled={downloading || capturing}
                   onClick={cancelDraft}
                   className="rounded-lg px-3 py-1.5 text-xs font-medium text-neutral-500 hover:bg-neutral-100 disabled:opacity-50 dark:text-white/50 dark:hover:bg-white/5"
                 >
@@ -466,11 +504,11 @@ export function BackgroundMediaField({
                 </button>
                 <button
                   type="button"
-                  disabled={downloading}
+                  disabled={downloading || capturing}
                   onClick={() => void confirmDraft()}
                   className="rounded-lg bg-builder-accent px-3 py-1.5 text-xs font-semibold text-black transition-transform hover:-translate-y-0.5 disabled:opacity-50"
                 >
-                  {downloading ? "Downloading & trimming…" : "Confirm clip"}
+                  {downloading ? "Uploading…" : capturing ? "Recording…" : "Confirm clip"}
                 </button>
               </div>
             </div>
@@ -631,6 +669,15 @@ export function BackgroundMediaField({
       )}
       {youtubeSearching && (
         <YoutubeSearchModal onSelect={handleVideoPicked} onClose={() => setYoutubeSearching(false)} />
+      )}
+      {capturing && draft && (
+        <YoutubeCaptureCard
+          videoId={draft.videoId}
+          start={draft.start}
+          end={draft.end}
+          onDone={(blob) => void handleCaptureDone(blob)}
+          onCancel={handleCaptureCancel}
+        />
       )}
     </div>
   );
