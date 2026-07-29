@@ -18,6 +18,9 @@ export type ThemeOverrides = {
   bg_position_x?: number; // 0..100, object-position X (pan)
   bg_position_y?: number; // 0..100, object-position Y (pan)
   bg_zoom?: number; // 1..2.5, object scale (zoom/resize)
+  gate_bg_position_x?: number; // 0..100, password page background pan (independent of the dashboard's own bg_position_x)
+  gate_bg_position_y?: number; // 0..100, password page background pan
+  gate_bg_zoom?: number; // 1..2.5, password page background zoom/resize
 };
 
 export const DEFAULT_THEME_OVERRIDES: Required<ThemeOverrides> = {
@@ -33,6 +36,9 @@ export const DEFAULT_THEME_OVERRIDES: Required<ThemeOverrides> = {
   bg_position_x: 50,
   bg_position_y: 50,
   bg_zoom: 1,
+  gate_bg_position_x: 50,
+  gate_bg_position_y: 50,
+  gate_bg_zoom: 1,
 };
 
 export function withThemeDefaults(overrides: ThemeOverrides | null | undefined) {

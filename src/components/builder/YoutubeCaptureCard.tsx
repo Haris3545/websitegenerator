@@ -34,6 +34,14 @@ export function supportsTabCapture(): boolean {
   );
 }
 
+// How long before the clip's real start point to begin (silently, off-
+// camera) playback — long enough for YouTube's own play/pause button and
+// buffering chrome (which show right as playback kicks in) to have settled
+// before anything is actually recorded. Trimming a beat off the end avoids
+// a trailing black frame some clips otherwise end on.
+const WARMUP_SECONDS = 3;
+const END_TRIM_SECONDS = 0.5;
+
 function pickMimeType(): string {
   const candidates = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
   for (const candidate of candidates) {
@@ -77,7 +85,8 @@ export function YoutubeCaptureCard({
   const [stage, setStage] = useState<Stage>("confirm");
   const [dialogClosing, setDialogClosing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [secondsLeft, setSecondsLeft] = useState(Math.max(1, Math.ceil(end - start)));
+  const [priming, setPriming] = useState(true);
+  const [secondsLeft, setSecondsLeft] = useState(WARMUP_SECONDS);
 
   const mountRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
@@ -85,6 +94,8 @@ export function YoutubeCaptureCard({
   const recorderRef = useRef<MediaRecorder | null>(null);
   const countdownIdRef = useRef<number | null>(null);
   const finishedRef = useRef(false);
+  const warmStartRef = useRef(0);
+  const hasBegunRef = useRef(false);
 
   function cleanupStream() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -166,8 +177,10 @@ export function YoutubeCaptureCard({
           onReady: async (e) => {
             if (cancelled) return;
             const player = e.target;
+            const warmStart = Math.max(0, start - WARMUP_SECONDS);
+            warmStartRef.current = warmStart;
             player.mute();
-            player.seekTo(start, true);
+            player.seekTo(warmStart, true);
             player.playVideo();
 
             try {
@@ -179,15 +192,30 @@ export function YoutubeCaptureCard({
               finishWith(() =>
                 onCancel(err instanceof Error ? `Couldn't isolate the clip from the rest of the tab — ${err.message}` : "Couldn't isolate the clip from the rest of the tab.")
               );
-              return;
             }
+          },
+          onStateChange: (e) => {
+            // Only the first real transition into PLAYING matters — that's
+            // the moment actual video frames start flowing (past whatever
+            // paused-thumbnail/play-button state preceded it), and the only
+            // reliable clock to measure the warmup wait from, since
+            // buffering delay before that point is unpredictable.
+            if (cancelled || hasBegunRef.current || e.data !== YT.PlayerState.PLAYING) return;
+            hasBegunRef.current = true;
 
-            // A short beat for the seek to actually land before recording
-            // starts, so the clip doesn't open on a stale frame.
+            const waitMs = Math.max(0, start - warmStartRef.current) * 1000;
+            setSecondsLeft(Math.ceil(waitMs / 1000));
+            const primingStartedAt = performance.now();
+            countdownIdRef.current = window.setInterval(() => {
+              setSecondsLeft(Math.max(0, Math.ceil((waitMs - (performance.now() - primingStartedAt)) / 1000)));
+            }, 250);
+
             window.setTimeout(() => {
+              if (countdownIdRef.current) window.clearInterval(countdownIdRef.current);
               if (cancelled) return;
+              setPriming(false);
               startRecording(stream);
-            }, 350);
+            }, waitMs);
           },
         },
       });
@@ -200,7 +228,7 @@ export function YoutubeCaptureCard({
   }, [stage]);
 
   function startRecording(stream: MediaStream) {
-    const durationMs = Math.max(1, end - start) * 1000;
+    const durationMs = Math.max(100, (end - start - END_TRIM_SECONDS) * 1000);
     const chunks: Blob[] = [];
     const recorder = new MediaRecorder(stream, { mimeType: pickMimeType() });
     recorderRef.current = recorder;
@@ -277,8 +305,10 @@ export function YoutubeCaptureCard({
         </div>
         <div className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-2 text-sm font-medium text-white/80">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
-            Recording… {secondsLeft}s left — don&apos;t switch tabs or close this window
+            <span className={`h-2 w-2 rounded-full ${priming ? "bg-white/40" : "animate-pulse bg-red-500"}`} />
+            {priming
+              ? `Starting in ${secondsLeft}s…`
+              : `Recording… ${secondsLeft}s left — don't switch tabs or close this window`}
           </span>
           <button
             type="button"

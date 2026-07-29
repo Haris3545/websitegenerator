@@ -21,6 +21,9 @@ export function GateForm({
   scrimOpacity = 0.55,
   grainIntensity = 0,
   grainMonochrome = false,
+  bgPositionX = 50,
+  bgPositionY = 50,
+  bgZoom = 1,
 }: {
   slug: string;
   backgroundUrl: string | null;
@@ -31,6 +34,9 @@ export function GateForm({
   scrimOpacity?: number;
   grainIntensity?: number;
   grainMonochrome?: boolean;
+  bgPositionX?: number;
+  bgPositionY?: number;
+  bgZoom?: number;
 }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -68,6 +74,7 @@ export function GateForm({
             loop
             playsInline
             className="absolute inset-0 h-full w-full object-cover"
+            style={{ objectPosition: `${bgPositionX}% ${bgPositionY}%`, transform: `scale(${bgZoom})` }}
           />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
@@ -75,6 +82,7 @@ export function GateForm({
             src={backgroundUrl}
             alt=""
             className="absolute inset-0 h-full w-full object-cover"
+            style={{ objectPosition: `${bgPositionX}% ${bgPositionY}%`, transform: `scale(${bgZoom})` }}
           />
         ))}
       {backgroundUrl && (

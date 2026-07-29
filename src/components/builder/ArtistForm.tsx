@@ -18,7 +18,8 @@ import {
   type ArtistFormInput,
 } from "@/app/builder/actions";
 import type { Artist } from "@/lib/database.types";
-import { DEFAULT_THEME_OVERRIDES } from "@/lib/theme";
+import { DEFAULT_THEME_OVERRIDES, type ThemeOverrides } from "@/lib/theme";
+import { grainTexture } from "@/lib/grainTexture";
 import { BrandLogoAnimation } from "@/components/BrandLogoAnimation";
 import { ProvisioningOverlay } from "@/components/builder/ProvisioningOverlay";
 import { YoutubeSearchModal } from "@/components/builder/YoutubeSearchModal";
@@ -38,6 +39,10 @@ function slugify(name: string) {
 
 function isGateVideoUrl(url: string) {
   return /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url);
+}
+
+function clamp(v: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, v));
 }
 
 const inputClass =
@@ -228,6 +233,60 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
   function update<K extends keyof ArtistFormInput>(key: K, value: ArtistFormInput[K]) {
     setForm((f) => ({ ...f, [key]: value }));
     setSaveStatus("dirty");
+  }
+
+  // Password page background gets its own pan/zoom, independent of the
+  // dashboard background's (ThemeEditor's bg_position_x/y/bg_zoom) — same
+  // storage (theme_overrides) and drag mechanics as that editor, just scoped
+  // to the gate preview below instead of a click-to-select part of it.
+  function setGateTheme(patch: Partial<ThemeOverrides>) {
+    update("theme_overrides", { ...form.theme_overrides, ...patch });
+  }
+  const gateTheme = { ...DEFAULT_THEME_OVERRIDES, ...form.theme_overrides };
+  const [gateDragging, setGateDragging] = useState(false);
+  const gateDragState = useRef<{
+    startX: number;
+    startY: number;
+    startPosX: number;
+    startPosY: number;
+    moved: boolean;
+  } | null>(null);
+
+  function handleGatePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (!form.gate_background_url) return;
+    gateDragState.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startPosX: gateTheme.gate_bg_position_x,
+      startPosY: gateTheme.gate_bg_position_y,
+      moved: false,
+    };
+  }
+
+  function handleGatePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const ds = gateDragState.current;
+    if (!ds) return;
+    const dx = e.clientX - ds.startX;
+    const dy = e.clientY - ds.startY;
+    if (!ds.moved && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) {
+      ds.moved = true;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      setGateDragging(true);
+    }
+    if (!ds.moved) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const overflowX = rect.width * 0.4;
+    const overflowY = rect.height * 0.4;
+    setGateTheme({
+      gate_bg_position_x: Math.round(clamp(ds.startPosX - (dx / overflowX) * 100, 0, 100)),
+      gate_bg_position_y: Math.round(clamp(ds.startPosY - (dy / overflowY) * 100, 0, 100)),
+    });
+  }
+
+  function handleGatePointerUp() {
+    gateDragState.current = null;
+    setGateDragging(false);
   }
 
   function handleNameChange(name: string) {
@@ -719,12 +778,18 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
           <span className={`${labelClass} flex items-center gap-1.5`}>
             Password page preview
             <HelpTooltip>
-              Shows the actual background photo/video and darkness overlay set below, live. Accent
-              colour is the thin divider line under the title.
+              Shows the actual background photo/video, darkness overlay, and grain set below, live.
+              Drag the preview to reposition the background; the zoom slider underneath resizes it.
+              Accent colour is the thin divider line under the title.
             </HelpTooltip>
           </span>
           <div
-            className="relative flex h-40 flex-col items-center justify-center gap-2 overflow-hidden rounded-lg px-4 text-center text-white lg:h-52 2xl:h-64"
+            onPointerDown={handleGatePointerDown}
+            onPointerMove={handleGatePointerMove}
+            onPointerUp={handleGatePointerUp}
+            className={`relative flex h-40 touch-none select-none flex-col items-center justify-center gap-2 overflow-hidden rounded-lg px-4 text-center text-white lg:h-52 2xl:h-64 ${
+              form.gate_background_url ? (gateDragging ? "cursor-grabbing" : "cursor-grab") : ""
+            }`}
             style={{ backgroundColor: "#0a0a0a", fontFamily: `"${form.font_family}", sans-serif` }}
           >
             {form.gate_background_url &&
@@ -732,6 +797,10 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
                 <video
                   src={form.gate_background_url}
                   className="absolute inset-0 h-full w-full object-cover"
+                  style={{
+                    objectPosition: `${gateTheme.gate_bg_position_x}% ${gateTheme.gate_bg_position_y}%`,
+                    transform: `scale(${gateTheme.gate_bg_zoom})`,
+                  }}
                   muted
                   loop
                   autoPlay
@@ -742,13 +811,28 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
                 <img
                   src={form.gate_background_url}
                   alt=""
-                  className="absolute inset-0 h-full w-full object-cover"
+                  draggable={false}
+                  className="absolute inset-0 h-full w-full select-none object-cover"
+                  style={{
+                    objectPosition: `${gateTheme.gate_bg_position_x}% ${gateTheme.gate_bg_position_y}%`,
+                    transform: `scale(${gateTheme.gate_bg_zoom})`,
+                  }}
                 />
               ))}
             {form.gate_background_url && (
               <div
                 className="absolute inset-0"
                 style={{ backgroundColor: `rgba(0,0,0,${form.gate_scrim_opacity})` }}
+              />
+            )}
+            {form.gate_grain_intensity > 0 && (
+              <div
+                className="animate-grain absolute inset-0 mix-blend-overlay"
+                style={{
+                  opacity: form.gate_grain_intensity,
+                  backgroundImage: grainTexture(form.gate_grain_monochrome),
+                  backgroundSize: "90px 90px",
+                }}
               />
             )}
             <p className="relative z-10 text-[10px] font-semibold uppercase tracking-[0.35em] text-white/70">
@@ -759,6 +843,23 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
             </p>
             <div className="relative z-10 mt-1 h-px w-16" style={{ backgroundColor: form.accent_color }} />
           </div>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="flex justify-between">
+              <span>Zoom / resize</span>
+              <span className="font-mono text-xs text-neutral-500 dark:text-white/40">
+                {gateTheme.gate_bg_zoom.toFixed(2)}x
+              </span>
+            </span>
+            <input
+              type="range"
+              min={1}
+              max={2.5}
+              step={0.05}
+              value={gateTheme.gate_bg_zoom}
+              onChange={(e) => setGateTheme({ gate_bg_zoom: Number(e.target.value) })}
+              className="accent-builder-accent"
+            />
+          </label>
         </div>
 
         <div className="border-t border-neutral-200 pt-4 dark:border-white/10">
