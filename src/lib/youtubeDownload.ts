@@ -7,6 +7,7 @@ import ytdl from "@distube/ytdl-core";
 import ffmpegPath from "ffmpeg-static";
 import { recordYoutubeClipViaBrowser } from "@/lib/youtubeScreenRecord";
 import { resolveYoutubeFormatViaYtDlp } from "@/lib/youtubeDownloadYtDlp";
+import { resolveYoutubeFormatViaPiped } from "@/lib/youtubeDownloadPiped";
 
 const execFileAsync = promisify(execFile);
 
@@ -16,6 +17,26 @@ const MAX_CLIP_SECONDS = 12; // small buffer over the 10s the builder's trimmer 
 // back its own headers for a format (it normally does).
 const BROWSER_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+/** yt-dlp and the Piped API both do the same job — resolve a direct,
+ * playable stream URL — via completely different infrastructure (yt-dlp
+ * runs here, on this deployment's own IP; Piped's public instances resolve
+ * it on theirs). Trying yt-dlp first since it's the faster of the two (no
+ * extra network hop to a third party), Piped second as a fallback that
+ * sidesteps whatever's blocking direct extraction from this IP entirely. */
+async function resolveFormat(videoId: string): Promise<{ url: string; headers: Record<string, string> }> {
+  try {
+    return await resolveYoutubeFormatViaYtDlp(videoId);
+  } catch (ytDlpErr) {
+    try {
+      return await resolveYoutubeFormatViaPiped(videoId);
+    } catch (pipedErr) {
+      const ytDlpMsg = ytDlpErr instanceof Error ? ytDlpErr.message : String(ytDlpErr);
+      const pipedMsg = pipedErr instanceof Error ? pipedErr.message : String(pipedErr);
+      throw new Error(`yt-dlp: ${ytDlpMsg} | Piped: ${pipedMsg}`);
+    }
+  }
+}
 
 /** Downloads the [start, end) window of a YouTube video as a standalone
  * H.264 mp4 file, ready to be uploaded and played back like any other
@@ -49,7 +70,7 @@ export async function downloadYoutubeClip(
 
   let tmpDir: string | null = null;
   try {
-    const { url, headers } = await resolveYoutubeFormatViaYtDlp(videoId);
+    const { url, headers } = await resolveFormat(videoId);
     const headerLines =
       Object.entries(headers).length > 0
         ? Object.entries(headers)
@@ -92,16 +113,19 @@ export async function downloadYoutubeClip(
     return { ok: true, buffer };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    if (/sign in to confirm/i.test(message)) {
-      // yt-dlp gets patched within days of YouTube changing something, but
-      // it's still ultimately hitting the same bot-check surface — if it
-      // still comes back with this specific error, fall back to actually
-      // rendering the real watch page in a headless browser and
-      // screen-recording it (see youtubeScreenRecord.ts), which presents a
-      // real browser session rather than any kind of API call.
-      return recordYoutubeClipViaBrowser(videoId, start, end);
-    }
-    return { ok: false, error: `Couldn't download/trim that clip: ${message}` };
+    // Both resolveFormat's own methods (yt-dlp, then Piped) already failed
+    // by this point, or ffmpeg itself choked on whatever URL one of them
+    // did resolve — either way, the last resort is actually rendering the
+    // real watch page in a headless browser and screen-recording it (see
+    // youtubeScreenRecord.ts), a fundamentally different technique from
+    // either extraction method above. If that also fails, its own error
+    // gets appended so nothing upstream is lost.
+    const screenRecordResult = await recordYoutubeClipViaBrowser(videoId, start, end);
+    if (screenRecordResult.ok) return screenRecordResult;
+    return {
+      ok: false,
+      error: `Couldn't download/trim that clip. ${message} | ${screenRecordResult.error}`,
+    };
   } finally {
     if (tmpDir) await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
   }
