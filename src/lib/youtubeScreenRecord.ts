@@ -138,12 +138,18 @@ export async function recordYoutubeClipViaBrowser(
   try {
     browser = await launchBrowser();
     const page = await browser.newPage();
-    await applySessionCookie(page);
+    const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
-    await page.goto(`https://www.youtube.com/watch?v=${videoId}`, {
-      waitUntil: "domcontentloaded",
-      timeout: 45_000,
-    });
+    // page.setCookie() falls back to the current page's own URL for any
+    // cookie that doesn't specify one itself (see applySessionCookie) — on
+    // a still-blank page that fallback has nothing to work with, which is
+    // what threw "Invalid cookie fields" here. Navigating first so the page
+    // actually has a real youtube.com URL, then reloading once the cookies
+    // are in, is the standard fix (the first load happens logged-out
+    // either way; the reload is what actually carries the session).
+    await page.goto(watchUrl, { waitUntil: "domcontentloaded", timeout: 45_000 });
+    await applySessionCookie(page);
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 });
 
     await dismissConsentDialog(page);
     await hidePlayerChrome(page);
