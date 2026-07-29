@@ -13,6 +13,7 @@ import {
   provisionConversationThemes,
   provisionSentiment,
   provisionInsights,
+  provisionAudience,
   finalizeProvisioning,
   checkProvisionedData,
   type ProvisionResult,
@@ -98,10 +99,11 @@ export function ProvisioningOverlay({
       { key: "insights", label: "Dashboard insights", run: () => provisionInsights(artistId, artistName) },
       { key: "wikipedia", label: "Wikipedia trends", run: () => provisionWikipediaTrends(artistId, artistName) },
       { key: "themes", label: "Conversation themes", run: () => provisionConversationThemes(artistId, artistName) },
+      { key: "audience", label: "Audience research", checkKey: "audience", run: () => provisionAudience(artistId, artistName) },
     ],
     [artistId, artistName, youtubeChannelId, mode]
   );
-  const CREATE_ONLY_KEYS = ["sentiment", "insights", "wikipedia", "themes"];
+  const CREATE_ONLY_KEYS = ["sentiment", "insights", "wikipedia", "themes", "audience"];
   const steps = mode === "refresh" ? allSteps.filter((s) => !CREATE_ONLY_KEYS.includes(s.key)) : allSteps;
 
   useEffect(() => {
@@ -116,15 +118,22 @@ export function ProvisioningOverlay({
     }
 
     async function run() {
-      // media/events/youtube/social/music/genius are independent of each
-      // other. Everything after that depends on some of it having already
-      // landed: sentiment reads media_articles, insights reads sentiment
-      // plus youtube/music/social's own tables, wikipedia reads back what
-      // music just stored, and conversation themes reads
+      // media/events/youtube/social/music/genius/audience are independent
+      // of each other (audience's own Gemini research doesn't read back
+      // anything else). Everything after that depends on some of it having
+      // already landed: sentiment reads media_articles, insights reads
+      // sentiment plus youtube/music/social's own tables, wikipedia reads
+      // back what music just stored, and conversation themes reads
       // wikipedia+social+genius — so those four run afterward, in that
       // order (when they're running at all — see the mode="refresh"
-      // filtering above, which skips all four as Gemini/quota-limited).
-      await Promise.all(["media", "events", "youtube", "social", "music", "genius"].map(runStep));
+      // filtering above, which skips all five as Gemini/quota-limited).
+      // Filtered against byKey rather than assumed unconditionally present
+      // since "audience" (like sentiment/insights/wikipedia/themes) isn't
+      // in `steps` at all under mode="refresh".
+      const parallelKeys = ["media", "events", "youtube", "social", "music", "genius", "audience"].filter(
+        (key) => key in byKey
+      );
+      await Promise.all(parallelKeys.map(runStep));
       if (cancelled) return;
       if (mode === "create") {
         await runStep("sentiment");
@@ -160,6 +169,10 @@ export function ProvisioningOverlay({
   return (
     <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-6 bg-neutral-950 px-4 py-10 text-white">
       <BrandLogoAnimation className="h-16 w-16 invert" loop={phase !== "done"} />
+
+      <p className="text-lg font-semibold">
+        {mode === "refresh" ? "Refreshing everything" : "Creating website"}
+      </p>
 
       <div className="w-full max-w-sm">
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">

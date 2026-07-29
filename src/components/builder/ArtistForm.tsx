@@ -19,6 +19,7 @@ import {
 } from "@/app/builder/actions";
 import type { Artist } from "@/lib/database.types";
 import { DEFAULT_THEME_OVERRIDES, type ThemeOverrides } from "@/lib/theme";
+import { computeArtistPassword } from "@/lib/artistAccess";
 import { grainTexture } from "@/lib/grainTexture";
 import { BrandLogoAnimation } from "@/components/BrandLogoAnimation";
 import { ProvisioningOverlay } from "@/components/builder/ProvisioningOverlay";
@@ -645,7 +646,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
           />
           {form.slug && (
             <p className="text-xs text-neutral-500 dark:text-white/40">
-              Password page password: <span className="font-mono text-neutral-700 dark:text-white/70">{form.slug}</span>
+              Password page password: <span className="font-mono text-neutral-700 dark:text-white/70">{computeArtistPassword(form.slug)}</span>
             </p>
           )}
         </label>
@@ -675,7 +676,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
               className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-neutral-200 bg-white px-3.5 py-2.5 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-100 disabled:opacity-50 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
             >
               <YoutubeIcon className="h-4 w-4 shrink-0" />
-              {isLookingUpYoutube ? "Looking up…" : "Use"}
+              {isLookingUpYoutube ? "Looking up…" : "Find channel"}
             </button>
 
             {channelDropdownOpen && (searchingChannels || channelResults.length > 0) && (
@@ -710,13 +711,13 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
                 update("accent_color", suggestedAccent);
                 setSuggestedAccent(null);
               }}
-              className="flex w-fit items-center gap-2 rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs font-medium text-neutral-600 transition-colors hover:bg-neutral-100 dark:border-white/10 dark:text-white/60 dark:hover:bg-white/5"
+              className="flex w-fit items-center gap-3 rounded-lg border border-neutral-200 px-3 py-2 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-100 dark:border-white/10 dark:text-white/70 dark:hover:bg-white/5"
             >
               <span
-                className="h-3.5 w-3.5 rounded-full border border-black/10 dark:border-white/20"
+                className="h-6 w-6 shrink-0 rounded-full border border-black/10 shadow-sm dark:border-white/20"
                 style={{ backgroundColor: suggestedAccent }}
               />
-              Lifted {suggestedAccent} from their channel art — use as accent colour
+              Use their channel&apos;s most prominent colour ({suggestedAccent}) as your accent colour?
             </button>
           )}
           {youtubeLookup?.status === "error" && (

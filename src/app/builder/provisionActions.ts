@@ -12,6 +12,7 @@ import { refreshWikipediaTrendsNow } from "@/lib/wikipedia";
 import { refreshConversationThemesForArtist } from "@/lib/conversationThemes";
 import { refreshInsightsNow } from "@/lib/insights";
 import { refreshSentimentNow } from "@/lib/sentiment";
+import { provisionAudienceResearchIfEmpty } from "@/lib/audienceResearch";
 import { artistCacheTag } from "@/lib/getSiteArtist";
 
 /** Granular, individually-callable counterparts to refreshEverything's
@@ -160,6 +161,20 @@ export async function provisionInsights(artistId: string, artistName: string): P
   }
 }
 
+/** One-time Gemini web-search pass for publicly published audience
+ * demographics — see audienceResearch.ts for the full reasoning. Only ever
+ * called from creation (same Gemini-cost bucket as sentiment/insights/
+ * wikipedia/themes above), and a no-op if the artist already has any
+ * audience_statements at all, so it's safe even if this ever ran twice. */
+export async function provisionAudience(artistId: string, artistName: string): Promise<ProvisionResult> {
+  try {
+    await provisionAudienceResearchIfEmpty(artistId, artistName);
+    return { ok: true };
+  } catch (err) {
+    return toResult(err);
+  }
+}
+
 export async function finalizeProvisioning(slug: string) {
   updateTag(artistCacheTag(slug));
   revalidatePath(`/s/${slug}`, "layout");
@@ -180,13 +195,14 @@ export async function checkProvisionedData(artistId: string): Promise<Record<str
     return count ?? 0;
   };
 
-  const [media, events, youtube, social, music] = await Promise.all([
+  const [media, events, youtube, social, music, audience] = await Promise.all([
     count("media_articles"),
     count("artist_events"),
     count("youtube_stats"),
     count("social_comment_map"),
     count("music_stats"),
+    count("audience_statements"),
   ]);
 
-  return { media, events, youtube, social, music };
+  return { media, events, youtube, social, music, audience };
 }

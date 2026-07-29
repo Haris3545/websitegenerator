@@ -1,7 +1,7 @@
 import ExcelJS from "exceljs";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 
-type ParsedRow = {
+export type ParsedRow = {
   category: string | null;
   statement: string;
   segment: string;

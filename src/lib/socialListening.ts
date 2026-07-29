@@ -6,7 +6,19 @@ import type { SocialComment } from "@/lib/database.types";
 
 const STALE_AFTER_MS = 6 * 60 * 60 * 1000; // 6 hours — heavier than a simple mentions fetch
 const MAX_COMMENTS = 1000;
-const WEB_SWEEP_MAX_COMMENTS = 100;
+const WEB_SWEEP_MAX_COMMENTS = 200;
+
+// A single search call's grounding tends to settle on whatever handful of
+// results it finds first — running several differently-angled searches in
+// parallel and merging the (deduped) results surfaces meaningfully more
+// genuine distinct posts than one broad query does, which matters here
+// since a sparse-looking category map is a worse outcome than a few extra
+// Gemini calls (see the file-level comment on real per-day headroom).
+const WEB_SWEEP_SEARCH_ANGLES = [
+  "Reddit threads and comments",
+  "X/Twitter posts and replies, forum posts, and blog comments",
+  "reviews, reactions, and opinions about their music or live performances",
+];
 
 const WEB_MENTIONS_SCHEMA = {
   type: Type.OBJECT,
@@ -60,16 +72,16 @@ function safeParseJson(text: string | undefined): Record<string, unknown> {
  * there's no reason to throw genuine mentions away. See
  * refreshSocialListeningForArtist's includeWebSweep option for where this
  * is (and deliberately isn't) called from. */
-async function fetchWebMentionsViaGemini(artistName: string): Promise<SocialComment[]> {
+async function fetchWebMentionsForAngle(artistName: string, angle: string): Promise<SocialComment[]> {
   const searchRes = await generateContentThrottled({
     model: "gemini-2.5-flash-lite",
     contents:
-      `Search the web for real discussion, comments, or posts about the musical artist "${artistName}" — ` +
-      "Reddit threads, X/Twitter replies, forum posts, blog comments, anywhere people are genuinely " +
-      "discussing them. Find actual text people have posted — quote it verbatim, don't summarize or " +
-      "paraphrase — along with who posted it, where it's from, and what the post/thread was about. " +
-      "Only report things you have real search evidence for; if you can't find genuine posts, say so " +
-      "plainly rather than inventing any.",
+      `Search the web for real discussion about the musical artist "${artistName}", specifically ${angle}. ` +
+      "Find as many genuinely distinct posts/comments as you can — cast a wide net across different " +
+      "threads and sources rather than stopping at the first one or two you find. Find actual text " +
+      "people have posted — quote it verbatim, don't summarize or paraphrase — along with who posted " +
+      "it, where it's from, and what the post/thread was about. Only report things you have real " +
+      "search evidence for; if you can't find genuine posts, say so plainly rather than inventing any.",
     config: { tools: [{ googleSearch: {} }] },
   });
   const digest = searchRes.text ?? "";
@@ -78,9 +90,9 @@ async function fetchWebMentionsViaGemini(artistName: string): Promise<SocialComm
   const extractRes = await generateContentThrottled({
     model: "gemini-2.5-flash-lite",
     contents:
-      "Extract individual comments/posts from this research into structured data. Each entry needs " +
-      "the actual quoted text; skip anything that reads like a summary rather than a real quote, and " +
-      `skip duplicates.\n\nResearch:\n${digest}`,
+      "Extract every individual comment/post from this research into structured data — one entry per " +
+      "distinct post, not a rolled-up summary. Each entry needs the actual quoted text; skip anything " +
+      `that reads like a summary rather than a real quote, and skip duplicates.\n\nResearch:\n${digest}`,
     config: { responseMimeType: "application/json", responseSchema: WEB_MENTIONS_SCHEMA },
   });
 
@@ -89,7 +101,6 @@ async function fetchWebMentionsViaGemini(artistName: string): Promise<SocialComm
 
   return extracted
     .filter((c): c is ExtractedWebComment & { text: string } => !!c.text?.trim())
-    .slice(0, WEB_SWEEP_MAX_COMMENTS)
     .map((c) => ({
       platform: "web" as const,
       author: c.author?.trim() || "unknown",
@@ -99,6 +110,24 @@ async function fetchWebMentionsViaGemini(artistName: string): Promise<SocialComm
       context: [c.source, c.context].filter(Boolean).join(" — ") || "Web",
       publishedAt: null,
     }));
+}
+
+async function fetchWebMentionsViaGemini(artistName: string): Promise<SocialComment[]> {
+  const batches = await Promise.all(
+    WEB_SWEEP_SEARCH_ANGLES.map((angle) => fetchWebMentionsForAngle(artistName, angle))
+  );
+
+  const seen = new Set<string>();
+  const merged: SocialComment[] = [];
+  for (const batch of batches) {
+    for (const comment of batch) {
+      const key = comment.text.trim().toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      merged.push(comment);
+    }
+  }
+  return merged.slice(0, WEB_SWEEP_MAX_COMMENTS);
 }
 
 type YoutubeSearchResponse = {
