@@ -6,6 +6,7 @@ import { googleFontsCssUrl } from "@/lib/fonts";
 import { grainTexture } from "@/lib/grainTexture";
 import { AutoFitHeading } from "@/components/site/AutoFitHeading";
 import { YoutubeBackgroundPlayer } from "@/components/site/YoutubeBackgroundPlayer";
+import { hexToRgba } from "@/lib/color";
 
 export function GateForm({
   slug,
@@ -89,8 +90,14 @@ export function GateForm({
           />
         ))
       )}
+      {/* A flat black scrim would make the secondary colour picked in the
+          builder invisible on every gate that has a background photo/video
+          set (i.e. almost all of them) — tinting the scrim with that colour
+          instead means it always contributes something to how the page
+          actually looks, rather than only mattering on the rare gate with
+          no media at all. */}
       {(backgroundUrl || youtubeVideoId) && (
-        <div className="absolute inset-0" style={{ backgroundColor: `rgba(0,0,0,${scrimOpacity})` }} />
+        <div className="absolute inset-0" style={{ backgroundColor: hexToRgba(backgroundColor, scrimOpacity) }} />
       )}
       <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/70" />
       {grainIntensity > 0 && (

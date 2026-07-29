@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useTransition } from "react";
-import { refreshEverything, logOutOfArtistSite } from "@/app/s/[slug]/actions";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { logOutOfArtistSite } from "@/app/s/[slug]/actions";
 import { useEditMode } from "@/components/site/EditModeContext";
 import { BrandLogoAnimation } from "@/components/BrandLogoAnimation";
+import { ProvisioningOverlay } from "@/components/builder/ProvisioningOverlay";
 
 function toCsv(rows: Record<string, unknown>[]): string {
   if (!rows.length) return "";
@@ -29,17 +31,23 @@ function downloadCsv(rows: Record<string, unknown>[], filename: string) {
 export function SiteFooter({
   slug,
   artistId,
+  artistName,
+  youtubeChannelId,
   tagline,
   csvRows,
   csvFilename,
 }: {
   slug: string;
   artistId: string;
+  artistName: string;
+  youtubeChannelId: string | null;
   tagline: string;
   csvRows?: Record<string, unknown>[];
   csvFilename?: string;
 }) {
-  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+  const [refreshing, setRefreshing] = useState(false);
   const { editMode, toggle, editingAllowed } = useEditMode();
 
   return (
@@ -72,11 +80,11 @@ export function SiteFooter({
           </button>
           <button
             type="button"
-            disabled={isPending}
-            onClick={() => startTransition(() => refreshEverything(slug))}
+            disabled={refreshing}
+            onClick={() => setRefreshing(true)}
             className="flex items-center gap-1.5 rounded bg-[var(--accent)] px-3 py-1.5 text-xs font-semibold text-black transition-all duration-150 ease-out hover:-translate-y-0.5 hover:brightness-110 disabled:pointer-events-none disabled:opacity-50"
           >
-            {isPending ? (
+            {refreshing ? (
               <>
                 <BrandLogoAnimation className="h-4 w-4" loop />
                 Refreshing
@@ -88,6 +96,27 @@ export function SiteFooter({
         </div>
         <p className="text-xs text-white/40">{tagline}</p>
       </div>
+
+      {/* Full-screen, per-step progress instead of just this button's own
+          small spinner — refreshing across every data source can take a
+          while, and standing there with only "Refreshing" and a tiny icon
+          to go on gave no sense of whether it was actually doing anything.
+          Same overlay the builder shows right after creating a new artist
+          (see ProvisioningOverlay.tsx), just pointed at the already-live
+          site instead of a brand-new one. */}
+      {refreshing && (
+        <ProvisioningOverlay
+          artistId={artistId}
+          slug={slug}
+          artistName={artistName}
+          youtubeChannelId={youtubeChannelId}
+          mode="refresh"
+          onComplete={() => {
+            setRefreshing(false);
+            router.refresh();
+          }}
+        />
+      )}
 
       <div className="mt-8 flex justify-center gap-3">
         {editingAllowed && (

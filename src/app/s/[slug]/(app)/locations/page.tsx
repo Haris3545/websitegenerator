@@ -92,6 +92,8 @@ export default async function LocationsPage({ params }: { params: Promise<{ slug
       <SiteFooter
         slug={slug}
         artistId={artist.id}
+        artistName={artist.name}
+        youtubeChannelId={artist.youtube_channel_id}
         tagline={artist.tagline}
         csvRows={events ?? []}
         csvFilename={`${slug}-locations.csv`}

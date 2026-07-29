@@ -86,6 +86,7 @@ export function YoutubeBackgroundPlayer({
           rel: 0,
           playsinline: 1,
           iv_load_policy: 3,
+          cc_load_policy: 0,
           start: Math.floor(start),
           // Deliberately no `end` here — letting YouTube's own player
           // enforce the cutoff means it hard-stops into the ended state
@@ -98,18 +99,29 @@ export function YoutubeBackgroundPlayer({
             e.target.mute();
             e.target.playVideo();
             pollRef.current = window.setInterval(() => {
-              if (playerRef.current && playerRef.current.getCurrentTime() >= end - LOOP_LEAD_SECONDS) {
-                playerRef.current.seekTo(start, true);
+              const player = playerRef.current;
+              if (player && player.getCurrentTime() >= end - LOOP_LEAD_SECONDS) {
+                player.seekTo(start, true);
+                // seekTo's own "allowSeekAhead" is enough to keep playback
+                // going in the common case, but a still-buffering embed can
+                // briefly land in a paused-looking state right at the seek —
+                // an explicit playVideo() right behind it closes that gap so
+                // there's nothing on screen for YouTube's own pause icon to
+                // flash over.
+                player.playVideo();
               }
             }, POLL_MS);
           },
           onStateChange: (e) => {
-            // A fallback only — the poll above should always seek away
-            // before this can naturally fire, but if it's ever missed for
-            // any reason, still recover into the loop rather than sitting
-            // on YouTube's own "video ended" card indefinitely.
-            if (e.data === YT.PlayerState.ENDED) {
-              e.target.seekTo(start, true);
+            // Anything other than actively playing during an ambient,
+            // muted, no-controls background loop is a visual glitch, not a
+            // real pause a viewer asked for (there's no way to click pause —
+            // the whole layer is pointer-events: none) — force playback to
+            // resume immediately whenever the player drifts into PAUSED or
+            // ENDED, rather than leaving whatever YouTube's own chrome shows
+            // for that state sitting on screen.
+            if (e.data === YT.PlayerState.PAUSED || e.data === YT.PlayerState.ENDED) {
+              if (e.data === YT.PlayerState.ENDED) e.target.seekTo(start, true);
               e.target.playVideo();
             }
           },

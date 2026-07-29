@@ -208,6 +208,8 @@ export default async function YoutubePage({ params }: { params: Promise<{ slug: 
       <SiteFooter
         slug={slug}
         artistId={artist.id}
+        artistName={artist.name}
+        youtubeChannelId={artist.youtube_channel_id}
         tagline={artist.tagline}
         csvRows={videos}
         csvFilename={`${slug}-youtube.csv`}

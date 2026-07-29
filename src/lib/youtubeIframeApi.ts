@@ -19,7 +19,7 @@ export interface YTPlayerOptions {
 
 export interface YTNamespace {
   Player: new (el: HTMLElement, opts: YTPlayerOptions) => YTPlayer;
-  PlayerState: { ENDED: number; PLAYING: number };
+  PlayerState: { ENDED: number; PLAYING: number; PAUSED: number };
 }
 
 declare global {

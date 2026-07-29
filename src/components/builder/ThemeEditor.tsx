@@ -97,17 +97,19 @@ export function ThemeEditor({
     const containerRect = e.currentTarget.getBoundingClientRect();
     const imgRect = imgRef.current?.getBoundingClientRect();
     // object-position's 0-100% range only covers however far the *scaled*
-    // image actually overflows its container — at low zoom (or an image
-    // whose aspect ratio happens to already match the container) that
-    // overflow can be a fraction of the container's own width, so dividing
-    // by the container's width (as this used to) made the drag track far
-    // slower than the cursor: moving the mouse across the whole box barely
-    // nudged the image. Dividing by the image's actual rendered overflow —
-    // read straight off its bounding rect, which already reflects the zoom
-    // transform — makes a pixel of drag move the image a pixel on screen,
-    // regardless of zoom level.
-    const overflowX = Math.max((imgRect?.width ?? containerRect.width) - containerRect.width, 1);
-    const overflowY = Math.max((imgRect?.height ?? containerRect.height) - containerRect.height, 1);
+    // image actually overflows its container. Dividing by that raw overflow
+    // gives an exact pixel-for-pixel match at high zoom, but at low zoom (or
+    // an image whose aspect ratio happens to already match the container)
+    // the real overflow can be just a handful of pixels — dividing by that
+    // makes a single pixel of mouse movement swing the position by a huge
+    // percentage, so the drag feels like it jumps in big coarse steps
+    // instead of moving smoothly. Flooring the denominator at a fraction of
+    // the container's own size keeps the drag controllable at any zoom
+    // level: real overflow still takes over and dominates once it exceeds
+    // that floor (typically past ~1.4x zoom), so higher zoom still gets the
+    // finer pixel-accurate control it needs for precise composition.
+    const overflowX = Math.max((imgRect?.width ?? containerRect.width) - containerRect.width, containerRect.width * 0.4);
+    const overflowY = Math.max((imgRect?.height ?? containerRect.height) - containerRect.height, containerRect.height * 0.4);
     set("bg_position_x", Math.round(clamp(ds.startPosX - (dx / overflowX) * 100, 0, 100)));
     set("bg_position_y", Math.round(clamp(ds.startPosY - (dy / overflowY) * 100, 0, 100)));
     setSelected("background");

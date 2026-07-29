@@ -31,19 +31,35 @@ export type YoutubeVideoSearchResult = {
 };
 
 export type YoutubeChannelLookup =
-  | { ok: true; channelId: string; channelTitle: string }
+  | { ok: true; channelId: string; channelTitle: string; channelThumbnail?: string }
   | { ok: false; error: string };
 
 type YoutubeChannelLookupResponse = {
-  items?: { id?: string; snippet?: { title?: string } }[];
+  items?: {
+    id?: string;
+    snippet?: { title?: string; thumbnails?: { high?: { url?: string }; medium?: { url?: string }; default?: { url?: string } } };
+  }[];
 };
+
+function channelThumbnailFrom(snippet?: {
+  thumbnails?: { high?: { url?: string }; medium?: { url?: string }; default?: { url?: string } };
+}): string | undefined {
+  return snippet?.thumbnails?.high?.url ?? snippet?.thumbnails?.medium?.url ?? snippet?.thumbnails?.default?.url;
+}
 
 type YoutubeVideoLookupResponse = {
   items?: { snippet?: { channelId?: string; channelTitle?: string } }[];
 };
 
 type YoutubeChannelSearchResponse = {
-  items?: { id?: { channelId?: string }; snippet?: { channelId?: string; title?: string } }[];
+  items?: {
+    id?: { channelId?: string };
+    snippet?: {
+      channelId?: string;
+      title?: string;
+      thumbnails?: { high?: { url?: string }; medium?: { url?: string }; default?: { url?: string } };
+    };
+  }[];
 };
 
 async function lookupChannelById(id: string, apiKey: string): Promise<YoutubeChannelLookup> {
@@ -54,7 +70,7 @@ async function lookupChannelById(id: string, apiKey: string): Promise<YoutubeCha
   const data: YoutubeChannelLookupResponse = await res.json();
   const item = data.items?.[0];
   if (!item?.id) return { ok: false, error: "No YouTube channel found for that ID." };
-  return { ok: true, channelId: item.id, channelTitle: item.snippet?.title ?? "" };
+  return { ok: true, channelId: item.id, channelTitle: item.snippet?.title ?? "", channelThumbnail: channelThumbnailFrom(item.snippet) };
 }
 
 async function lookupChannelByHandle(handle: string, apiKey: string): Promise<YoutubeChannelLookup> {
@@ -65,7 +81,7 @@ async function lookupChannelByHandle(handle: string, apiKey: string): Promise<Yo
   const data: YoutubeChannelLookupResponse = await res.json();
   const item = data.items?.[0];
   if (!item?.id) return { ok: false, error: `No YouTube channel found for @${handle}.` };
-  return { ok: true, channelId: item.id, channelTitle: item.snippet?.title ?? "" };
+  return { ok: true, channelId: item.id, channelTitle: item.snippet?.title ?? "", channelThumbnail: channelThumbnailFrom(item.snippet) };
 }
 
 async function lookupChannelByUsername(username: string, apiKey: string): Promise<YoutubeChannelLookup> {
@@ -76,7 +92,7 @@ async function lookupChannelByUsername(username: string, apiKey: string): Promis
   const data: YoutubeChannelLookupResponse = await res.json();
   const item = data.items?.[0];
   if (!item?.id) return { ok: false, error: "No YouTube channel found for that username." };
-  return { ok: true, channelId: item.id, channelTitle: item.snippet?.title ?? "" };
+  return { ok: true, channelId: item.id, channelTitle: item.snippet?.title ?? "", channelThumbnail: channelThumbnailFrom(item.snippet) };
 }
 
 async function lookupChannelByVideoId(videoId: string, apiKey: string): Promise<YoutubeChannelLookup> {
@@ -104,7 +120,7 @@ async function lookupChannelBySearch(query: string, apiKey: string): Promise<You
       error: `Couldn't find a channel matching "${query}" — try pasting the channel's own URL instead.`,
     };
   }
-  return { ok: true, channelId, channelTitle: item?.snippet?.title ?? "" };
+  return { ok: true, channelId, channelTitle: item?.snippet?.title ?? "", channelThumbnail: channelThumbnailFrom(item?.snippet) };
 }
 
 const CHANNEL_ID_RE = /^UC[a-zA-Z0-9_-]{22}$/;

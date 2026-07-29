@@ -48,7 +48,13 @@ export default async function IdeasPage({ params }: { params: Promise<{ slug: st
       <div className="mt-6">
         <IdeasBoard artistId={artist.id} slug={slug} initialItems={items ?? []} />
       </div>
-      <SiteFooter slug={slug} artistId={artist.id} tagline={artist.tagline} />
+      <SiteFooter
+        slug={slug}
+        artistId={artist.id}
+        artistName={artist.name}
+        youtubeChannelId={artist.youtube_channel_id}
+        tagline={artist.tagline}
+      />
     </div>
   );
 }

@@ -46,31 +46,41 @@ function StatusIcon({ status }: { status: StepStatus }) {
   return <span className="block h-4 w-4 rounded-full border-2 border-white/10" />;
 }
 
-/** Shown right after a brand-new artist is first saved — runs every data
- * source eagerly (the same ones "Refresh Everything" bundles) with visible
- * per-step progress, instead of leaving the live site to fetch everything
- * lazily on first visit (slow, and previously required a manual "Refresh
- * Everything" click to actually fill in). Ends with a real check that rows
- * landed in each source's own table — not just that each step returned ok,
- * since a step can legitimately succeed while finding nothing to store. */
+/** Shown right after a brand-new artist is first saved (mode="create") or
+ * when someone clicks "Refresh Everything" on the live site (mode="refresh")
+ * — runs every data source eagerly with visible per-step progress, instead
+ * of either leaving the live site to fetch everything lazily on first visit,
+ * or (for a refresh) sitting behind one opaque multi-second await with just
+ * a spinner in a button. Ends with a real check that rows landed in each
+ * source's own table — not just that each step returned ok, since a step
+ * can legitimately succeed while finding nothing to store.
+ *
+ * mode="refresh" deliberately skips the Wikipedia trends and conversation
+ * themes steps (both back onto Gemini/quota-limited calls) — same reasoning
+ * as refreshEverything() in app/s/[slug]/actions.ts, which this overlay
+ * replaces the UI for: a repeatedly-clickable button on every artist's site
+ * must never be what burns through those quotas, whereas running them once
+ * at creation is fine. */
 export function ProvisioningOverlay({
   artistId,
   slug,
   artistName,
   youtubeChannelId,
+  mode = "create",
   onComplete,
 }: {
   artistId: string;
   slug: string;
   artistName: string;
   youtubeChannelId: string | null;
+  mode?: "create" | "refresh";
   onComplete: () => void;
 }) {
   const [statuses, setStatuses] = useState<Record<string, StepStatus>>({});
   const [phase, setPhase] = useState<"running" | "checking" | "done">("running");
   const [checkResults, setCheckResults] = useState<Record<string, number> | null>(null);
 
-  const steps = useMemo<Step[]>(
+  const allSteps = useMemo<Step[]>(
     () => [
       { key: "media", label: "News & press coverage", checkKey: "media", run: () => provisionMedia(artistId, artistName) },
       { key: "events", label: "Tour dates", checkKey: "events", run: () => provisionEvents(artistId, artistName) },
@@ -83,6 +93,7 @@ export function ProvisioningOverlay({
     ],
     [artistId, artistName, youtubeChannelId]
   );
+  const steps = mode === "refresh" ? allSteps.filter((s) => s.key !== "wikipedia" && s.key !== "themes") : allSteps;
 
   useEffect(() => {
     let cancelled = false;
@@ -99,13 +110,16 @@ export function ProvisioningOverlay({
       // media/events/youtube/social/music/genius are independent of each
       // other; wikipedia reads back what music just stored, and
       // conversation themes reads wikipedia+social+genius — so those two
-      // have to run after the rest, in that order.
+      // have to run after the rest, in that order (when they're running at
+      // all — see the mode="refresh" filtering above).
       await Promise.all(["media", "events", "youtube", "social", "music", "genius"].map(runStep));
       if (cancelled) return;
-      await runStep("wikipedia");
-      if (cancelled) return;
-      await runStep("themes");
-      if (cancelled) return;
+      if (mode === "create") {
+        await runStep("wikipedia");
+        if (cancelled) return;
+        await runStep("themes");
+        if (cancelled) return;
+      }
 
       await finalizeProvisioning(slug);
       if (cancelled) return;
@@ -121,7 +135,8 @@ export function ProvisioningOverlay({
     return () => {
       cancelled = true;
     };
-  }, [artistId, slug, steps]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `steps` is recomputed from these same deps every render; including it here would just re-trigger this identically
+  }, [artistId, slug, mode, artistName, youtubeChannelId]);
 
   const finishedCount = Object.values(statuses).filter((s) => s === "done" || s === "error").length;
   const progress = phase === "done" ? 1 : finishedCount / steps.length;
@@ -142,7 +157,9 @@ export function ProvisioningOverlay({
             ? "Confirming everything landed…"
             : phase === "done"
               ? "Dashboard ready"
-              : "Setting up the dashboard…"}
+              : mode === "refresh"
+                ? "Refreshing the dashboard…"
+                : "Setting up the dashboard…"}
         </p>
       </div>
 

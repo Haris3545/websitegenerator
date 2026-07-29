@@ -26,6 +26,7 @@ import { YoutubeSearchModal } from "@/components/builder/YoutubeSearchModal";
 import { YOUTUBE_BUTTON_CLASS } from "@/components/builder/mediaActionStyles";
 import { YoutubeIcon } from "@/components/builder/YoutubeIcon";
 import { HelpTooltip } from "@/components/builder/HelpTooltip";
+import { averageColorFromImageUrl } from "@/lib/colorFromImage";
 import type { YoutubeVideoSearchResult } from "@/lib/youtube";
 
 function slugify(name: string) {
@@ -43,16 +44,18 @@ const sectionClass =
   "flex flex-col gap-5 rounded-2xl border border-neutral-200/70 bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-white/[0.025]";
 
 function Section({
+  id,
   title,
   description,
   children,
 }: {
+  id?: string;
   title: string;
   description?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className={sectionClass}>
+    <div id={id} className={`${sectionClass} scroll-mt-28`}>
       <div>
         <h2 className="text-base font-semibold tracking-tight text-neutral-900 dark:text-white">{title}</h2>
         {description && (
@@ -115,6 +118,12 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
     { status: "success"; channelTitle: string } | { status: "error"; error: string } | null
   >(null);
   const [channelSearching, setChannelSearching] = useState(false);
+  // Lifted straight from the channel's own avatar once a lookup resolves
+  // one — a suggestion the "Use" button below applies deliberately, never
+  // silently, since accent_color may already be something someone chose on
+  // purpose.
+  const [suggestedAccent, setSuggestedAccent] = useState<string | null>(null);
+  const [edgeCasesOpen, setEdgeCasesOpen] = useState(!!artist?.aesthetic_prompt?.trim());
   const [formError, setFormError] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
@@ -230,6 +239,26 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
     if (!slugTouched) update("slug", slugify(name));
   }
 
+  // Shared by both ways of resolving a channel (pasted link and search-modal
+  // pick) — besides linking the channel id, it lifts a suggested accent
+  // colour straight from the channel's own avatar so there's at least a
+  // starting point that already matches their branding instead of a blind
+  // colour-wheel guess. Only ever offered as a one-click suggestion (see the
+  // "Use" button below), never applied automatically — accent_color may
+  // already be something someone chose on purpose.
+  function applyYoutubeLookupResult(lookupResult: Awaited<ReturnType<typeof lookupYoutubeChannel>>) {
+    if (lookupResult.ok) {
+      update("youtube_channel_id", lookupResult.channelId);
+      setYoutubeLookup({ status: "success", channelTitle: lookupResult.channelTitle });
+      setSuggestedAccent(null);
+      if (lookupResult.channelThumbnail) {
+        void averageColorFromImageUrl(lookupResult.channelThumbnail).then(setSuggestedAccent);
+      }
+    } else {
+      setYoutubeLookup({ status: "error", error: lookupResult.error });
+    }
+  }
+
   // Picking a video from the search modal resolves to *its channel* — reuses
   // the exact same lookup the paste-a-link flow already does (which already
   // knows how to turn a video URL into the channel that posted it), just fed
@@ -237,13 +266,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
   function handleChannelVideoPicked(result: YoutubeVideoSearchResult) {
     setChannelSearching(false);
     startYoutubeLookup(async () => {
-      const lookupResult = await lookupYoutubeChannel(`https://www.youtube.com/watch?v=${result.videoId}`);
-      if (lookupResult.ok) {
-        update("youtube_channel_id", lookupResult.channelId);
-        setYoutubeLookup({ status: "success", channelTitle: lookupResult.channelTitle });
-      } else {
-        setYoutubeLookup({ status: "error", error: lookupResult.error });
-      }
+      applyYoutubeLookupResult(await lookupYoutubeChannel(`https://www.youtube.com/watch?v=${result.videoId}`));
     });
   }
 
@@ -408,8 +431,32 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
   return (
     <>
     <form onSubmit={handleSubmit} className="flex w-full max-w-2xl flex-col gap-6 lg:max-w-3xl 2xl:max-w-5xl">
-      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 rounded-full border border-neutral-200/70 bg-white/90 px-4 py-2.5 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-neutral-950/80">
+      {/* The builder's own app header (BuilderLayout) is separately sticky
+          at top-0 with a higher z-index — offsetting this bar below it
+          (rather than also sticking flush to top-0) keeps it from sitting
+          flush against, or hidden behind, the very top edge of the window
+          once the page scrolls. */}
+      <div className="sticky top-16 z-10 flex items-center justify-between gap-3 rounded-full border border-neutral-200/70 bg-white/90 px-4 py-2.5 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-neutral-950/80">
         <p className={`text-xs font-medium ${saveStatusColor[saveStatus]}`}>{saveStatusText[saveStatus]}</p>
+        {/* A running "where am I" while scrolled through a long form — the
+            numbered Section titles alone only orient someone once they've
+            already scrolled to one. Hidden below sm since three pills plus
+            the save status and button don't all fit a narrow screen. */}
+        <div className="hidden items-center gap-1 sm:flex">
+          {[
+            { id: "section-setup", label: "1. Setup" },
+            { id: "section-media", label: "2. Media" },
+            { id: "section-aesthetic", label: "3. Aesthetic" },
+          ].map((step) => (
+            <a
+              key={step.id}
+              href={`#${step.id}`}
+              className="rounded-full px-2.5 py-1 text-xs font-medium text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900 dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white"
+            >
+              {step.label}
+            </a>
+          ))}
+        </div>
         <button
           type="button"
           onClick={() => void saveProgress()}
@@ -420,7 +467,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
         </button>
       </div>
 
-      <Section title="1. Initial setup" description="Who this is, their YouTube channel, and which tabs their site includes.">
+      <Section id="section-setup" title="1. Initial setup" description="Who this is, their YouTube channel, and which tabs their site includes.">
         <label className="flex flex-col gap-1.5 text-sm">
           <span className={labelClass}>Artist name</span>
           <input
@@ -464,13 +511,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
               disabled={isLookingUpYoutube || !youtubeUrlInput.trim()}
               onClick={() =>
                 startYoutubeLookup(async () => {
-                  const result = await lookupYoutubeChannel(youtubeUrlInput);
-                  if (result.ok) {
-                    update("youtube_channel_id", result.channelId);
-                    setYoutubeLookup({ status: "success", channelTitle: result.channelTitle });
-                  } else {
-                    setYoutubeLookup({ status: "error", error: result.error });
-                  }
+                  applyYoutubeLookupResult(await lookupYoutubeChannel(youtubeUrlInput));
                 })
               }
               className="shrink-0 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:opacity-50"
@@ -492,6 +533,22 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
               ✓ Found: {youtubeLookup.channelTitle || form.youtube_channel_id}
             </p>
           )}
+          {suggestedAccent && (
+            <button
+              type="button"
+              onClick={() => {
+                update("accent_color", suggestedAccent);
+                setSuggestedAccent(null);
+              }}
+              className="flex w-fit items-center gap-2 rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs font-medium text-neutral-600 transition-colors hover:bg-neutral-100 dark:border-white/10 dark:text-white/60 dark:hover:bg-white/5"
+            >
+              <span
+                className="h-3.5 w-3.5 rounded-full border border-black/10 dark:border-white/20"
+                style={{ backgroundColor: suggestedAccent }}
+              />
+              Lifted {suggestedAccent} from their channel art — use as accent colour
+            </button>
+          )}
           {youtubeLookup?.status === "error" && (
             <p className="text-xs text-red-600 dark:text-red-400">{youtubeLookup.error}</p>
           )}
@@ -509,6 +566,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
       </Section>
 
       <Section
+        id="section-media"
         title="2. Media"
         description="Backgrounds for the dashboard and the password page — upload a file, search the web, or paste one straight in."
       >
@@ -620,6 +678,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
       </Section>
 
       <Section
+        id="section-aesthetic"
         title="3. Aesthetic"
         description="Look and feel — colours, font, title text, and fine-tuning on top of it all (background pan/zoom/contrast, title weight, card shape, plus a dedicated Readability button)."
       >
@@ -662,8 +721,9 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
           <span className={`${labelClass} flex items-center gap-1.5`}>
             Password page preview
             <HelpTooltip>
-              Secondary colour fills the whole background; accent colour is the thin divider line
-              under the title.
+              Secondary colour is the plain background when there&apos;s no photo/video set below —
+              and tints the darkness overlay when there is, so it&apos;s never just hidden underneath
+              one. Accent colour is the thin divider line under the title.
             </HelpTooltip>
           </span>
           <div
@@ -697,20 +757,42 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
           onAestheticParamsChange={(aesthetic_params) => update("aesthetic_params", aesthetic_params)}
         />
         <div className="border-t border-neutral-200 pt-4 dark:border-white/10">
-          <p className={`${labelClass} flex items-center gap-1.5`}>
-            Edge cases
-            <HelpTooltip>
-              Effects above already cover grain/tint/blur/vignette/aberration — only use this box for
-              something those sliders can&apos;t do. Parsed into the same effects on save.
-            </HelpTooltip>
-          </p>
-          <textarea
-            rows={3}
-            placeholder='e.g. "warm orange tint that pulses slightly"'
-            value={form.aesthetic_prompt}
-            onChange={(e) => update("aesthetic_prompt", e.target.value)}
-            className={`mt-2 w-full ${inputClass}`}
-          />
+          {/* Collapsed by default (unless there's already something written
+              in it) — this is a rarely-needed escape hatch for whatever the
+              sliders above can't already do, not something that needs to
+              stay visible alongside them on every visit. */}
+          <button
+            type="button"
+            onClick={() => setEdgeCasesOpen((o) => !o)}
+            className="flex w-full items-center justify-between gap-1.5 text-left"
+          >
+            <span className={`${labelClass} flex items-center gap-1.5`}>
+              Edge cases
+              <HelpTooltip>
+                Effects above already cover grain/tint/blur/vignette/aberration — only use this box
+                for something those sliders can&apos;t do. Parsed into the same effects on save.
+              </HelpTooltip>
+            </span>
+            <svg
+              viewBox="0 0 20 20"
+              fill="none"
+              className={`h-4 w-4 shrink-0 text-neutral-400 transition-transform duration-200 dark:text-white/40 ${
+                edgeCasesOpen ? "rotate-180" : ""
+              }`}
+              aria-hidden
+            >
+              <path d="m5.5 7.5 4.5 5 4.5-5" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          {edgeCasesOpen && (
+            <textarea
+              rows={3}
+              placeholder='e.g. "warm orange tint that pulses slightly"'
+              value={form.aesthetic_prompt}
+              onChange={(e) => update("aesthetic_prompt", e.target.value)}
+              className={`mt-2 w-full ${inputClass}`}
+            />
+          )}
         </div>
       </Section>
 

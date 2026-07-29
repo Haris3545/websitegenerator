@@ -11,6 +11,8 @@ type SerpApiImagesResponse = {
     original?: string;
     title?: string;
     source?: string;
+    original_width?: number;
+    original_height?: number;
   }[];
 };
 
@@ -36,6 +38,14 @@ export async function searchGoogleImages(query: string): Promise<ImageSearchResu
 
   return (data.images_results ?? [])
     .filter((img) => img.thumbnail && img.original)
+    // A background image gets stretched across a whole viewport (or a TV
+    // screen — see the builder's own responsive preview boxes), so a
+    // higher-resolution original holds up far better than a small one; sort
+    // the biggest originals first rather than leaving SerpApi's relevance
+    // order (which doesn't account for size at all) as the only sort. Images
+    // without a reported size sink to the end rather than being dropped —
+    // they're still perfectly uploadable, just an unknown quantity.
+    .sort((a, b) => (b.original_width ?? 0) * (b.original_height ?? 0) - (a.original_width ?? 0) * (a.original_height ?? 0))
     .slice(0, 40)
     .map((img) => ({
       thumbnail: img.thumbnail as string,
