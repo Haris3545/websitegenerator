@@ -37,7 +37,7 @@ function slugify(name: string) {
 }
 
 const inputClass =
-  "rounded-xl border border-neutral-200 bg-white px-3.5 py-2.5 placeholder-neutral-400 transition-shadow duration-150 focus:border-builder-accent focus:shadow-[0_0_0_3px_rgba(255,90,31,0.15)] focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder-white/30";
+  "rounded-xl border border-neutral-200 bg-white px-3.5 py-2.5 placeholder-neutral-400 transition-shadow duration-150 focus:border-builder-accent focus:shadow-[0_0_0_3px_rgba(255,201,49,0.2)] focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder-white/30";
 const labelClass = "text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-white/50";
 const sectionClass =
   "flex flex-col gap-5 rounded-2xl border border-neutral-200/70 bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-white/[0.025]";

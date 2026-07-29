@@ -16,9 +16,9 @@
   --color-foreground: var(--foreground);
   /* The builder admin tool's single brand accent — VCCP's own orange —
      used for solid fills (buttons, active states, focus rings) with black
-     text on top for contrast (still ~6.6:1, comfortably AA), the same way
-     the generated artist sites already treat their own --accent color. */
-  --color-builder-accent: #ff5a1f;
+     text on top for contrast, the same way the generated artist sites
+     already treat their own --accent color. */
+  --color-builder-accent: #ffc931;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
