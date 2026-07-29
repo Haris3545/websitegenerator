@@ -15,13 +15,15 @@ const COBALT_BASE_HOST = "cobalt.meowing.de";
 
 function deriveApiCandidates(host: string): string[] {
   const withoutPrefix = host.replace(/^cobalt[.-]?/, "");
-  return [
-    `https://${host}`,
-    `https://${host}/api/json`,
-    `https://api.${withoutPrefix}`,
-    `https://cobalt-api.${withoutPrefix}`,
-    `https://capi.${withoutPrefix}`,
-  ];
+  // The bare host and its /api/json path both consistently 405 (confirmed
+  // live — that host is the GET-only web frontend, not the API), so
+  // they're dropped rather than re-tried every request. cobalt-api.<domain>
+  // is the strongest remaining lead: it returned a real HTTP 400 rather
+  // than 404/405/520, meaning something there actually parsed the request
+  // as JSON and rejected its contents — that's a genuine API handler, just
+  // one that didn't like this specific payload (see the detailed error
+  // body logging below, added to find out why).
+  return [`https://api.${withoutPrefix}`, `https://cobalt-api.${withoutPrefix}`, `https://capi.${withoutPrefix}`];
 }
 
 const COBALT_API_CANDIDATES = deriveApiCandidates(COBALT_BASE_HOST);
@@ -53,15 +55,22 @@ async function fetchFromCandidate(base: string, videoId: string): Promise<{ url:
     });
 
     // A non-JSON body (an HTML error page, a frontend's index page) means
-    // this candidate isn't actually the API — surface the status/method
-    // mismatch rather than failing obscurely on JSON parsing.
+    // this candidate isn't actually the API. A JSON body on a non-2xx
+    // response, though, is cobalt's own validation error — that used to
+    // get discarded in favor of a bare "HTTP 400", throwing away the one
+    // piece of information (which field it didn't like, or why) that
+    // would actually explain what's wrong instead of just that something
+    // is.
     const contentType = res.headers.get("content-type") ?? "";
     if (!contentType.includes("application/json")) {
       throw new Error(`HTTP ${res.status}, non-JSON response (${contentType || "no content-type"}) — wrong endpoint`);
     }
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
     const data: CobaltResponse = await res.json();
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status} — body: ${JSON.stringify(data).slice(0, 500)}`);
+    }
 
     // "tunnel"/"redirect"/"stream" all carry a single ready-to-fetch url;
     // "picker" is cobalt's own multi-option response (e.g. separate video/
