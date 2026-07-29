@@ -48,6 +48,8 @@ export function YoutubeClipField({
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
   const previewPollRef = useRef<number | null>(null);
+  const playbackSyncPollRef = useRef<number | null>(null);
+  const lastPolledTimeRef = useRef(0);
 
   useEffect(() => {
     if (!draft) return;
@@ -74,13 +76,37 @@ export function YoutubeClipField({
         videoId: draft.videoId,
         playerVars: { modestbranding: 1, rel: 0, playsinline: 1 },
         events: {
-          onReady: (e) => setDuration(e.target.getDuration()),
+          onReady: (e) => {
+            setDuration(e.target.getDuration());
+            lastPolledTimeRef.current = e.target.getCurrentTime();
+            // Scrubbing the video with YouTube's own control bar (much more
+            // familiar than our custom ruler for "just find the moment")
+            // should carry the trim window along with it. A deliberate seek
+            // shows up as a large jump in currentTime between polls; normal
+            // playback only advances it smoothly by roughly the poll
+            // interval each tick — that distinction is what tells a manual
+            // scrub apart from ordinary playback without needing a
+            // dedicated "user seeked" event, which the IFrame API doesn't
+            // expose. Skipped entirely for a short window after *our own*
+            // seekPreview() calls, so dragging the timeline doesn't fight
+            // itself through this same poll.
+            playbackSyncPollRef.current = window.setInterval(() => {
+              const player = playerRef.current;
+              if (!player) return;
+              const now = player.getCurrentTime();
+              const delta = now - lastPolledTimeRef.current;
+              lastPolledTimeRef.current = now;
+              if (performance.now() - lastSeekAtRef.current < 500) return;
+              if (Math.abs(delta) > 1.2) setDraftWindowStart(now);
+            }, 250);
+          },
         },
       });
     });
     return () => {
       cancelled = true;
       if (previewPollRef.current) window.clearInterval(previewPollRef.current);
+      if (playbackSyncPollRef.current) window.clearInterval(playbackSyncPollRef.current);
       playerRef.current?.destroy();
       playerRef.current = null;
       container.replaceChildren();

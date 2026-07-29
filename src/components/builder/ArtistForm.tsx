@@ -407,7 +407,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
 
   return (
     <>
-    <form onSubmit={handleSubmit} className="flex max-w-2xl flex-col gap-6">
+    <form onSubmit={handleSubmit} className="flex w-full max-w-2xl flex-col gap-6 lg:max-w-3xl 2xl:max-w-5xl">
       <div className="sticky top-0 z-10 flex items-center justify-between gap-3 rounded-full border border-neutral-200/70 bg-white/90 px-4 py-2.5 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-neutral-950/80">
         <p className={`text-xs font-medium ${saveStatusColor[saveStatus]}`}>{saveStatusText[saveStatus]}</p>
         <button

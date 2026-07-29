@@ -135,7 +135,7 @@ export function MediaUploadField({
         isVideoUrl ? (
           <video
             src={value}
-            className="h-32 w-full rounded-lg border border-neutral-200 object-cover dark:border-white/10"
+            className="h-32 w-full rounded-lg border border-neutral-200 object-cover dark:border-white/10 lg:h-44 2xl:h-56"
             muted
             loop
             autoPlay
@@ -145,7 +145,7 @@ export function MediaUploadField({
           <img
             src={value}
             alt=""
-            className="h-32 w-full rounded-lg border border-neutral-200 object-cover dark:border-white/10"
+            className="h-32 w-full rounded-lg border border-neutral-200 object-cover dark:border-white/10 lg:h-44 2xl:h-56"
           />
         )
       )}

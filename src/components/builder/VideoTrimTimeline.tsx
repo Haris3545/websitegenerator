@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-// A grace period before any zoom starts — ordinary dragging (the whole
-// reason to grab a handle in the first place) should never zoom the ruler
-// out from under it. Only a genuine, sustained hold — several seconds,
-// clearly deliberate rather than incidental to dragging — zooms in.
-const ZOOM_START_DELAY_MS = 5000;
+// How long the pointer has to sit essentially still (not "how long since you
+// first grabbed the handle") before zoom starts — actively sliding the
+// handle around to find the right spot should never zoom out from under it,
+// no matter how long that search takes; only stopping and holding zooms in,
+// like a long-press. Movement past STILLNESS_JITTER_PX resets this clock.
+const ZOOM_START_DELAY_MS = 3000;
+const STILLNESS_JITTER_PX = 3;
 // How long the ramp takes once it starts.
 const ZOOM_RAMP_MS = 700;
 // The most-zoomed-in view shows this fraction of the full clip duration (or
@@ -72,7 +74,7 @@ export function VideoTrimTimeline({
     lastClientX: number;
     liveValue: number; // running start/end (or window start) as it's dragged
     windowSpan: number;
-    grabTime: number;
+    stillSince: number; // resets on any real movement — zoom is gated on *this*, not total hold time
   } | null>(null);
 
   useEffect(() => {
@@ -81,6 +83,15 @@ export function VideoTrimTimeline({
     const ro = new ResizeObserver((entries) => setTrackWidth(entries[0]?.contentRect.width ?? 0));
     ro.observe(el);
     return () => ro.disconnect();
+  }, []);
+
+  // Belt-and-braces: if this unmounts mid-drag (e.g. Cancel clicked while
+  // still holding a handle), nothing would otherwise ever clear the forced
+  // body cursor set in beginDrag.
+  useEffect(() => {
+    return () => {
+      document.body.style.cursor = "";
+    };
   }, []);
 
   // The full-duration view is the resting state — only an active edge-drag
@@ -94,8 +105,8 @@ export function VideoTrimTimeline({
     (centerTime: number) => {
       const drag = dragRef.current;
       if (!drag) return;
-      const elapsed = performance.now() - drag.grabTime;
-      const rampElapsed = Math.max(0, elapsed - ZOOM_START_DELAY_MS);
+      const stillFor = performance.now() - drag.stillSince;
+      const rampElapsed = Math.max(0, stillFor - ZOOM_START_DELAY_MS);
       const t = clamp(rampElapsed / ZOOM_RAMP_MS, 0, 1);
       const fullSpan = Math.max(duration, 1);
 
@@ -132,18 +143,30 @@ export function VideoTrimTimeline({
       lastClientX: e.clientX,
       liveValue: kind === "end" ? end : start,
       windowSpan: end - start,
-      grabTime: performance.now(),
+      stillSince: performance.now(),
     };
     setActiveHandle(kind);
+    // Forced on the whole page (not just the handle) so the grabbing cursor
+    // stays consistent for the entire drag even if the pointer briefly
+    // strays off the small handle itself during a fast movement — pointer
+    // capture keeps the *events* routed correctly either way, but the
+    // cursor icon the browser actually paints is otherwise whatever's under
+    // it, not what has capture.
+    document.body.style.cursor = "grabbing";
   }
 
   function handlePointerMove(e: React.PointerEvent) {
     const drag = dragRef.current;
     if (!drag || trackWidth === 0) return;
 
+    const dx = e.clientX - drag.lastClientX;
     const pxPerSecond = trackWidth / Math.max(view.end - view.start, 0.001);
-    const dt = (e.clientX - drag.lastClientX) / pxPerSecond;
+    const dt = dx / pxPerSecond;
     drag.lastClientX = e.clientX;
+    // Any real movement means the pointer is actively being slid around to
+    // find a spot, not held to zoom in on one — reset the stillness clock
+    // so zoom only ever starts once movement genuinely stops.
+    if (Math.abs(dx) > STILLNESS_JITTER_PX) drag.stillSince = performance.now();
 
     if (drag.kind === "window") {
       // The window drag deliberately never zooms — it's for coarse
@@ -161,10 +184,26 @@ export function VideoTrimTimeline({
     else onEndChange(newValue);
   }
 
+  // pointermove events only fire on actual movement — a pointer held
+  // perfectly still (the exact case zoom is meant to reward) would never
+  // fire another one after the last real move, so updateZoom would never
+  // get called again and the ramp would stall forever just short of
+  // zooming in. This ticks it forward independently of movement while a
+  // start/end drag is active, so genuinely holding still — not just
+  // dragging slowly — is what reaches the zoom threshold.
+  useEffect(() => {
+    if (activeHandle !== "start" && activeHandle !== "end") return;
+    const id = window.setInterval(() => {
+      if (dragRef.current) updateZoom(dragRef.current.liveValue);
+    }, 50);
+    return () => window.clearInterval(id);
+  }, [activeHandle, updateZoom]);
+
   function endDrag() {
     dragRef.current = null;
     setActiveHandle(null);
     setView({ start: 0, end: Math.max(duration, 1) });
+    document.body.style.cursor = "";
   }
 
   const fullSpan = Math.max(view.end - view.start, 0.001);
@@ -223,7 +262,9 @@ export function VideoTrimTimeline({
           {/* The selection window itself — dragging its body repositions
               both edges together. */}
           <div
-            className="absolute inset-y-0 cursor-grab rounded-md border-2 border-builder-accent bg-builder-accent/15 shadow-[0_0_0_1px_rgba(0,0,0,0.15)] active:cursor-grabbing"
+            className={`absolute inset-y-0 rounded-md border-2 border-builder-accent bg-builder-accent/15 shadow-[0_0_0_1px_rgba(0,0,0,0.15)] ${
+              activeHandle === "window" ? "cursor-grabbing" : "cursor-grab"
+            }`}
             style={{ left: `${clamp(startPct, 0, 100)}%`, width: `${clamp(endPct - startPct, 0, 100)}%` }}
             onPointerDown={(e) => beginDrag("window", e)}
           />
@@ -233,7 +274,9 @@ export function VideoTrimTimeline({
           {(["start", "end"] as const).map((kind) => (
             <div
               key={kind}
-              className="absolute inset-y-0 z-10 flex w-7 -translate-x-1/2 cursor-ew-resize touch-none items-center justify-center"
+              className={`absolute inset-y-0 z-10 flex w-7 -translate-x-1/2 touch-none items-center justify-center ${
+                activeHandle === kind ? "cursor-grabbing" : "cursor-grab"
+              }`}
               style={{ left: `${clamp(kind === "start" ? startPct : endPct, 0, 100)}%` }}
               onPointerDown={(e) => beginDrag(kind, e)}
             >
@@ -264,8 +307,8 @@ export function VideoTrimTimeline({
         )}
       </div>
       <p className="text-center text-[11px] text-neutral-400 dark:text-white/40">
-        Drag the highlighted window to move it, or drag either edge to trim — hold an edge to zoom
-        in for precision.
+        Drag the highlighted window to move it, or drag either edge to trim — stop and hold still on
+        an edge to zoom in for precision.
       </p>
     </div>
   );

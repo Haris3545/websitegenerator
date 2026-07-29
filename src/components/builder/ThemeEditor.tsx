@@ -136,7 +136,7 @@ export function ThemeEditor({
         onPointerDown={handleBgPointerDown}
         onPointerMove={handleBgPointerMove}
         onPointerUp={handleBgPointerUp}
-        className={`relative h-72 w-full touch-none select-none overflow-hidden rounded-lg text-white ${ring("background")} ${
+        className={`relative h-72 w-full touch-none select-none overflow-hidden rounded-lg text-white lg:h-96 2xl:h-[28rem] ${ring("background")} ${
           backgroundImageUrl ? (dragging ? "cursor-grabbing" : "cursor-grab") : ""
         }`}
         style={{ backgroundColor: "#111", fontFamily: `"${fontFamily}", sans-serif` }}
