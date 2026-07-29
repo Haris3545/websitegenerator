@@ -22,11 +22,10 @@ import { DEFAULT_THEME_OVERRIDES, type ThemeOverrides } from "@/lib/theme";
 import { grainTexture } from "@/lib/grainTexture";
 import { BrandLogoAnimation } from "@/components/BrandLogoAnimation";
 import { ProvisioningOverlay } from "@/components/builder/ProvisioningOverlay";
-import { YoutubeSearchModal } from "@/components/builder/YoutubeSearchModal";
-import { YOUTUBE_BUTTON_CLASS } from "@/components/builder/mediaActionStyles";
 import { YoutubeIcon } from "@/components/builder/YoutubeIcon";
 import { HelpTooltip } from "@/components/builder/HelpTooltip";
 import { averageColorFromImageUrl } from "@/lib/colorFromImage";
+import { searchYoutubeVideosAction } from "@/app/builder/searchActions";
 import type { YoutubeVideoSearchResult } from "@/lib/youtube";
 
 function slugify(name: string) {
@@ -118,13 +117,22 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
   const [youtubeLookup, setYoutubeLookup] = useState<
     { status: "success"; channelTitle: string } | { status: "error"; error: string } | null
   >(null);
-  const [channelSearching, setChannelSearching] = useState(false);
+  // Typing a name (rather than pasting a link) live-searches instead of
+  // requiring a separate "Search YouTube" button/modal — one box handles
+  // both ways of finding a channel.
+  const [channelResults, setChannelResults] = useState<YoutubeVideoSearchResult[]>([]);
+  const [searchingChannels, setSearchingChannels] = useState(false);
+  const [channelDropdownOpen, setChannelDropdownOpen] = useState(false);
+  const channelSearchDebounceRef = useRef<number | null>(null);
+  const channelSearchRequestIdRef = useRef(0);
   // Lifted straight from the channel's own avatar once a lookup resolves
   // one — a suggestion the "Use" button below applies deliberately, never
   // silently, since accent_color may already be something someone chose on
   // purpose.
   const [suggestedAccent, setSuggestedAccent] = useState<string | null>(null);
   const [edgeCasesOpen, setEdgeCasesOpen] = useState(!!artist?.aesthetic_prompt?.trim());
+  // Collapsed by default — see the disclosure itself for why.
+  const [tabsChecklistOpen, setTabsChecklistOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
@@ -314,12 +322,61 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
     }
   }
 
-  // Picking a video from the search modal resolves to *its channel* — reuses
-  // the exact same lookup the paste-a-link flow already does (which already
-  // knows how to turn a video URL into the channel that posted it), just fed
-  // a URL built from the search result instead of one someone pasted in.
-  function handleChannelVideoPicked(result: YoutubeVideoSearchResult) {
-    setChannelSearching(false);
+  // A pasted link/handle resolves directly (no point searching "https://…"
+  // as if it were a channel name) — anything else is treated as a name to
+  // search live as they type.
+  function looksLikeYoutubeLink(v: string): boolean {
+    return /^(https?:\/\/|www\.|youtube\.com|youtu\.be|@)/i.test(v.trim());
+  }
+
+  function handleChannelQueryChange(next: string) {
+    setYoutubeUrlInput(next);
+    setYoutubeLookup(null);
+    if (channelSearchDebounceRef.current) window.clearTimeout(channelSearchDebounceRef.current);
+
+    const trimmed = next.trim();
+    if (!trimmed || looksLikeYoutubeLink(trimmed) || trimmed.length < 2) {
+      setChannelResults([]);
+      setChannelDropdownOpen(false);
+      setSearchingChannels(false);
+      return;
+    }
+
+    const requestId = ++channelSearchRequestIdRef.current;
+    channelSearchDebounceRef.current = window.setTimeout(async () => {
+      setSearchingChannels(true);
+      setChannelDropdownOpen(true);
+      const result = await searchYoutubeVideosAction(trimmed);
+      if (requestId !== channelSearchRequestIdRef.current) return;
+      setSearchingChannels(false);
+      if (!result.ok) {
+        setChannelResults([]);
+        return;
+      }
+      // Video search naturally returns several videos per channel — dedupe
+      // down to one entry per channel so the dropdown reads as a channel
+      // picker, not a video picker.
+      const seen = new Set<string>();
+      const deduped: YoutubeVideoSearchResult[] = [];
+      for (const r of result.data) {
+        const key = r.channelTitle.trim().toLowerCase();
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        deduped.push(r);
+        if (deduped.length >= 6) break;
+      }
+      setChannelResults(deduped);
+    }, 350);
+  }
+
+  // Picking a channel from the live-search dropdown resolves to *its
+  // channel* — reuses the exact same lookup the paste-a-link flow already
+  // does (which already knows how to turn a video URL into the channel that
+  // posted it), just fed a URL built from the search result instead of one
+  // someone pasted in.
+  function pickChannelResult(result: YoutubeVideoSearchResult) {
+    setChannelDropdownOpen(false);
+    setYoutubeUrlInput(result.channelTitle);
     startYoutubeLookup(async () => {
       applyYoutubeLookupResult(await lookupYoutubeChannel(`https://www.youtube.com/watch?v=${result.videoId}`));
     });
@@ -575,7 +632,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
         <label className="flex flex-col gap-1.5 text-sm">
           <span className={`${labelClass} flex items-center gap-1.5`}>
             Slug (site URL: /s/&lt;slug&gt;)
-            <HelpTooltip>Also determines the gate password — see the password page section below.</HelpTooltip>
+            <HelpTooltip>Also determines the gate password, shown below as you type it.</HelpTooltip>
           </span>
           <input
             required
@@ -586,42 +643,61 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
             }}
             className={`${inputClass} font-mono`}
           />
+          {form.slug && (
+            <p className="text-xs text-neutral-500 dark:text-white/40">
+              Password page password: <span className="font-mono text-neutral-700 dark:text-white/70">{form.slug}</span>
+            </p>
+          )}
         </label>
 
         <div className="flex flex-col gap-1.5 text-sm">
           <span className={labelClass}>YouTube channel</span>
-          <div className="flex gap-2 rounded-lg border-2 border-dashed border-emerald-500/40 bg-emerald-500/[0.04] p-2 dark:border-emerald-400/30 dark:bg-emerald-400/[0.04]">
+          <div className="relative flex gap-2">
             <input
               value={youtubeUrlInput}
-              onChange={(e) => {
-                setYoutubeUrlInput(e.target.value);
-                setYoutubeLookup(null);
+              onChange={(e) => handleChannelQueryChange(e.target.value)}
+              onFocus={() => {
+                if (channelResults.length > 0) setChannelDropdownOpen(true);
               }}
-              placeholder="Paste the channel's URL, or a link to one of their videos"
-              className={`flex-1 text-sm rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder-neutral-400 focus:border-emerald-500 focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-white dark:placeholder-white/30`}
+              onBlur={() => window.setTimeout(() => setChannelDropdownOpen(false), 150)}
+              placeholder="Type their name, or paste a channel/video link"
+              className={`flex-1 ${inputClass}`}
             />
             <button
               type="button"
               disabled={isLookingUpYoutube || !youtubeUrlInput.trim()}
-              onClick={() =>
+              onClick={() => {
+                setChannelDropdownOpen(false);
                 startYoutubeLookup(async () => {
                   applyYoutubeLookupResult(await lookupYoutubeChannel(youtubeUrlInput));
-                })
-              }
-              className="shrink-0 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:opacity-50"
+                });
+              }}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-neutral-200 bg-white px-3.5 py-2.5 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-100 disabled:opacity-50 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
             >
-              {isLookingUpYoutube ? "Looking up…" : "Use link"}
+              <YoutubeIcon className="h-4 w-4 shrink-0" />
+              {isLookingUpYoutube ? "Looking up…" : "Use"}
             </button>
+
+            {channelDropdownOpen && (searchingChannels || channelResults.length > 0) && (
+              <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-xl border border-neutral-200 bg-white py-1 shadow-lg dark:border-white/10 dark:bg-neutral-900">
+                {searchingChannels && channelResults.length === 0 && (
+                  <p className="px-3 py-2 text-xs text-neutral-400 dark:text-white/40">Searching…</p>
+                )}
+                {channelResults.map((r) => (
+                  <button
+                    key={r.videoId}
+                    type="button"
+                    onClick={() => pickChannelResult(r)}
+                    className="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-neutral-100 dark:hover:bg-white/5"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={r.thumbnail} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+                    <span className="truncate text-sm text-neutral-800 dark:text-white/80">{r.channelTitle}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          <button
-            type="button"
-            disabled={isLookingUpYoutube}
-            onClick={() => setChannelSearching(true)}
-            className={`self-start ${YOUTUBE_BUTTON_CLASS}`}
-          >
-            <YoutubeIcon />
-            Search YouTube
-          </button>
           {youtubeLookup?.status === "success" && (
             <p className="text-xs text-emerald-600 dark:text-emerald-400">
               ✓ Found: {youtubeLookup.channelTitle || form.youtube_channel_id}
@@ -651,12 +727,36 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
               Currently linked: {form.youtube_channel_id}
             </p>
           )}
-          {channelSearching && (
-            <YoutubeSearchModal onSelect={handleChannelVideoPicked} onClose={() => setChannelSearching(false)} />
-          )}
         </div>
 
-        <TabsChecklist value={form.enabled_tabs} onChange={(tabs) => update("enabled_tabs", tabs)} />
+        <div className="flex flex-col gap-1.5">
+          {/* Collapsed by default — everything defaults to enabled, so this
+              is only worth scanning once there's something to compare it
+              against, not the first decision a blank form asks for. */}
+          <button
+            type="button"
+            onClick={() => setTabsChecklistOpen((o) => !o)}
+            className="flex w-full items-center justify-between gap-1.5 text-left"
+          >
+            <span className={`${labelClass} flex items-center gap-1.5`}>
+              Which dashboard tabs to include
+              <HelpTooltip>All included by default — only worth changing if some genuinely don&apos;t apply.</HelpTooltip>
+            </span>
+            <svg
+              viewBox="0 0 20 20"
+              fill="none"
+              className={`h-4 w-4 shrink-0 text-neutral-400 transition-transform duration-200 dark:text-white/40 ${
+                tabsChecklistOpen ? "rotate-180" : ""
+              }`}
+              aria-hidden
+            >
+              <path d="m5.5 7.5 4.5 5 4.5-5" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          {tabsChecklistOpen && (
+            <TabsChecklist value={form.enabled_tabs} onChange={(tabs) => update("enabled_tabs", tabs)} />
+          )}
+        </div>
       </Section>
 
       <Section
@@ -685,51 +785,138 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
               onChange={(v) => update("gate_background_url", v)}
             />
 
-            <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-3 dark:border-white/10">
-              <span className={labelClass}>Password page darkness &amp; grain</span>
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="flex justify-between">
-                  <span>Darkness overlay</span>
-                  <span className="font-mono text-xs text-neutral-500 dark:text-white/40">
-                    {form.gate_scrim_opacity}
+            <div className="flex flex-col gap-1.5">
+              <span className={`${labelClass} flex items-center gap-1.5`}>
+                Password page preview
+                <HelpTooltip>
+                  Live — every control below (position, zoom, darkness, grain) updates it instantly.
+                  Drag directly on it to reposition the background. Accent colour is the thin divider
+                  line under the title.
+                </HelpTooltip>
+              </span>
+              <div
+                onPointerDown={handleGatePointerDown}
+                onPointerMove={handleGatePointerMove}
+                onPointerUp={handleGatePointerUp}
+                className={`relative flex h-40 touch-none select-none flex-col items-center justify-center gap-2 overflow-hidden rounded-lg px-4 text-center text-white lg:h-52 2xl:h-64 ${
+                  form.gate_background_url ? (gateDragging ? "cursor-grabbing" : "cursor-grab") : ""
+                }`}
+                style={{ backgroundColor: "#0a0a0a", fontFamily: `"${form.font_family}", sans-serif` }}
+              >
+                {form.gate_background_url &&
+                  (isGateVideoUrl(form.gate_background_url) ? (
+                    <video
+                      src={form.gate_background_url}
+                      className="absolute inset-0 h-full w-full object-cover"
+                      style={{
+                        objectPosition: `${gateTheme.gate_bg_position_x}% ${gateTheme.gate_bg_position_y}%`,
+                        transform: `scale(${gateTheme.gate_bg_zoom})`,
+                      }}
+                      muted
+                      loop
+                      autoPlay
+                      playsInline
+                    />
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={form.gate_background_url}
+                      alt=""
+                      draggable={false}
+                      className="absolute inset-0 h-full w-full select-none object-cover"
+                      style={{
+                        objectPosition: `${gateTheme.gate_bg_position_x}% ${gateTheme.gate_bg_position_y}%`,
+                        transform: `scale(${gateTheme.gate_bg_zoom})`,
+                      }}
+                    />
+                  ))}
+                {form.gate_background_url && (
+                  <div
+                    className="absolute inset-0"
+                    style={{ backgroundColor: `rgba(0,0,0,${form.gate_scrim_opacity})` }}
+                  />
+                )}
+                {form.gate_grain_intensity > 0 && (
+                  <div
+                    className="animate-grain absolute inset-0 mix-blend-overlay"
+                    style={{
+                      opacity: form.gate_grain_intensity,
+                      backgroundImage: grainTexture(form.gate_grain_monochrome),
+                      backgroundSize: "90px 90px",
+                    }}
+                  />
+                )}
+                <p className="relative z-10 text-[10px] font-semibold uppercase tracking-[0.35em] text-white/70">
+                  {form.tagline || "Tagline"}
+                </p>
+                <p className="relative z-10 text-xl font-bold uppercase leading-none tracking-tight">
+                  {form.project_title || "Project title"}
+                </p>
+                <div className="relative z-10 mt-1 h-px w-16" style={{ backgroundColor: form.accent_color }} />
+              </div>
+
+              <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-3 dark:border-white/10">
+                <label className="flex flex-col gap-1 text-sm">
+                  <span className="flex justify-between">
+                    <span>Zoom / resize</span>
+                    <span className="font-mono text-xs text-neutral-500 dark:text-white/40">
+                      {gateTheme.gate_bg_zoom.toFixed(2)}x
+                    </span>
                   </span>
-                </span>
-                <input
-                  type="range"
-                  min={0}
-                  max={0.85}
-                  step={0.05}
-                  value={form.gate_scrim_opacity}
-                  onChange={(e) => update("gate_scrim_opacity", Number(e.target.value))}
-                  className="accent-builder-accent"
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="flex justify-between">
-                  <span>Grain intensity</span>
-                  <span className="font-mono text-xs text-neutral-500 dark:text-white/40">
-                    {form.gate_grain_intensity}
+                  <input
+                    type="range"
+                    min={1}
+                    max={2.5}
+                    step={0.05}
+                    value={gateTheme.gate_bg_zoom}
+                    onChange={(e) => setGateTheme({ gate_bg_zoom: Number(e.target.value) })}
+                    className="accent-builder-accent"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-sm">
+                  <span className="flex justify-between">
+                    <span>Darkness overlay</span>
+                    <span className="font-mono text-xs text-neutral-500 dark:text-white/40">
+                      {form.gate_scrim_opacity}
+                    </span>
                   </span>
-                </span>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  value={form.gate_grain_intensity}
-                  onChange={(e) => update("gate_grain_intensity", Number(e.target.value))}
-                  className="accent-builder-accent"
-                />
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={form.gate_grain_monochrome}
-                  onChange={(e) => update("gate_grain_monochrome", e.target.checked)}
-                  className="h-4 w-4 rounded border-neutral-300 accent-builder-accent dark:border-white/20"
-                />
-                Monochrome grain
-              </label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={0.85}
+                    step={0.05}
+                    value={form.gate_scrim_opacity}
+                    onChange={(e) => update("gate_scrim_opacity", Number(e.target.value))}
+                    className="accent-builder-accent"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-sm">
+                  <span className="flex justify-between">
+                    <span>Grain intensity</span>
+                    <span className="font-mono text-xs text-neutral-500 dark:text-white/40">
+                      {form.gate_grain_intensity}
+                    </span>
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={form.gate_grain_intensity}
+                    onChange={(e) => update("gate_grain_intensity", Number(e.target.value))}
+                    className="accent-builder-accent"
+                  />
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={form.gate_grain_monochrome}
+                    onChange={(e) => update("gate_grain_monochrome", e.target.checked)}
+                    className="h-4 w-4 rounded border-neutral-300 accent-builder-accent dark:border-white/20"
+                  />
+                  Monochrome grain
+                </label>
+              </div>
             </div>
           </>
         ) : (
@@ -742,7 +929,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
       <Section
         id="section-aesthetic"
         title="3. Aesthetic"
-        description="Look and feel — colours, font, title text, and fine-tuning on top of it all (background pan/zoom/contrast, title weight, card shape, plus a dedicated Readability button)."
+        description="Look and feel — colours, font, title text, and fine-tuning on top of it all (background pan/zoom/contrast, title weight, card shape, plus readability and effects)."
       >
         <label className="flex flex-col gap-1.5 text-sm">
           <span className={`${labelClass} flex items-center gap-1.5`}>
@@ -773,94 +960,6 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
           <ColorField label="Accent" value={form.accent_color} onChange={(v) => update("accent_color", v)} />
         </div>
         <FontPicker value={form.font_family} onChange={(v) => update("font_family", v)} />
-
-        <div className="flex flex-col gap-1.5">
-          <span className={`${labelClass} flex items-center gap-1.5`}>
-            Password page preview
-            <HelpTooltip>
-              Shows the actual background photo/video, darkness overlay, and grain set below, live.
-              Drag the preview to reposition the background; the zoom slider underneath resizes it.
-              Accent colour is the thin divider line under the title.
-            </HelpTooltip>
-          </span>
-          <div
-            onPointerDown={handleGatePointerDown}
-            onPointerMove={handleGatePointerMove}
-            onPointerUp={handleGatePointerUp}
-            className={`relative flex h-40 touch-none select-none flex-col items-center justify-center gap-2 overflow-hidden rounded-lg px-4 text-center text-white lg:h-52 2xl:h-64 ${
-              form.gate_background_url ? (gateDragging ? "cursor-grabbing" : "cursor-grab") : ""
-            }`}
-            style={{ backgroundColor: "#0a0a0a", fontFamily: `"${form.font_family}", sans-serif` }}
-          >
-            {form.gate_background_url &&
-              (isGateVideoUrl(form.gate_background_url) ? (
-                <video
-                  src={form.gate_background_url}
-                  className="absolute inset-0 h-full w-full object-cover"
-                  style={{
-                    objectPosition: `${gateTheme.gate_bg_position_x}% ${gateTheme.gate_bg_position_y}%`,
-                    transform: `scale(${gateTheme.gate_bg_zoom})`,
-                  }}
-                  muted
-                  loop
-                  autoPlay
-                  playsInline
-                />
-              ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={form.gate_background_url}
-                  alt=""
-                  draggable={false}
-                  className="absolute inset-0 h-full w-full select-none object-cover"
-                  style={{
-                    objectPosition: `${gateTheme.gate_bg_position_x}% ${gateTheme.gate_bg_position_y}%`,
-                    transform: `scale(${gateTheme.gate_bg_zoom})`,
-                  }}
-                />
-              ))}
-            {form.gate_background_url && (
-              <div
-                className="absolute inset-0"
-                style={{ backgroundColor: `rgba(0,0,0,${form.gate_scrim_opacity})` }}
-              />
-            )}
-            {form.gate_grain_intensity > 0 && (
-              <div
-                className="animate-grain absolute inset-0 mix-blend-overlay"
-                style={{
-                  opacity: form.gate_grain_intensity,
-                  backgroundImage: grainTexture(form.gate_grain_monochrome),
-                  backgroundSize: "90px 90px",
-                }}
-              />
-            )}
-            <p className="relative z-10 text-[10px] font-semibold uppercase tracking-[0.35em] text-white/70">
-              {form.tagline || "Tagline"}
-            </p>
-            <p className="relative z-10 text-xl font-bold uppercase leading-none tracking-tight">
-              {form.project_title || "Project title"}
-            </p>
-            <div className="relative z-10 mt-1 h-px w-16" style={{ backgroundColor: form.accent_color }} />
-          </div>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="flex justify-between">
-              <span>Zoom / resize</span>
-              <span className="font-mono text-xs text-neutral-500 dark:text-white/40">
-                {gateTheme.gate_bg_zoom.toFixed(2)}x
-              </span>
-            </span>
-            <input
-              type="range"
-              min={1}
-              max={2.5}
-              step={0.05}
-              value={gateTheme.gate_bg_zoom}
-              onChange={(e) => setGateTheme({ gate_bg_zoom: Number(e.target.value) })}
-              className="accent-builder-accent"
-            />
-          </label>
-        </div>
 
         <div className="border-t border-neutral-200 pt-4 dark:border-white/10">
           <p className={labelClass}>Fine-tuning</p>

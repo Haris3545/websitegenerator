@@ -128,8 +128,8 @@ export function ThemeEditor({
         <p className="flex items-center gap-1.5 font-medium">
           Fine-tune the look, by hand
           <HelpTooltip>
-            Click a part of the preview to select it, then adjust with the controls underneath.
-            Readability and Effects are separate, reachable from their own buttons below.
+            Click a tab below (or the matching part of the preview) to select it, then adjust with
+            the controls underneath.
           </HelpTooltip>
         </p>
       </div>
@@ -209,36 +209,41 @@ export function ThemeEditor({
         </div>
       </div>
 
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => setSelected(selected === "readability" ? null : "readability")}
-          className={`self-start rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-            selected === "readability"
-              ? "border-builder-accent bg-builder-accent text-black"
-              : "border-neutral-300 text-neutral-700 hover:bg-neutral-100 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
-          }`}
-        >
-          Readability →
-        </button>
-        <button
-          type="button"
-          onClick={() => setSelected(selected === "effects" ? null : "effects")}
-          className={`self-start rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-            selected === "effects"
-              ? "border-builder-accent bg-builder-accent text-black"
-              : "border-neutral-300 text-neutral-700 hover:bg-neutral-100 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
-          }`}
-        >
-          Effects →
-        </button>
+      {/* One uniform way to reach every category — background/header/cards
+          used to only be reachable by clicking that exact part of the
+          preview, while readability/effects were two separate buttons not
+          tied to the preview at all. Clicking the preview still works too
+          (it just flips the same `selected` state these buttons do), but
+          this row is the one interaction that reaches all five. */}
+      <div className="flex flex-wrap gap-2">
+        {(
+          [
+            { id: "background", label: "Background" },
+            { id: "header", label: "Header" },
+            { id: "cards", label: "Cards" },
+            { id: "readability", label: "Readability" },
+            { id: "effects", label: "Effects" },
+          ] as const
+        ).map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setSelected(selected === tab.id ? null : tab.id)}
+            className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+              selected === tab.id
+                ? "border-builder-accent bg-builder-accent text-black"
+                : "border-neutral-300 text-neutral-700 hover:bg-neutral-100 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       <div className="rounded-lg border border-neutral-300 bg-neutral-50 p-4 dark:border-white/15 dark:bg-white/5">
         {selected === null && (
           <p className="text-neutral-500 dark:text-white/50">
-            Click the background, the title, or a card above — or Readability/Effects, for controls
-            that aren&apos;t tied to a specific part of the preview.
+            Pick a tab above (or click the matching part of the preview) to start adjusting.
           </p>
         )}
 
