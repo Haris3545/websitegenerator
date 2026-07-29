@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-// A brief grace period before any zoom starts — without it, even a quick
-// tap-and-release on a handle triggered a visible zoom snap, which read as
-// glitchy rather than deliberate. Only a genuine *hold* zooms in.
-const ZOOM_START_DELAY_MS = 150;
+// A grace period before any zoom starts — ordinary dragging (the whole
+// reason to grab a handle in the first place) should never zoom the ruler
+// out from under it. Only a genuine, sustained hold — several seconds,
+// clearly deliberate rather than incidental to dragging — zooms in.
+const ZOOM_START_DELAY_MS = 5000;
 // How long the ramp takes once it starts.
 const ZOOM_RAMP_MS = 700;
 // The most-zoomed-in view shows this fraction of the full clip duration (or

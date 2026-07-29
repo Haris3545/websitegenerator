@@ -92,6 +92,7 @@ export type ArtistFormInput = {
   gate_grain_monochrome: boolean;
   youtube_channel_id: string | null;
   aesthetic_prompt: string;
+  aesthetic_params: AestheticParams;
   tagline: string;
   project_title: string;
   theme_overrides: ThemeOverrides;
@@ -128,23 +129,27 @@ export async function upsertArtist(
       font_family: input.font_family,
     };
 
-    // Re-parsing on every save would blow away whatever AestheticPanel's
-    // manual sliders had set, since this free-text box is usually just
-    // sitting there unchanged — only worth a fresh Gemini call when the
-    // prompt text itself actually changed. A brand-new artist has nothing
-    // to preserve, so it always parses (typically empty -> all-zero params).
-    let aesthetic_params: AestheticParams | undefined;
+    // Re-parsing on every save would blow away whatever the builder's own
+    // background-effects sliders (or the live site's AestheticPanel) had
+    // set, since this free-text box is usually just sitting there unchanged
+    // — only worth a fresh Gemini call when the prompt text itself actually
+    // changed. When it hasn't, trust input.aesthetic_params as-is: the form
+    // state was initialized from the artist's saved value and the sliders
+    // mutate it directly, so it already reflects whatever's meant to be
+    // saved. A brand-new artist has nothing to preserve, so it always
+    // parses (typically empty prompt -> all-zero params).
+    let aesthetic_params: AestheticParams;
     if (input.id) {
       const { data: existing } = await supabase
         .from("artists")
-        .select("aesthetic_prompt, aesthetic_params")
+        .select("aesthetic_prompt")
         .eq("id", input.id)
         .maybeSingle();
-      if (existing && existing.aesthetic_prompt === input.aesthetic_prompt) {
-        aesthetic_params = existing.aesthetic_params;
-      }
-    }
-    if (aesthetic_params === undefined) {
+      aesthetic_params =
+        existing && existing.aesthetic_prompt === input.aesthetic_prompt
+          ? input.aesthetic_params
+          : await parseAestheticPrompt(input.aesthetic_prompt);
+    } else {
       aesthetic_params = await parseAestheticPrompt(input.aesthetic_prompt);
     }
 

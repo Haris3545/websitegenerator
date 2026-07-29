@@ -23,7 +23,9 @@ import { DEFAULT_THEME_OVERRIDES } from "@/lib/theme";
 import { BrandLogoAnimation } from "@/components/BrandLogoAnimation";
 import { ProvisioningOverlay } from "@/components/builder/ProvisioningOverlay";
 import { YoutubeSearchModal } from "@/components/builder/YoutubeSearchModal";
-import { SEARCH_BUTTON_CLASS } from "@/components/builder/mediaActionStyles";
+import { YOUTUBE_BUTTON_CLASS } from "@/components/builder/mediaActionStyles";
+import { YoutubeIcon } from "@/components/builder/YoutubeIcon";
+import { HelpTooltip } from "@/components/builder/HelpTooltip";
 import type { YoutubeVideoSearchResult } from "@/lib/youtube";
 
 function slugify(name: string) {
@@ -35,10 +37,10 @@ function slugify(name: string) {
 }
 
 const inputClass =
-  "rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder-neutral-400 focus:border-builder-accent focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-white dark:placeholder-white/30";
+  "rounded-xl border border-neutral-200 bg-white px-3.5 py-2.5 placeholder-neutral-400 transition-shadow duration-150 focus:border-builder-accent focus:shadow-[0_0_0_3px_rgba(255,90,31,0.15)] focus:outline-none dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder-white/30";
 const labelClass = "text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-white/50";
 const sectionClass =
-  "flex flex-col gap-4 rounded-xl border border-neutral-200 bg-neutral-50 p-5 dark:border-white/10 dark:bg-white/[0.03]";
+  "flex flex-col gap-5 rounded-2xl border border-neutral-200/70 bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-white/[0.025]";
 
 function Section({
   title,
@@ -52,9 +54,9 @@ function Section({
   return (
     <div className={sectionClass}>
       <div>
-        <h2 className="text-sm font-semibold text-neutral-900 dark:text-white">{title}</h2>
+        <h2 className="text-base font-semibold tracking-tight text-neutral-900 dark:text-white">{title}</h2>
         {description && (
-          <p className="mt-0.5 text-xs text-neutral-500 dark:text-white/40">{description}</p>
+          <p className="mt-1 text-sm text-neutral-500 dark:text-white/40">{description}</p>
         )}
       </div>
       {children}
@@ -86,6 +88,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
     gate_grain_monochrome: artist?.gate_grain_monochrome ?? false,
     youtube_channel_id: artist?.youtube_channel_id ?? null,
     aesthetic_prompt: artist?.aesthetic_prompt ?? "",
+    aesthetic_params: artist?.aesthetic_params ?? {},
     tagline: artist?.tagline ?? "VCCP Cultural Intelligence",
     project_title: artist?.project_title ?? "The Recording Studio",
     theme_overrides: artist?.theme_overrides ?? DEFAULT_THEME_OVERRIDES,
@@ -405,13 +408,13 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
   return (
     <>
     <form onSubmit={handleSubmit} className="flex max-w-2xl flex-col gap-6">
-      <div className="flex items-center justify-between gap-3 rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 dark:border-white/10 dark:bg-white/[0.03]">
+      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 rounded-full border border-neutral-200/70 bg-white/90 px-4 py-2.5 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-neutral-950/80">
         <p className={`text-xs font-medium ${saveStatusColor[saveStatus]}`}>{saveStatusText[saveStatus]}</p>
         <button
           type="button"
           onClick={() => void saveProgress()}
           disabled={saveStatus === "saving" || !form.name.trim() || !form.slug.trim()}
-          className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-40 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
+          className="rounded-full border border-neutral-200 px-3.5 py-1.5 text-xs font-medium text-neutral-700 transition-colors hover:bg-neutral-100 disabled:opacity-40 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
         >
           Save progress
         </button>
@@ -429,7 +432,10 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
         </label>
 
         <label className="flex flex-col gap-1.5 text-sm">
-          <span className={labelClass}>Slug (site URL: /s/&lt;slug&gt;)</span>
+          <span className={`${labelClass} flex items-center gap-1.5`}>
+            Slug (site URL: /s/&lt;slug&gt;)
+            <HelpTooltip>Also determines the gate password — see the password page section below.</HelpTooltip>
+          </span>
           <input
             required
             value={form.slug}
@@ -439,9 +445,6 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
             }}
             className={`${inputClass} font-mono`}
           />
-          <span className="text-xs text-neutral-500 dark:text-white/40">
-            Also determines the gate password — see below.
-          </span>
         </label>
 
         <div className="flex flex-col gap-1.5 text-sm">
@@ -479,12 +482,9 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
             type="button"
             disabled={isLookingUpYoutube}
             onClick={() => setChannelSearching(true)}
-            className={`self-start ${SEARCH_BUTTON_CLASS}`}
+            className={`self-start ${YOUTUBE_BUTTON_CLASS}`}
           >
-            <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" aria-hidden>
-              <circle cx="8.5" cy="8.5" r="5" stroke="currentColor" strokeWidth={1.6} />
-              <path d="m16 16-3.4-3.4" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" />
-            </svg>
+            <YoutubeIcon />
             Search YouTube
           </button>
           {youtubeLookup?.status === "success" && (
@@ -505,10 +505,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
           )}
         </div>
 
-        <div className="flex flex-col gap-1.5 text-sm">
-          <span className={labelClass}>Tabs</span>
-          <TabsChecklist value={form.enabled_tabs} onChange={(tabs) => update("enabled_tabs", tabs)} />
-        </div>
+        <TabsChecklist value={form.enabled_tabs} onChange={(tabs) => update("enabled_tabs", tabs)} />
       </Section>
 
       <Section
@@ -525,8 +522,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
               onChange={(v) => update("background_image_url", v)}
             />
             <p className="-mt-2 text-xs text-neutral-500 dark:text-white/40">
-              Shown behind every page of the dashboard (not the password page — that&apos;s set
-              separately below). An image or a looping muted video, either works.
+              Shown behind every page of the dashboard (not the password page, set separately below).
             </p>
             <YoutubeClipField
               label="Or use a YouTube clip instead"
@@ -541,8 +537,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
             />
             {form.background_youtube_id && (
               <p className="-mt-2 text-xs text-neutral-500 dark:text-white/40">
-                A YouTube clip takes priority over the uploaded file above while it&apos;s set — remove
-                it to fall back to that upload again.
+                Takes priority over the file above while set — remove to fall back to it.
               </p>
             )}
 
@@ -566,7 +561,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
             />
             {form.gate_youtube_id && (
               <p className="-mt-2 text-xs text-neutral-500 dark:text-white/40">
-                A YouTube clip takes priority over the uploaded file above while it&apos;s set.
+                Takes priority over the file above while set.
               </p>
             )}
 
@@ -629,16 +624,18 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
         description="Look and feel — colours, font, title text, and fine-tuning on top of it all (background pan/zoom/contrast, title weight, card shape, plus a dedicated Readability button)."
       >
         <label className="flex flex-col gap-1.5 text-sm">
-          <span className={labelClass}>Project title</span>
+          <span className={`${labelClass} flex items-center gap-1.5`}>
+            Project title
+            <HelpTooltip>
+              The big title shown top-left on the site (e.g. &quot;The Recording Studio&quot;). The
+              artist&apos;s name is shown separately, top-right.
+            </HelpTooltip>
+          </span>
           <input
             value={form.project_title}
             onChange={(e) => update("project_title", e.target.value)}
             className={inputClass}
           />
-          <span className="text-xs text-neutral-500 dark:text-white/40">
-            The big title shown top-left on the site (e.g. &quot;The Recording Studio&quot;). The
-            artist&apos;s name is shown separately, top-right.
-          </span>
         </label>
 
         <label className="flex flex-col gap-1.5 text-sm">
@@ -662,7 +659,13 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
         <FontPicker value={form.font_family} onChange={(v) => update("font_family", v)} />
 
         <div className="flex flex-col gap-1.5">
-          <span className={labelClass}>Password page preview</span>
+          <span className={`${labelClass} flex items-center gap-1.5`}>
+            Password page preview
+            <HelpTooltip>
+              Secondary colour fills the whole background; accent colour is the thin divider line
+              under the title.
+            </HelpTooltip>
+          </span>
           <div
             className="flex flex-col items-center justify-center gap-2 rounded-lg px-4 py-8 text-center text-white"
             style={{ backgroundColor: form.secondary_color, fontFamily: `"${form.font_family}", sans-serif` }}
@@ -675,10 +678,6 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
             </p>
             <div className="mt-1 h-px w-16" style={{ backgroundColor: form.accent_color }} />
           </div>
-          <span className="text-xs text-neutral-500 dark:text-white/40">
-            The secondary colour fills the whole password page background; the accent colour is the
-            thin divider line under the title.
-          </span>
         </div>
 
         <div className="border-t border-neutral-200 pt-4 dark:border-white/10">
@@ -694,13 +693,16 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
           projectTitle={form.project_title}
           tagline={form.tagline}
           artistName={form.name}
+          aestheticParams={form.aesthetic_params}
+          onAestheticParamsChange={(aesthetic_params) => update("aesthetic_params", aesthetic_params)}
         />
         <div className="border-t border-neutral-200 pt-4 dark:border-white/10">
-          <p className={labelClass}>Edge cases</p>
-          <p className="mt-1 text-xs text-neutral-500 dark:text-white/40">
-            Grain, tint, blur, vignette, and chromatic aberration all have sliders on the live site
-            itself (Edit mode &gt; 🎨). Only use this box for something those sliders can&apos;t do —
-            it&apos;s parsed into the same effects on save.
+          <p className={`${labelClass} flex items-center gap-1.5`}>
+            Edge cases
+            <HelpTooltip>
+              Effects above already cover grain/tint/blur/vignette/aberration — only use this box for
+              something those sliders can&apos;t do. Parsed into the same effects on save.
+            </HelpTooltip>
           </p>
           <textarea
             rows={3}
@@ -725,7 +727,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
       <button
         type="submit"
         disabled={isPending}
-        className="self-start rounded-lg bg-builder-accent px-4 py-2 text-sm font-semibold text-black transition-transform duration-150 ease-out hover:-translate-y-0.5 hover:brightness-95 disabled:opacity-50"
+        className="self-start rounded-full bg-builder-accent px-6 py-2.5 text-sm font-semibold text-black shadow-sm transition-all duration-150 ease-out hover:-translate-y-0.5 hover:shadow-md hover:brightness-95 disabled:opacity-50"
       >
         {isPending ? "Saving..." : artist ? "Save changes" : "Create artist"}
       </button>

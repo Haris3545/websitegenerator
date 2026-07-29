@@ -2,9 +2,12 @@
 
 import { useRef, useState, type CSSProperties } from "react";
 import { DEFAULT_THEME_OVERRIDES, type ThemeOverrides } from "@/lib/theme";
+import { DEFAULT_AESTHETIC_PARAMS } from "@/lib/aesthetics";
 import { ColorField } from "@/components/builder/ColorField";
+import { HelpTooltip } from "@/components/builder/HelpTooltip";
+import type { AestheticParams } from "@/lib/database.types";
 
-type Selection = "background" | "header" | "cards" | "readability" | null;
+type Selection = "background" | "header" | "cards" | "readability" | "effects" | null;
 
 function clamp(v: number, min: number, max: number) {
   return Math.min(max, Math.max(min, v));
@@ -20,6 +23,8 @@ export function ThemeEditor({
   projectTitle,
   tagline,
   artistName,
+  aestheticParams,
+  onAestheticParamsChange,
 }: {
   value: ThemeOverrides;
   onChange: (next: ThemeOverrides) => void;
@@ -30,8 +35,17 @@ export function ThemeEditor({
   projectTitle: string;
   tagline: string;
   artistName: string;
+  /** Grain/tint/blur/vignette/chromatic-aberration — the same controls the
+   * live site's Edit Mode panel (AestheticPanel.tsx) exposes, mirrored here
+   * so they don't require leaving the builder to reach. */
+  aestheticParams: AestheticParams;
+  onAestheticParamsChange: (next: AestheticParams) => void;
 }) {
   const [selected, setSelected] = useState<Selection>(null);
+  const a = { ...DEFAULT_AESTHETIC_PARAMS, tint_color: primaryColor, ...aestheticParams };
+  function setAesthetic<K extends keyof AestheticParams>(key: K, v: AestheticParams[K]) {
+    onAestheticParamsChange({ ...aestheticParams, [key]: v });
+  }
   const [dragging, setDragging] = useState(false);
   const t = { ...DEFAULT_THEME_OVERRIDES, ...value };
 
@@ -42,6 +56,7 @@ export function ThemeEditor({
     startPosY: number;
     moved: boolean;
   } | null>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
 
   function set<K extends keyof ThemeOverrides>(key: K, v: ThemeOverrides[K]) {
     onChange({ ...value, [key]: v });
@@ -79,9 +94,22 @@ export function ThemeEditor({
     }
     if (!ds.moved) return;
 
-    const rect = e.currentTarget.getBoundingClientRect();
-    set("bg_position_x", Math.round(clamp(ds.startPosX - (dx / rect.width) * 100, 0, 100)));
-    set("bg_position_y", Math.round(clamp(ds.startPosY - (dy / rect.height) * 100, 0, 100)));
+    const containerRect = e.currentTarget.getBoundingClientRect();
+    const imgRect = imgRef.current?.getBoundingClientRect();
+    // object-position's 0-100% range only covers however far the *scaled*
+    // image actually overflows its container — at low zoom (or an image
+    // whose aspect ratio happens to already match the container) that
+    // overflow can be a fraction of the container's own width, so dividing
+    // by the container's width (as this used to) made the drag track far
+    // slower than the cursor: moving the mouse across the whole box barely
+    // nudged the image. Dividing by the image's actual rendered overflow —
+    // read straight off its bounding rect, which already reflects the zoom
+    // transform — makes a pixel of drag move the image a pixel on screen,
+    // regardless of zoom level.
+    const overflowX = Math.max((imgRect?.width ?? containerRect.width) - containerRect.width, 1);
+    const overflowY = Math.max((imgRect?.height ?? containerRect.height) - containerRect.height, 1);
+    set("bg_position_x", Math.round(clamp(ds.startPosX - (dx / overflowX) * 100, 0, 100)));
+    set("bg_position_y", Math.round(clamp(ds.startPosY - (dy / overflowY) * 100, 0, 100)));
     setSelected("background");
   }
 
@@ -95,12 +123,12 @@ export function ThemeEditor({
   return (
     <div className="flex flex-col gap-4 text-sm" style={{ "--accent-ring": accentColor } as CSSProperties}>
       <div>
-        <p className="font-medium">Fine-tune the look, by hand</p>
-        <p className="text-xs text-neutral-500 dark:text-white/40">
-          Click a part of the preview below to select it, then adjust it with the controls that
-          appear underneath. Readability is separate — it&apos;s reachable from its own button below
-          rather than by clicking the preview, since a selection outline right on the cards would
-          make it impossible to judge a low border-visibility setting on its own.
+        <p className="flex items-center gap-1.5 font-medium">
+          Fine-tune the look, by hand
+          <HelpTooltip>
+            Click a part of the preview to select it, then adjust with the controls underneath.
+            Readability and Effects are separate, reachable from their own buttons below.
+          </HelpTooltip>
         </p>
       </div>
 
@@ -108,7 +136,7 @@ export function ThemeEditor({
         onPointerDown={handleBgPointerDown}
         onPointerMove={handleBgPointerMove}
         onPointerUp={handleBgPointerUp}
-        className={`relative h-72 w-full overflow-hidden rounded-lg text-white ${ring("background")} ${
+        className={`relative h-72 w-full touch-none select-none overflow-hidden rounded-lg text-white ${ring("background")} ${
           backgroundImageUrl ? (dragging ? "cursor-grabbing" : "cursor-grab") : ""
         }`}
         style={{ backgroundColor: "#111", fontFamily: `"${fontFamily}", sans-serif` }}
@@ -116,6 +144,7 @@ export function ThemeEditor({
         {backgroundImageUrl && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
+            ref={imgRef}
             src={backgroundImageUrl}
             alt=""
             draggable={false}
@@ -178,23 +207,36 @@ export function ThemeEditor({
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={() => setSelected(selected === "readability" ? null : "readability")}
-        className={`self-start rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-          selected === "readability"
-            ? "border-builder-accent bg-builder-accent text-black"
-            : "border-neutral-300 text-neutral-700 hover:bg-neutral-100 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
-        }`}
-      >
-        Readability →
-      </button>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setSelected(selected === "readability" ? null : "readability")}
+          className={`self-start rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+            selected === "readability"
+              ? "border-builder-accent bg-builder-accent text-black"
+              : "border-neutral-300 text-neutral-700 hover:bg-neutral-100 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
+          }`}
+        >
+          Readability →
+        </button>
+        <button
+          type="button"
+          onClick={() => setSelected(selected === "effects" ? null : "effects")}
+          className={`self-start rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+            selected === "effects"
+              ? "border-builder-accent bg-builder-accent text-black"
+              : "border-neutral-300 text-neutral-700 hover:bg-neutral-100 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
+          }`}
+        >
+          Effects →
+        </button>
+      </div>
 
       <div className="rounded-lg border border-neutral-300 bg-neutral-50 p-4 dark:border-white/15 dark:bg-white/5">
         {selected === null && (
           <p className="text-neutral-500 dark:text-white/50">
-            Click the background, the title, or a card above — or Readability, for the controls
-            that affect whether people can actually read the dashboard over your background.
+            Click the background, the title, or a card above — or Readability/Effects, for controls
+            that aren&apos;t tied to a specific part of the preview.
           </p>
         )}
 
@@ -273,11 +315,12 @@ export function ThemeEditor({
 
         {selected === "readability" && (
           <div className="flex flex-col gap-3">
-            <p className="font-medium">Readability</p>
-            <p className="text-xs text-neutral-500 dark:text-white/40">
-              Whether people can actually read the dashboard over your background — deliberately not
-              tied to clicking the preview above, so nothing outlines the cards while you&apos;re
-              judging a low border-visibility value against the real thing.
+            <p className="flex items-center gap-1.5 font-medium">
+              Readability
+              <HelpTooltip>
+                Whether people can actually read the dashboard over your background — separate from
+                clicking the preview so nothing outlines the cards while judging border visibility.
+              </HelpTooltip>
             </p>
             <Slider
               label="Background darkness overlay"
@@ -308,6 +351,59 @@ export function ThemeEditor({
               value={t.card_text_color}
               onChange={(v) => set("card_text_color", v)}
             />
+          </div>
+        )}
+
+        {selected === "effects" && (
+          <div className="flex flex-col gap-3">
+            <p className="font-medium">Background effects</p>
+            <p className="text-xs text-neutral-500 dark:text-white/40">
+              The same grain/tint/blur/aberration controls as the live site&apos;s Edit Mode panel —
+              set here instead, no need to publish first to reach them.
+            </p>
+            <Slider
+              label="Animated film grain"
+              min={0}
+              max={1}
+              step={0.05}
+              value={a.grain_intensity}
+              onChange={(v) => setAesthetic("grain_intensity", v)}
+            />
+            <label className="-mt-2 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={a.grain_monochrome}
+                onChange={(e) => setAesthetic("grain_monochrome", e.target.checked)}
+                className="accent-builder-accent"
+              />
+              Monochrome grain
+            </label>
+            <Slider
+              label="Chromatic aberration"
+              min={0}
+              max={1}
+              step={0.05}
+              value={a.chromatic_aberration}
+              onChange={(v) => setAesthetic("chromatic_aberration", v)}
+            />
+            <Slider
+              label="Vignette"
+              min={0}
+              max={1}
+              step={0.05}
+              value={a.vignette}
+              onChange={(v) => setAesthetic("vignette", v)}
+            />
+            <ColorField label="Tint colour" value={a.tint_color} onChange={(v) => setAesthetic("tint_color", v)} />
+            <Slider
+              label="Tint amount"
+              min={0}
+              max={1}
+              step={0.05}
+              value={a.tint_opacity}
+              onChange={(v) => setAesthetic("tint_opacity", v)}
+            />
+            <Slider label="Blur" min={0} max={1} step={0.05} value={a.blur} onChange={(v) => setAesthetic("blur", v)} />
           </div>
         )}
       </div>

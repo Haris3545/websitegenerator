@@ -5,7 +5,8 @@ import { loadYoutubeIframeApi, parseYoutubeVideoId, type YTPlayer } from "@/lib/
 import { YoutubeSearchModal } from "@/components/builder/YoutubeSearchModal";
 import { VideoTrimTimeline } from "@/components/builder/VideoTrimTimeline";
 import type { YoutubeVideoSearchResult } from "@/lib/youtube";
-import { SEARCH_BUTTON_CLASS } from "@/components/builder/mediaActionStyles";
+import { YOUTUBE_BUTTON_CLASS } from "@/components/builder/mediaActionStyles";
+import { YoutubeIcon } from "@/components/builder/YoutubeIcon";
 
 const MAX_CLIP_SECONDS = 10;
 
@@ -319,11 +320,8 @@ export function YoutubeClipField({
               Use link
             </button>
           </div>
-          <button type="button" onClick={() => setSearching(true)} className={`self-start ${SEARCH_BUTTON_CLASS}`}>
-            <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" aria-hidden>
-              <circle cx="8.5" cy="8.5" r="5" stroke="currentColor" strokeWidth={1.6} />
-              <path d="m16 16-3.4-3.4" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" />
-            </svg>
+          <button type="button" onClick={() => setSearching(true)} className={`self-start ${YOUTUBE_BUTTON_CLASS}`}>
+            <YoutubeIcon />
             Search YouTube
           </button>
         </div>

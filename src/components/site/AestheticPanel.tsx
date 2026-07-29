@@ -7,17 +7,8 @@ import { ColorField } from "@/components/builder/ColorField";
 import { FontPicker } from "@/components/builder/FontPicker";
 import { DEFAULT_THEME_OVERRIDES, type ThemeOverrides } from "@/lib/theme";
 import { grainTexture } from "@/lib/grainTexture";
+import { DEFAULT_AESTHETIC_PARAMS } from "@/lib/aesthetics";
 import type { AestheticParams } from "@/lib/database.types";
-
-const DEFAULT_AESTHETIC_PARAMS: Required<AestheticParams> = {
-  grain_intensity: 0,
-  grain_monochrome: false,
-  tint_color: "#000000", // overridden with the artist's primary color at each usage site below
-  tint_opacity: 0,
-  blur: 0,
-  vignette: 0,
-  chromatic_aberration: 0,
-};
 
 type Aesthetics = {
   primary_color: string;
