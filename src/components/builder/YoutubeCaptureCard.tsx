@@ -94,7 +94,6 @@ export function YoutubeCaptureCard({
   const recorderRef = useRef<MediaRecorder | null>(null);
   const countdownIdRef = useRef<number | null>(null);
   const finishedRef = useRef(false);
-  const warmStartRef = useRef(0);
   const hasBegunRef = useRef(false);
 
   function cleanupStream() {
@@ -178,10 +177,13 @@ export function YoutubeCaptureCard({
             if (cancelled) return;
             const player = e.target;
             const warmStart = Math.max(0, start - WARMUP_SECONDS);
-            warmStartRef.current = warmStart;
             player.mute();
             player.seekTo(warmStart, true);
             player.playVideo();
+            // cc_load_policy: 0 alone doesn't reliably override a signed-in
+            // viewer's own "always show captions" account preference —
+            // this is the actual forceful off-switch.
+            player.unloadModule?.("captions");
 
             try {
               const track = stream.getVideoTracks()[0];
@@ -203,7 +205,14 @@ export function YoutubeCaptureCard({
             if (cancelled || hasBegunRef.current || e.data !== YT.PlayerState.PLAYING) return;
             hasBegunRef.current = true;
 
-            const waitMs = Math.max(0, start - warmStartRef.current) * 1000;
+            // Always the full warmup, regardless of how much lead-in room
+            // start actually had — when start is small (0-2s), waiting only
+            // start - warmStart left near-zero real time between the
+            // PLAYING transition and recording, which wasn't enough for
+            // YouTube's own play-button/watermark fade-out animation to
+            // finish (that CSS transition lags a beat behind the JS state
+            // change). A full 3s buffer covers it consistently either way.
+            const waitMs = WARMUP_SECONDS * 1000;
             setSecondsLeft(Math.ceil(waitMs / 1000));
             const primingStartedAt = performance.now();
             countdownIdRef.current = window.setInterval(() => {
@@ -271,6 +280,10 @@ export function YoutubeCaptureCard({
             blocks automated downloads. Once you allow it, the clip takes over the screen at full size for{" "}
             {Math.round(end - start)}s to capture it at the best possible quality — don&apos;t switch tabs or
             close the window until it finishes.
+          </p>
+          <p className="mt-2 rounded-lg bg-builder-accent/10 px-2.5 py-2 text-xs font-medium text-neutral-700 dark:text-white/70">
+            Tip: full-screen this browser window first (F11, or your browser&apos;s maximize button) — the
+            bigger the window, the sharper the capture.
           </p>
           {error && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
           <div className="mt-4 flex justify-end gap-2">

@@ -6,6 +6,10 @@ export interface YTPlayer {
   getCurrentTime(): number;
   getDuration(): number;
   destroy(): void;
+  /** Undocumented-but-public and widely relied on to force closed captions
+   * off — cc_load_policy: 0 alone doesn't override a viewer's own
+   * account-level "always show captions" preference, but this does. */
+  unloadModule?(module: string): void;
 }
 
 export interface YTPlayerOptions {
