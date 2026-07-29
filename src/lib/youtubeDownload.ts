@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import ytdl from "@distube/ytdl-core";
 import ffmpegPath from "ffmpeg-static";
+import { recordYoutubeClipViaBrowser } from "@/lib/youtubeScreenRecord";
 
 const execFileAsync = promisify(execFile);
 
@@ -140,13 +141,15 @@ export async function downloadYoutubeClip(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (/sign in to confirm/i.test(message)) {
-      return {
-        ok: false,
-        error:
-          "YouTube is treating this as a bot request (this happens from cloud/server IPs without a " +
-          "logged-in session). Set YOUTUBE_COOKIE to a real signed-in YouTube session's cookie string " +
-          "to fix it — ask whoever manages this app's Vercel project.",
-      };
+      // Even a valid YOUTUBE_COOKIE isn't always enough by itself anymore —
+      // YouTube's bot check increasingly keys off the request's IP
+      // reputation as much as session validity, and cloud/serverless IPs
+      // (like Vercel's) get flagged regardless. Falls back to actually
+      // rendering the real watch page in a headless browser and
+      // screen-recording it instead of asking the data API for a direct
+      // CDN URL — see youtubeScreenRecord.ts for why that's more likely to
+      // get through.
+      return recordYoutubeClipViaBrowser(videoId, start, end);
     }
     return { ok: false, error: `Couldn't download/trim that clip: ${message}` };
   } finally {
