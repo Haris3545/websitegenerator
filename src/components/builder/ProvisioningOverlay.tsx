@@ -11,6 +11,8 @@ import {
   provisionGenius,
   provisionWikipediaTrends,
   provisionConversationThemes,
+  provisionSentiment,
+  provisionInsights,
   finalizeProvisioning,
   checkProvisionedData,
   type ProvisionResult,
@@ -88,12 +90,15 @@ export function ProvisioningOverlay({
       { key: "social", label: "Social listening", checkKey: "social", run: () => provisionSocialListening(artistId, artistName) },
       { key: "music", label: "Music & listener stats", checkKey: "music", run: () => provisionMusic(artistId, artistName) },
       { key: "genius", label: "Lyric annotations", run: () => provisionGenius(artistId, artistName) },
+      { key: "sentiment", label: "Sentiment overview", run: () => provisionSentiment(artistId, artistName) },
+      { key: "insights", label: "Dashboard insights", run: () => provisionInsights(artistId, artistName) },
       { key: "wikipedia", label: "Wikipedia trends", run: () => provisionWikipediaTrends(artistId, artistName) },
       { key: "themes", label: "Conversation themes", run: () => provisionConversationThemes(artistId, artistName) },
     ],
     [artistId, artistName, youtubeChannelId]
   );
-  const steps = mode === "refresh" ? allSteps.filter((s) => s.key !== "wikipedia" && s.key !== "themes") : allSteps;
+  const CREATE_ONLY_KEYS = ["sentiment", "insights", "wikipedia", "themes"];
+  const steps = mode === "refresh" ? allSteps.filter((s) => !CREATE_ONLY_KEYS.includes(s.key)) : allSteps;
 
   useEffect(() => {
     let cancelled = false;
@@ -108,13 +113,20 @@ export function ProvisioningOverlay({
 
     async function run() {
       // media/events/youtube/social/music/genius are independent of each
-      // other; wikipedia reads back what music just stored, and
-      // conversation themes reads wikipedia+social+genius — so those two
-      // have to run after the rest, in that order (when they're running at
-      // all — see the mode="refresh" filtering above).
+      // other. Everything after that depends on some of it having already
+      // landed: sentiment reads media_articles, insights reads sentiment
+      // plus youtube/music/social's own tables, wikipedia reads back what
+      // music just stored, and conversation themes reads
+      // wikipedia+social+genius — so those four run afterward, in that
+      // order (when they're running at all — see the mode="refresh"
+      // filtering above, which skips all four as Gemini/quota-limited).
       await Promise.all(["media", "events", "youtube", "social", "music", "genius"].map(runStep));
       if (cancelled) return;
       if (mode === "create") {
+        await runStep("sentiment");
+        if (cancelled) return;
+        await runStep("insights");
+        if (cancelled) return;
         await runStep("wikipedia");
         if (cancelled) return;
         await runStep("themes");

@@ -4,8 +4,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ColorField } from "@/components/builder/ColorField";
 import { FontPicker } from "@/components/builder/FontPicker";
-import { MediaUploadField } from "@/components/builder/MediaUploadField";
-import { YoutubeClipField } from "@/components/builder/YoutubeClipField";
+import { BackgroundMediaField } from "@/components/builder/BackgroundMediaField";
 import { AudienceUploadField } from "@/components/builder/AudienceUploadField";
 import { TabsChecklist } from "@/components/builder/TabsChecklist";
 import { ThemeEditor } from "@/components/builder/ThemeEditor";
@@ -344,7 +343,16 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
-    const isNew = !idRef.current;
+    // Deliberately the original `artist` prop, not `!idRef.current` — the
+    // debounced autosave (see saveProgress/useEffect above) sets idRef.current
+    // as soon as it fires, which is typically well before anyone finishes
+    // filling out the rest of the form and clicks this button. Checking
+    // idRef.current here meant isNew was already false by the time of a real
+    // submit in practice, silently skipping the whole eager-provisioning
+    // overlay below every time. `artist` is a prop set once at mount (present
+    // only on the edit page, never the new-artist page) so it can't drift
+    // the way a ref mutated by autosave does.
+    const isNew = !artist;
     // Opened synchronously, within the click itself, so the browser trusts
     // it as a real user-initiated tab rather than blocking it as a popup —
     // by the time creation actually finishes below, we're well past the
@@ -590,7 +598,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
       >
         {form.slug ? (
           <>
-            <MediaUploadField
+            <BackgroundMediaField
               label="Background"
               slotName="background"
               artistSlug={form.slug}
@@ -600,25 +608,13 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
             <p className="-mt-2 text-xs text-neutral-500 dark:text-white/40">
               Shown behind every page of the dashboard (not the password page, set separately below).
             </p>
-            <YoutubeClipField
-              label="Or pull one from a YouTube clip"
-              artistSlug={form.slug}
-              slotName="background"
-              onDownload={(url) => update("background_image_url", url)}
-            />
 
-            <MediaUploadField
+            <BackgroundMediaField
               label="Password page background"
               slotName="gate-background"
               artistSlug={form.slug}
               value={form.gate_background_url}
               onChange={(v) => update("gate_background_url", v)}
-            />
-            <YoutubeClipField
-              label="Or pull one from a YouTube clip"
-              artistSlug={form.slug}
-              slotName="gate-background"
-              onDownload={(url) => update("gate_background_url", url)}
             />
 
             <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-3 dark:border-white/10">

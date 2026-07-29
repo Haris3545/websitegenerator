@@ -72,7 +72,11 @@ export async function importImageFromUrl(
     const supabase = await createClient();
     const { error: uploadError } = await supabase.storage
       .from("artist-media")
-      .upload(path, buffer, { upsert: true, contentType });
+      // cacheControl: "0" alongside the ?t= cache-bust below — the storage
+      // path is fixed per slot (re-picking a search result overwrites the
+      // same object), so without this a CDN edge that caches by path alone
+      // could keep serving whatever was there before the overwrite.
+      .upload(path, buffer, { upsert: true, contentType, cacheControl: "0" });
     if (uploadError) throw new Error(uploadError.message);
 
     const { data } = supabase.storage.from("artist-media").getPublicUrl(path);
@@ -109,7 +113,10 @@ export async function downloadYoutubeClipAction(
     const supabase = await createClient();
     const { error: uploadError } = await supabase.storage
       .from("artist-media")
-      .upload(path, result.buffer, { upsert: true, contentType: "video/mp4" });
+      // Same fixed-path-per-slot reasoning as importImageFromUrl above —
+      // re-trimming and re-confirming a clip overwrites this exact object,
+      // so caching by path alone risks still serving the previous clip.
+      .upload(path, result.buffer, { upsert: true, contentType: "video/mp4", cacheControl: "0" });
     if (uploadError) throw new Error(uploadError.message);
 
     const { data } = supabase.storage.from("artist-media").getPublicUrl(path);

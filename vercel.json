@@ -1,8 +1,12 @@
 {
   "crons": [
     {
-      "path": "/api/cron/refresh-media",
-      "schedule": "0 6 * * *"
+      "path": "/api/cron/refresh-everything",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-everything",
+      "schedule": "0 14 * * *"
     }
   ]
 }

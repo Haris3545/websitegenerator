@@ -10,6 +10,8 @@ import { refreshMusicStats } from "@/lib/music";
 import { refreshGeniusAnnotations } from "@/lib/genius";
 import { refreshWikipediaTrendsNow } from "@/lib/wikipedia";
 import { refreshConversationThemesForArtist } from "@/lib/conversationThemes";
+import { refreshInsightsNow } from "@/lib/insights";
+import { refreshSentimentNow } from "@/lib/sentiment";
 import { artistCacheTag } from "@/lib/getSiteArtist";
 
 /** Granular, individually-callable counterparts to refreshEverything's
@@ -117,6 +119,33 @@ export async function provisionConversationThemes(
 ): Promise<ProvisionResult> {
   try {
     await refreshConversationThemesForArtist(artistId, artistName);
+    return { ok: true };
+  } catch (err) {
+    return toResult(err);
+  }
+}
+
+/** Dashboard's own sentiment overview and "What we've noticed" insight
+ * cards otherwise only compute on that page's own first visit (see
+ * (app)/page.tsx's refreshSentimentNow/refreshInsightsNow fallback) — a
+ * brand-new artist landing straight on their dashboard right after creation
+ * would sit on that same lazy wait a second time. Running both here means
+ * they're already there. Both call Gemini once each, same as
+ * wikipedia/themes above — fine as a one-time creation cost, not something
+ * to repeat on every refresh (see refreshEverything's own comment on why
+ * Gemini calls stay out of anything repeatedly-clickable). */
+export async function provisionSentiment(artistId: string, artistName: string): Promise<ProvisionResult> {
+  try {
+    await refreshSentimentNow(artistId, artistName);
+    return { ok: true };
+  } catch (err) {
+    return toResult(err);
+  }
+}
+
+export async function provisionInsights(artistId: string, artistName: string): Promise<ProvisionResult> {
+  try {
+    await refreshInsightsNow(artistId, artistName);
     return { ok: true };
   } catch (err) {
     return toResult(err);
