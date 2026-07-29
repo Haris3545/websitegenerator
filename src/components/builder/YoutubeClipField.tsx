@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { loadYoutubeIframeApi, parseYoutubeVideoId, type YTPlayer } from "@/lib/youtubeIframeApi";
+import { YoutubeSearchModal } from "@/components/builder/YoutubeSearchModal";
+import { VideoTrimTimeline } from "@/components/builder/VideoTrimTimeline";
+import type { YoutubeVideoSearchResult } from "@/lib/youtube";
 
 const MAX_CLIP_SECONDS = 10;
 
@@ -39,6 +42,7 @@ export function YoutubeClipField({
   const [urlError, setUrlError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
+  const [searching, setSearching] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
   const previewPollRef = useRef<number | null>(null);
@@ -88,10 +92,7 @@ export function YoutubeClipField({
       setUrlError("That doesn't look like a YouTube link.");
       return;
     }
-    setUrlError(null);
-    setUrlInput("");
-    setDuration(null);
-    setDraft({ videoId: id, start: 0, end: MAX_CLIP_SECONDS });
+    beginUrlOrSearchDraft(id);
   }
 
   function beginEdit() {
@@ -130,6 +131,30 @@ export function YoutubeClipField({
     });
   }
 
+  // Dragging the trim window's body (rather than either edge) shifts both
+  // points together, keeping the span fixed — VideoTrimTimeline already
+  // clamps the candidate start to stay within [0, duration - span] before
+  // calling this, so there's no additional clamping to do here.
+  function setDraftWindowStart(newStart: number) {
+    setDraft((prev) => {
+      if (!prev) return prev;
+      const span = prev.end - prev.start;
+      return { ...prev, start: newStart, end: newStart + span };
+    });
+  }
+
+  function beginUrlOrSearchDraft(id: string) {
+    setUrlError(null);
+    setUrlInput("");
+    setDuration(null);
+    setDraft({ videoId: id, start: 0, end: MAX_CLIP_SECONDS });
+  }
+
+  function handleVideoPicked(result: YoutubeVideoSearchResult) {
+    setSearching(false);
+    beginUrlOrSearchDraft(result.videoId);
+  }
+
   function applyCurrentTimeAs(which: "start" | "end") {
     const t = playerRef.current?.getCurrentTime();
     if (t === undefined) return;
@@ -161,44 +186,36 @@ export function YoutubeClipField({
         <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-3 dark:border-white/10">
           <div ref={containerRef} className="aspect-video w-full overflow-hidden rounded-lg bg-black" />
 
-          <div className="flex items-center gap-2 text-xs text-neutral-600 dark:text-white/60">
-            <span>Start {formatSeconds(draft.start)}</span>
-            <input
-              type="range"
-              min={0}
-              max={Math.max(duration ?? MAX_CLIP_SECONDS * 10, 1)}
-              step={0.5}
-              value={draft.start}
-              onChange={(e) => setDraftStart(Number(e.target.value))}
-              className="flex-1"
-            />
-            <button
-              type="button"
-              onClick={() => applyCurrentTimeAs("start")}
-              className="shrink-0 rounded border border-neutral-300 px-2 py-1 text-[11px] font-medium hover:bg-neutral-100 dark:border-white/15 dark:hover:bg-white/5"
-            >
-              Use now
-            </button>
-          </div>
+          <VideoTrimTimeline
+            duration={Math.max(duration ?? MAX_CLIP_SECONDS * 10, 1)}
+            start={draft.start}
+            end={draft.end}
+            maxClipSeconds={MAX_CLIP_SECONDS}
+            onStartChange={setDraftStart}
+            onEndChange={setDraftEnd}
+            onWindowShift={setDraftWindowStart}
+          />
 
-          <div className="flex items-center gap-2 text-xs text-neutral-600 dark:text-white/60">
-            <span>End {formatSeconds(draft.end)}</span>
-            <input
-              type="range"
-              min={0}
-              max={Math.max(duration ?? MAX_CLIP_SECONDS * 10, 1)}
-              step={0.5}
-              value={draft.end}
-              onChange={(e) => setDraftEnd(Number(e.target.value))}
-              className="flex-1"
-            />
-            <button
-              type="button"
-              onClick={() => applyCurrentTimeAs("end")}
-              className="shrink-0 rounded border border-neutral-300 px-2 py-1 text-[11px] font-medium hover:bg-neutral-100 dark:border-white/15 dark:hover:bg-white/5"
-            >
-              Use now
-            </button>
+          <div className="flex items-center justify-between gap-2 text-xs text-neutral-600 dark:text-white/60">
+            <span>
+              {formatSeconds(draft.start)} – {formatSeconds(draft.end)}
+            </span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => applyCurrentTimeAs("start")}
+                className="shrink-0 rounded border border-neutral-300 px-2 py-1 text-[11px] font-medium hover:bg-neutral-100 dark:border-white/15 dark:hover:bg-white/5"
+              >
+                Set start to current
+              </button>
+              <button
+                type="button"
+                onClick={() => applyCurrentTimeAs("end")}
+                className="shrink-0 rounded border border-neutral-300 px-2 py-1 text-[11px] font-medium hover:bg-neutral-100 dark:border-white/15 dark:hover:bg-white/5"
+              >
+                Set end to current
+              </button>
+            </div>
           </div>
 
           <p className="text-xs text-neutral-400 dark:text-white/40">
@@ -279,9 +296,17 @@ export function YoutubeClipField({
           >
             Use
           </button>
+          <button
+            type="button"
+            onClick={() => setSearching(true)}
+            className="shrink-0 rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
+          >
+            Search YouTube
+          </button>
         </div>
       )}
       {urlError && <p className="text-red-600 dark:text-red-400">{urlError}</p>}
+      {searching && <YoutubeSearchModal onSelect={handleVideoPicked} onClose={() => setSearching(false)} />}
     </div>
   );
 }

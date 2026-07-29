@@ -3,6 +3,9 @@
 import { useId, useRef, useState } from "react";
 import imageCompression from "browser-image-compression";
 import { createClient } from "@/lib/supabase/client";
+import { ImageSearchModal } from "@/components/builder/ImageSearchModal";
+import { importImageFromUrl } from "@/app/builder/searchActions";
+import type { ImageSearchResult } from "@/lib/googleImageSearch";
 
 // A clipboard paste hands over the browser's own raw bitmap rendering of
 // the copied image, not the (often already-compressed JPEG) file it
@@ -34,6 +37,7 @@ export function MediaUploadField({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pasteFocused, setPasteFocused] = useState(false);
+  const [searching, setSearching] = useState(false);
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -103,6 +107,23 @@ export function MediaUploadField({
     }
   }
 
+  async function handleImagePicked(result: ImageSearchResult) {
+    setSearching(false);
+    setError(null);
+    setUploading(true);
+    // Downloaded and re-hosted server-side (see importImageFromUrl) rather
+    // than pointing the site straight at the search result's own URL — that
+    // third-party host can disappear, rate-limit, or block hotlinking at
+    // any time, the same reasoning as re-hosting a pasted file.
+    const uploadResult = await importImageFromUrl(result.original, artistSlug, slotName);
+    setUploading(false);
+    if (uploadResult.ok) {
+      onChange(uploadResult.data);
+    } else {
+      setError(uploadResult.error);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-2 text-sm">
       <span className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-white/50">
@@ -163,6 +184,14 @@ export function MediaUploadField({
           >
             {uploading ? "Uploading..." : value ? "Replace file" : "Choose file"}
           </button>
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => setSearching(true)}
+            className="self-start rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
+          >
+            Search images
+          </button>
           <span className="text-xs text-neutral-400 dark:text-white/40">
             or click here and paste an image
           </span>
@@ -174,6 +203,9 @@ export function MediaUploadField({
         ~2MB. Videos are capped at {VIDEO_MAX_MB}MB (compress heavy files before uploading —
         client-side transcoding isn&apos;t wired up).
       </p>
+      {searching && (
+        <ImageSearchModal onSelect={(r) => void handleImagePicked(r)} onClose={() => setSearching(false)} />
+      )}
     </div>
   );
 }
