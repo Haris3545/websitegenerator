@@ -5,6 +5,7 @@ import { loadYoutubeIframeApi, parseYoutubeVideoId, type YTPlayer } from "@/lib/
 import { YoutubeSearchModal } from "@/components/builder/YoutubeSearchModal";
 import { VideoTrimTimeline } from "@/components/builder/VideoTrimTimeline";
 import type { YoutubeVideoSearchResult } from "@/lib/youtube";
+import { SEARCH_BUTTON_CLASS } from "@/components/builder/mediaActionStyles";
 
 const MAX_CLIP_SECONDS = 10;
 
@@ -111,6 +112,21 @@ export function YoutubeClipField({
     setDraft(null);
   }
 
+  // Throttled rather than called on every single drag frame — YouTube's
+  // player doesn't need (or want) a seekTo() call 60 times a second, and
+  // this is purely a visual "show me where I'm trimming" preview, not
+  // something that needs frame-perfect sync with the pointer.
+  const lastSeekAtRef = useRef(0);
+  const SEEK_THROTTLE_MS = 90;
+  function seekPreview(t: number) {
+    const player = playerRef.current;
+    if (!player) return;
+    const now = performance.now();
+    if (now - lastSeekAtRef.current < SEEK_THROTTLE_MS) return;
+    lastSeekAtRef.current = now;
+    player.seekTo(t, true);
+  }
+
   function setDraftStart(next: number) {
     setDraft((prev) => {
       if (!prev) return prev;
@@ -118,6 +134,7 @@ export function YoutubeClipField({
       const minEnd = clampedStart + 1;
       const maxEnd = clampedStart + MAX_CLIP_SECONDS;
       const clampedEnd = Math.min(Math.max(prev.end, minEnd), maxEnd, duration ?? maxEnd);
+      seekPreview(clampedStart);
       return { ...prev, start: clampedStart, end: Math.max(clampedEnd, minEnd) };
     });
   }
@@ -127,6 +144,7 @@ export function YoutubeClipField({
       if (!prev) return prev;
       const clampedEnd = Math.min(next, duration ?? next);
       const clampedStart = Math.max(0, Math.max(prev.start, clampedEnd - MAX_CLIP_SECONDS));
+      seekPreview(clampedEnd);
       return { ...prev, start: clampedStart, end: clampedEnd };
     });
   }
@@ -139,6 +157,7 @@ export function YoutubeClipField({
     setDraft((prev) => {
       if (!prev) return prev;
       const span = prev.end - prev.start;
+      seekPreview(newStart);
       return { ...prev, start: newStart, end: newStart + span };
     });
   }
@@ -272,35 +291,39 @@ export function YoutubeClipField({
           </div>
         </div>
       ) : (
-        <div className="flex gap-2">
-          <input
-            value={urlInput}
-            onChange={(e) => {
-              setUrlInput(e.target.value);
-              setUrlError(null);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                beginUrlSubmit();
-              }
-            }}
-            placeholder="Paste a YouTube link"
-            className="flex-1 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm placeholder-neutral-400 focus:border-builder-accent focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-white dark:placeholder-white/30"
-          />
-          <button
-            type="button"
-            onClick={beginUrlSubmit}
-            disabled={!urlInput.trim()}
-            className="shrink-0 rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
-          >
-            Use
-          </button>
-          <button
-            type="button"
-            onClick={() => setSearching(true)}
-            className="shrink-0 rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
-          >
+        <div className="flex flex-col gap-2">
+          {/* Same colour convention as MediaUploadField (mediaActionStyles.ts):
+              green for pasting a link straight in, violet for searching. */}
+          <div className="flex gap-2 rounded-lg border-2 border-dashed border-emerald-500/40 bg-emerald-500/[0.04] p-2 dark:border-emerald-400/30 dark:bg-emerald-400/[0.04]">
+            <input
+              value={urlInput}
+              onChange={(e) => {
+                setUrlInput(e.target.value);
+                setUrlError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  beginUrlSubmit();
+                }
+              }}
+              placeholder="Paste a YouTube link"
+              className="flex-1 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm placeholder-neutral-400 focus:border-emerald-500 focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-white dark:placeholder-white/30"
+            />
+            <button
+              type="button"
+              onClick={beginUrlSubmit}
+              disabled={!urlInput.trim()}
+              className="shrink-0 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:opacity-50"
+            >
+              Use link
+            </button>
+          </div>
+          <button type="button" onClick={() => setSearching(true)} className={`self-start ${SEARCH_BUTTON_CLASS}`}>
+            <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" aria-hidden>
+              <circle cx="8.5" cy="8.5" r="5" stroke="currentColor" strokeWidth={1.6} />
+              <path d="m16 16-3.4-3.4" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" />
+            </svg>
             Search YouTube
           </button>
         </div>

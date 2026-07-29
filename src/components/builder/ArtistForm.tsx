@@ -22,6 +22,9 @@ import type { Artist } from "@/lib/database.types";
 import { DEFAULT_THEME_OVERRIDES } from "@/lib/theme";
 import { BrandLogoAnimation } from "@/components/BrandLogoAnimation";
 import { ProvisioningOverlay } from "@/components/builder/ProvisioningOverlay";
+import { YoutubeSearchModal } from "@/components/builder/YoutubeSearchModal";
+import { SEARCH_BUTTON_CLASS } from "@/components/builder/mediaActionStyles";
+import type { YoutubeVideoSearchResult } from "@/lib/youtube";
 
 function slugify(name: string) {
   return name
@@ -108,6 +111,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
   const [youtubeLookup, setYoutubeLookup] = useState<
     { status: "success"; channelTitle: string } | { status: "error"; error: string } | null
   >(null);
+  const [channelSearching, setChannelSearching] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
@@ -221,6 +225,23 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
   function handleNameChange(name: string) {
     update("name", name);
     if (!slugTouched) update("slug", slugify(name));
+  }
+
+  // Picking a video from the search modal resolves to *its channel* — reuses
+  // the exact same lookup the paste-a-link flow already does (which already
+  // knows how to turn a video URL into the channel that posted it), just fed
+  // a URL built from the search result instead of one someone pasted in.
+  function handleChannelVideoPicked(result: YoutubeVideoSearchResult) {
+    setChannelSearching(false);
+    startYoutubeLookup(async () => {
+      const lookupResult = await lookupYoutubeChannel(`https://www.youtube.com/watch?v=${result.videoId}`);
+      if (lookupResult.ok) {
+        update("youtube_channel_id", lookupResult.channelId);
+        setYoutubeLookup({ status: "success", channelTitle: lookupResult.channelTitle });
+      } else {
+        setYoutubeLookup({ status: "error", error: lookupResult.error });
+      }
+    });
   }
 
   async function handlePublish() {
@@ -396,7 +417,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
         </button>
       </div>
 
-      <Section title="1. Artist info" description="Who this is and what their site includes.">
+      <Section title="1. Initial setup" description="Who this is, their YouTube channel, and which tabs their site includes.">
         <label className="flex flex-col gap-1.5 text-sm">
           <span className={labelClass}>Artist name</span>
           <input
@@ -425,7 +446,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
 
         <div className="flex flex-col gap-1.5 text-sm">
           <span className={labelClass}>YouTube channel</span>
-          <div className="flex gap-2">
+          <div className="flex gap-2 rounded-lg border-2 border-dashed border-emerald-500/40 bg-emerald-500/[0.04] p-2 dark:border-emerald-400/30 dark:bg-emerald-400/[0.04]">
             <input
               value={youtubeUrlInput}
               onChange={(e) => {
@@ -433,7 +454,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
                 setYoutubeLookup(null);
               }}
               placeholder="Paste the channel's URL, or a link to one of their videos"
-              className={`flex-1 text-sm ${inputClass}`}
+              className={`flex-1 text-sm rounded-lg border border-neutral-300 bg-white px-3 py-2 placeholder-neutral-400 focus:border-emerald-500 focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-white dark:placeholder-white/30`}
             />
             <button
               type="button"
@@ -449,11 +470,23 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
                   }
                 })
               }
-              className="rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-40 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
+              className="shrink-0 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:opacity-50"
             >
-              {isLookingUpYoutube ? "Looking up..." : "Find channel"}
+              {isLookingUpYoutube ? "Looking up…" : "Use link"}
             </button>
           </div>
+          <button
+            type="button"
+            disabled={isLookingUpYoutube}
+            onClick={() => setChannelSearching(true)}
+            className={`self-start ${SEARCH_BUTTON_CLASS}`}
+          >
+            <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" aria-hidden>
+              <circle cx="8.5" cy="8.5" r="5" stroke="currentColor" strokeWidth={1.6} />
+              <path d="m16 16-3.4-3.4" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" />
+            </svg>
+            Search YouTube
+          </button>
           {youtubeLookup?.status === "success" && (
             <p className="text-xs text-emerald-600 dark:text-emerald-400">
               ✓ Found: {youtubeLookup.channelTitle || form.youtube_channel_id}
@@ -467,6 +500,9 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
               Currently linked: {form.youtube_channel_id}
             </p>
           )}
+          {channelSearching && (
+            <YoutubeSearchModal onSelect={handleChannelVideoPicked} onClose={() => setChannelSearching(false)} />
+          )}
         </div>
 
         <div className="flex flex-col gap-1.5 text-sm">
@@ -476,62 +512,9 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
       </Section>
 
       <Section
-        title="2. Aesthetic choices"
-        description="The big, foundational choices — colours, font, background media, and the title text they all surround."
+        title="2. Media"
+        description="Backgrounds for the dashboard and the password page — upload a file, search the web, or paste one straight in."
       >
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className={labelClass}>Project title</span>
-          <input
-            value={form.project_title}
-            onChange={(e) => update("project_title", e.target.value)}
-            className={inputClass}
-          />
-          <span className="text-xs text-neutral-500 dark:text-white/40">
-            The big title shown top-left on the site (e.g. &quot;The Recording Studio&quot;). The
-            artist&apos;s name is shown separately, top-right.
-          </span>
-        </label>
-
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className={labelClass}>Tagline</span>
-          <input
-            value={form.tagline}
-            onChange={(e) => update("tagline", e.target.value)}
-            className={inputClass}
-          />
-        </label>
-
-        <div className="flex gap-6">
-          <ColorField label="Primary" value={form.primary_color} onChange={(v) => update("primary_color", v)} />
-          <ColorField
-            label="Secondary"
-            value={form.secondary_color}
-            onChange={(v) => update("secondary_color", v)}
-          />
-          <ColorField label="Accent" value={form.accent_color} onChange={(v) => update("accent_color", v)} />
-        </div>
-        <FontPicker value={form.font_family} onChange={(v) => update("font_family", v)} />
-
-        <div className="flex flex-col gap-1.5">
-          <span className={labelClass}>Password page preview</span>
-          <div
-            className="flex flex-col items-center justify-center gap-2 rounded-lg px-4 py-8 text-center text-white"
-            style={{ backgroundColor: form.secondary_color, fontFamily: `"${form.font_family}", sans-serif` }}
-          >
-            <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-white/70">
-              {form.tagline || "Tagline"}
-            </p>
-            <p className="text-xl font-bold uppercase leading-none tracking-tight">
-              {form.project_title || "Project title"}
-            </p>
-            <div className="mt-1 h-px w-16" style={{ backgroundColor: form.accent_color }} />
-          </div>
-          <span className="text-xs text-neutral-500 dark:text-white/40">
-            The secondary colour fills the whole password page background; the accent colour is the
-            thin divider line under the title.
-          </span>
-        </div>
-
         {form.slug ? (
           <>
             <MediaUploadField
@@ -642,9 +625,65 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
       </Section>
 
       <Section
-        title="3. Aesthetic tweaks"
-        description="Fine-tuning on top of the choices above — background pan/zoom/contrast, title weight, card shape, plus a dedicated Readability button for text contrast and border visibility."
+        title="3. Aesthetic"
+        description="Look and feel — colours, font, title text, and fine-tuning on top of it all (background pan/zoom/contrast, title weight, card shape, plus a dedicated Readability button)."
       >
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className={labelClass}>Project title</span>
+          <input
+            value={form.project_title}
+            onChange={(e) => update("project_title", e.target.value)}
+            className={inputClass}
+          />
+          <span className="text-xs text-neutral-500 dark:text-white/40">
+            The big title shown top-left on the site (e.g. &quot;The Recording Studio&quot;). The
+            artist&apos;s name is shown separately, top-right.
+          </span>
+        </label>
+
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className={labelClass}>Tagline</span>
+          <input
+            value={form.tagline}
+            onChange={(e) => update("tagline", e.target.value)}
+            className={inputClass}
+          />
+        </label>
+
+        <div className="flex gap-6">
+          <ColorField label="Primary" value={form.primary_color} onChange={(v) => update("primary_color", v)} />
+          <ColorField
+            label="Secondary"
+            value={form.secondary_color}
+            onChange={(v) => update("secondary_color", v)}
+          />
+          <ColorField label="Accent" value={form.accent_color} onChange={(v) => update("accent_color", v)} />
+        </div>
+        <FontPicker value={form.font_family} onChange={(v) => update("font_family", v)} />
+
+        <div className="flex flex-col gap-1.5">
+          <span className={labelClass}>Password page preview</span>
+          <div
+            className="flex flex-col items-center justify-center gap-2 rounded-lg px-4 py-8 text-center text-white"
+            style={{ backgroundColor: form.secondary_color, fontFamily: `"${form.font_family}", sans-serif` }}
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-white/70">
+              {form.tagline || "Tagline"}
+            </p>
+            <p className="text-xl font-bold uppercase leading-none tracking-tight">
+              {form.project_title || "Project title"}
+            </p>
+            <div className="mt-1 h-px w-16" style={{ backgroundColor: form.accent_color }} />
+          </div>
+          <span className="text-xs text-neutral-500 dark:text-white/40">
+            The secondary colour fills the whole password page background; the accent colour is the
+            thin divider line under the title.
+          </span>
+        </div>
+
+        <div className="border-t border-neutral-200 pt-4 dark:border-white/10">
+          <p className={labelClass}>Fine-tuning</p>
+        </div>
         <ThemeEditor
           value={form.theme_overrides}
           onChange={(theme_overrides) => update("theme_overrides", theme_overrides)}

@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { ImageSearchModal } from "@/components/builder/ImageSearchModal";
 import { importImageFromUrl } from "@/app/builder/searchActions";
 import type { ImageSearchResult } from "@/lib/googleImageSearch";
+import { UPLOAD_BUTTON_CLASS, SEARCH_BUTTON_CLASS, PASTE_ZONE_CLASS, PASTE_ZONE_FOCUS_CLASS } from "@/components/builder/mediaActionStyles";
 
 // A clipboard paste hands over the browser's own raw bitmap rendering of
 // the copied image, not the (often already-compressed JPEG) file it
@@ -129,74 +130,98 @@ export function MediaUploadField({
       <span className="text-xs font-medium uppercase tracking-wide text-neutral-500 dark:text-white/50">
         {label}
       </span>
+
+      {value && (
+        isVideoUrl ? (
+          <video
+            src={value}
+            className="h-32 w-full rounded-lg border border-neutral-200 object-cover dark:border-white/10"
+            muted
+            loop
+            autoPlay
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={value}
+            alt=""
+            className="h-32 w-full rounded-lg border border-neutral-200 object-cover dark:border-white/10"
+          />
+        )
+      )}
+
+      <input
+        ref={inputRef}
+        id={inputId}
+        type="file"
+        accept="image/*,video/*"
+        disabled={uploading}
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleFile(file);
+        }}
+      />
+
+      {/* Every field that adds media in this builder uses the same three
+          colours for the same three actions: blue = upload a file, violet =
+          search the web for one, dashed green = paste one in directly (see
+          mediaActionStyles.ts) — so which button does what doesn't need
+          re-learning field to field. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          disabled={uploading}
+          onClick={() => inputRef.current?.click()}
+          className={UPLOAD_BUTTON_CLASS}
+        >
+          <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" aria-hidden>
+            <path d="M10 12.5V3.5M10 3.5 6 7.5M10 3.5l4 4" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M4 13v1.5A1.5 1.5 0 0 0 5.5 16h9a1.5 1.5 0 0 0 1.5-1.5V13" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          {uploading ? "Uploading…" : value ? "Replace file" : "Upload file"}
+        </button>
+        <button
+          type="button"
+          disabled={uploading}
+          onClick={() => setSearching(true)}
+          className={SEARCH_BUTTON_CLASS}
+        >
+          <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4" aria-hidden>
+            <circle cx="8.5" cy="8.5" r="5" stroke="currentColor" strokeWidth={1.6} />
+            <path d="m16 16-3.4-3.4" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" />
+          </svg>
+          Search the web
+        </button>
+      </div>
+
       {/* Focusable + paste-listening, so clicking here then Cmd/Ctrl+V-ing a
           copied image uploads it straight in — no save-to-disk-then-browse
           round trip. Only images can arrive via clipboard paste (browsers
-          don't hand over video files that way), so the file picker below is
-          still how a video background gets in. */}
+          don't hand over video files that way), so upload/search above are
+          still how a video background gets in. Always visibly dashed
+          (rather than only colouring up on focus) so it reads as its own
+          distinct drop target from the outset, not a plain unstyled area. */}
       <div
         tabIndex={0}
         role="button"
         onPaste={handlePaste}
         onFocus={() => setPasteFocused(true)}
         onBlur={() => setPasteFocused(false)}
-        className={`flex flex-col gap-2 rounded-lg border p-2 transition-colors focus:outline-none ${
-          pasteFocused
-            ? "border-[var(--accent,theme(colors.neutral.400))] bg-neutral-50 dark:bg-white/[0.04]"
-            : "border-transparent"
+        className={`flex items-center gap-2 px-3 py-2.5 focus:outline-none ${PASTE_ZONE_CLASS} ${
+          pasteFocused ? PASTE_ZONE_FOCUS_CLASS : ""
         }`}
       >
-        {value &&
-          (isVideoUrl ? (
-            <video
-              src={value}
-              className="h-32 w-full rounded-lg border border-neutral-200 object-cover dark:border-white/10"
-              muted
-              loop
-              autoPlay
-            />
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={value}
-              alt=""
-              className="h-32 w-full rounded-lg border border-neutral-200 object-cover dark:border-white/10"
-            />
-          ))}
-        <input
-          ref={inputRef}
-          id={inputId}
-          type="file"
-          accept="image/*,video/*"
-          disabled={uploading}
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) handleFile(file);
-          }}
-        />
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            disabled={uploading}
-            onClick={() => inputRef.current?.click()}
-            className="self-start rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
-          >
-            {uploading ? "Uploading..." : value ? "Replace file" : "Choose file"}
-          </button>
-          <button
-            type="button"
-            disabled={uploading}
-            onClick={() => setSearching(true)}
-            className="self-start rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-100 disabled:opacity-50 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"
-          >
-            Search images
-          </button>
-          <span className="text-xs text-neutral-400 dark:text-white/40">
-            or click here and paste an image
-          </span>
-        </div>
+        <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden>
+          <rect x="5.5" y="3.5" width="9" height="13" rx="1.5" stroke="currentColor" strokeWidth={1.6} />
+          <path d="M8 3.5V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v.5" stroke="currentColor" strokeWidth={1.6} />
+          <path d="M8 10h4M8 12.5h4" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" />
+        </svg>
+        <span className="text-xs font-medium text-emerald-700 dark:text-emerald-300">
+          Click here, then paste an image (Ctrl/⌘+V)
+        </span>
       </div>
+
       {error && <p className="text-red-600 dark:text-red-400">{error}</p>}
       <p className="text-xs text-neutral-400 dark:text-white/40">
         Accepts an image or a video. Images are auto-compressed to fit {IMAGE_MAX_DIMENSION}px /
