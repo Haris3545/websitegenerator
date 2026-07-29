@@ -10,9 +10,11 @@ import ffmpegPath from "ffmpeg-static";
 // package.json — this points at the exact matching pre-built Chromium
 // binary pack (chromium-min ships without one, to stay under Vercel's
 // function bundle size limit, and downloads it from here at cold start
-// instead). See https://github.com/Sparticuz/chromium/releases.
+// instead). See https://github.com/Sparticuz/chromium/releases — the
+// asset name always includes an architecture suffix (x64/arm64), which a
+// bare "-pack.tar" (no suffix) 404s on; Vercel's Node.js Functions run x64.
 const CHROMIUM_PACK_URL =
-  "https://github.com/Sparticuz/chromium/releases/download/v149.0.0/chromium-v149.0.0-pack.tar";
+  "https://github.com/Sparticuz/chromium/releases/download/v149.0.0/chromium-v149.0.0-pack.x64.tar";
 
 const RECORD_WIDTH = 960;
 const RECORD_HEIGHT = 540;
