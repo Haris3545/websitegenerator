@@ -433,16 +433,25 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
     error: "text-red-600 dark:text-red-400",
   };
 
-  // Roughly "how far along is this artist" across the three numbered
-  // sections — deliberately loose thresholds (nothing here blocks saving,
-  // it's just a glanceable signal) rather than an exhaustive field-by-field
-  // checklist.
-  const sectionsComplete = [
+  // Roughly "how far along is this artist" — deliberately loose thresholds
+  // (nothing here blocks saving, it's just a glanceable signal) rather than
+  // an exhaustive field-by-field checklist. Three checkpoints used to mean
+  // typing a name/slug (nearly instant) already jumped the bar a full third
+  // full, and pasting one background image jumped it to two-thirds — over
+  // before the rest of the form (colours, YouTube channel, aesthetic
+  // tuning, gate page) had been touched at all. More, finer-grained
+  // checkpoints spread that same "quick fields go fast" reality across a
+  // bar that actually tracks with how much is left rather than snapping to
+  // big fractions from the first thirty seconds of typing.
+  const checkpoints = [
     !!form.name.trim() && !!form.slug.trim() && form.enabled_tabs.length > 0,
     !!form.background_image_url,
     !!form.project_title.trim() && !!form.tagline.trim(),
-  ].filter(Boolean).length;
-  const formProgress = sectionsComplete / 3;
+    !!form.youtube_channel_id?.trim(),
+    !!form.aesthetic_prompt?.trim() || !!form.aesthetic_params,
+    !!form.gate_background_url,
+  ];
+  const formProgress = checkpoints.filter(Boolean).length / checkpoints.length;
 
   return (
     <>

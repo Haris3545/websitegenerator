@@ -115,14 +115,26 @@ export async function recordYoutubeClipViaBrowser(
     await hidePlayerChrome(page);
     await page.waitForSelector("video", { timeout: 30_000 });
 
-    // Skip a pre-roll ad if one shows up — its own video element would
-    // otherwise get recorded instead of the real one.
-    try {
-      const skipSelector = ".ytp-ad-skip-button, .ytp-skip-ad-button";
-      await page.waitForSelector(skipSelector, { timeout: 6_000 });
-      await page.click(skipSelector);
-      await new Promise((resolve) => setTimeout(resolve, 1_000));
-    } catch {}
+    // A single 6-second check for a skip button badly undercounted how long
+    // pre-roll ads actually run: plenty aren't skippable until well past
+    // that, or aren't skippable at all for their first 15-30s, and this
+    // whole function only has ~60s total to work with (see maxDuration on
+    // the artist builder pages) — so this polls the player's own
+    // "ad-showing" state directly instead of gambling on one skip-button
+    // check, clicking skip the moment one appears but otherwise just
+    // waiting the ad out, up to AD_MAX_WAIT_MS.
+    const AD_MAX_WAIT_MS = 20_000;
+    const adDeadline = Date.now() + AD_MAX_WAIT_MS;
+    while (Date.now() < adDeadline) {
+      const adShowing = await page
+        .evaluate(() => document.querySelector(".html5-video-player")?.classList.contains("ad-showing") ?? false)
+        .catch(() => false);
+      if (!adShowing) break;
+      await page
+        .click(".ytp-ad-skip-button, .ytp-skip-ad-button")
+        .catch(() => {});
+      await new Promise((resolve) => setTimeout(resolve, 750));
+    }
 
     await page.evaluate((t: number) => {
       const v = document.querySelector("video") as HTMLVideoElement;
@@ -131,14 +143,41 @@ export async function recordYoutubeClipViaBrowser(
       void v.play();
     }, start);
 
-    await page.waitForFunction(
-      (t: number) => {
-        const v = document.querySelector("video") as HTMLVideoElement | null;
-        return !!v && v.currentTime >= t - 0.5 && !v.paused && v.readyState >= 3;
-      },
-      { timeout: 20_000 },
-      start
-    );
+    try {
+      await page.waitForFunction(
+        (t: number) => {
+          const v = document.querySelector("video") as HTMLVideoElement | null;
+          return !!v && v.currentTime >= t - 0.5 && !v.paused && v.readyState >= 3;
+        },
+        { timeout: 15_000 },
+        start
+      );
+    } catch (waitErr) {
+      // A bare "waiting failed" timeout gives no clue why — surface what
+      // the player was actually doing (still on an ad? blocked by an
+      // interstitial? genuinely stuck buffering?) so the next failure is
+      // diagnosable instead of another guess.
+      const diagnostics = await page
+        .evaluate(() => {
+          const v = document.querySelector("video") as HTMLVideoElement | null;
+          const player = document.querySelector(".html5-video-player");
+          return {
+            title: document.title,
+            bodySnippet: document.body.innerText.slice(0, 200).replace(/\s+/g, " "),
+            adShowing: player?.classList.contains("ad-showing") ?? null,
+            videoExists: !!v,
+            paused: v?.paused ?? null,
+            currentTime: v?.currentTime ?? null,
+            readyState: v?.readyState ?? null,
+            networkState: v?.networkState ?? null,
+            errorCode: v?.error?.code ?? null,
+          };
+        })
+        .catch(() => null);
+      throw new Error(
+        `Video never reached the requested timestamp: ${(waitErr as Error).message}. ${JSON.stringify(diagnostics)}`
+      );
+    }
 
     tmpDir = await mkdtemp(path.join(tmpdir(), "yt-rec-"));
     const outputPath = path.join(tmpDir, "clip.mp4");
