@@ -9,6 +9,9 @@ const PIPED_API_INSTANCES = [
   "https://api.piped.private.coffee",
   "https://piped-api.hostux.net",
   "https://pipedapi.leptons.xyz",
+  "https://pipedapi.smnz.de",
+  "https://piped-api.codespace.cz",
+  "https://pipedapi.drgns.space",
 ];
 
 const MAX_HEIGHT = 1080;
@@ -23,24 +26,35 @@ type PipedStream = {
 type PipedStreamsResponse = { videoStreams?: PipedStream[] };
 
 async function fetchFromInstance(base: string, videoId: string): Promise<{ url: string; headers: Record<string, string> }> {
-  const res = await fetch(`${base}/streams/${videoId}`, {
-    signal: AbortSignal.timeout(8_000),
-    headers: { Accept: "application/json" },
-  });
-  if (!res.ok) throw new Error(`${base}: HTTP ${res.status}`);
+  // Every throw in this function must carry `base` — a raw fetch()
+  // rejection (DNS failure, connection refused, timeout) throws a bare
+  // "fetch failed" with zero indication of which instance that came from,
+  // which is exactly the gap that made the last real failure here
+  // undiagnosable (two dead instances just showed up as two identical
+  // unlabeled "fetch failed" entries).
+  try {
+    const res = await fetch(`${base}/streams/${videoId}`, {
+      signal: AbortSignal.timeout(8_000),
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-  const data: PipedStreamsResponse = await res.json();
-  const streams = (data.videoStreams ?? []).filter((s) => s.videoOnly && s.url);
-  if (!streams.length) throw new Error(`${base}: no video-only streams in response`);
+    const data: PipedStreamsResponse = await res.json();
+    const streams = (data.videoStreams ?? []).filter((s) => s.videoOnly && s.url);
+    if (!streams.length) throw new Error("no video-only streams in response");
 
-  const withinCap = streams.filter((s) => !s.height || s.height <= MAX_HEIGHT);
-  const pool = withinCap.length ? withinCap : streams;
-  const best = pool.reduce((a, b) => ((b.height ?? 0) > (a.height ?? 0) ? b : a));
+    const withinCap = streams.filter((s) => !s.height || s.height <= MAX_HEIGHT);
+    const pool = withinCap.length ? withinCap : streams;
+    const best = pool.reduce((a, b) => ((b.height ?? 0) > (a.height ?? 0) ? b : a));
 
-  // Piped's own stream URLs already point directly at the CDN — no special
-  // headers needed the way a raw googlevideo.com URL resolved by us would
-  // (see youtubeDownload.ts's BROWSER_USER_AGENT).
-  return { url: best.url!, headers: {} };
+    // Piped's own stream URLs already point directly at the CDN — no
+    // special headers needed the way a raw googlevideo.com URL resolved by
+    // us would (see youtubeDownload.ts's BROWSER_USER_AGENT).
+    return { url: best.url!, headers: {} };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`${base}: ${message}`);
+  }
 }
 
 /** Same job as resolveYoutubeFormatViaYtDlp (youtubeDownloadYtDlp.ts) —
@@ -63,11 +77,7 @@ async function fetchFromInstance(base: string, videoId: string): Promise<{ url: 
 export async function resolveYoutubeFormatViaPiped(
   videoId: string
 ): Promise<{ url: string; headers: Record<string, string> }> {
-  const attempts = PIPED_API_INSTANCES.map((base) =>
-    fetchFromInstance(base, videoId).catch((err) => {
-      throw err instanceof Error ? err : new Error(String(err));
-    })
-  );
+  const attempts = PIPED_API_INSTANCES.map((base) => fetchFromInstance(base, videoId));
 
   try {
     return await Promise.any(attempts);
