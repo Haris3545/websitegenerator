@@ -3,46 +3,27 @@ import { promisify } from "node:util";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ytdl from "@distube/ytdl-core";
 import ffmpegPath from "ffmpeg-static";
-import { recordYoutubeClipViaBrowser } from "@/lib/youtubeScreenRecord";
-import { resolveYoutubeFormatViaYtDlp } from "@/lib/youtubeDownloadYtDlp";
 import { resolveYoutubeFormatViaCobalt } from "@/lib/youtubeDownloadCobalt";
 
 const execFileAsync = promisify(execFile);
 
 const MAX_CLIP_SECONDS = 12; // small buffer over the 10s the builder's trimmer enforces
-// A googlevideo.com URL rejects requests that don't look like they came
-// from a real browser — used as a fallback only when yt-dlp doesn't hand
-// back its own headers for a format (it normally does).
+// A googlevideo.com (or Cobalt-proxied) URL can reject requests that don't
+// look like they came from a real browser — used only when Cobalt doesn't
+// hand back its own headers for a stream.
 const BROWSER_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
-/** yt-dlp and Cobalt both do the same job — resolve a direct, playable
- * stream URL — via completely different infrastructure: yt-dlp runs here,
- * on this deployment's own IP; Cobalt's public instance resolves it on its
- * own. yt-dlp goes first since it's a single fast local call with no
- * network hop to a third party.
- *
- * Piped and Invidious were tried here too and removed — every instance of
- * both either didn't resolve at all or came back with its own 401/403/500,
- * from the third party's own server rather than YouTube, which pointed at
- * something more fundamental (this deployment's IP being treated with
- * suspicion broadly, not just by YouTube) than either project's instances
- * being individually flaky. Not worth carrying the dead weight forward. */
-async function resolveFormat(videoId: string): Promise<{ url: string; headers: Record<string, string> }> {
-  try {
-    return await resolveYoutubeFormatViaYtDlp(videoId);
-  } catch (ytDlpErr) {
-    try {
-      return await resolveYoutubeFormatViaCobalt(videoId);
-    } catch (cobaltErr) {
-      const ytDlpMsg = ytDlpErr instanceof Error ? ytDlpErr.message : String(ytDlpErr);
-      const cobaltMsg = cobaltErr instanceof Error ? cobaltErr.message : String(cobaltErr);
-      throw new Error(`yt-dlp: ${ytDlpMsg} | ${cobaltMsg}`);
-    }
-  }
-}
+// Standard YouTube video ID shape — 11 URL-safe base64 characters. Only
+// used to reject obvious garbage before spending a network round-trip on
+// it; @distube/ytdl-core's own validateID() did this same check but pulling
+// in the whole package just for this one regex wasn't worth it once its
+// actual extraction was dropped (see git history: it, plain yt-dlp, and a
+// headless-browser screen-record fallback were all tried and confirmed
+// blocked from this deployment's IP — repeatedly, across many rounds —
+// before landing on Cobalt as the only one that isn't).
+const YOUTUBE_ID_PATTERN = /^[a-zA-Z0-9_-]{11}$/;
 
 /** Downloads the [start, end) window of a YouTube video as a standalone
  * H.264 mp4 file, ready to be uploaded and played back like any other
@@ -53,30 +34,44 @@ async function resolveFormat(videoId: string): Promise<{ url: string; headers: R
  * trick fully eliminated; a real downloaded file has no player chrome to
  * flash in the first place.
  *
- * Resolving a direct, signed CDN URL for the video is done via yt-dlp (see
- * youtubeDownloadYtDlp.ts) — @distube/ytdl-core previously did this job but
- * fell increasingly behind YouTube's bot-check changes (a smaller,
- * less-resourced fork); yt-dlp is the actively-maintained, frequently-
- * patched industry-standard tool for exactly this. ffmpeg (bundled via
- * ffmpeg-static, no system install required) then trims and re-encodes,
- * reading directly from that CDN URL over HTTP — the clip is only ever a
- * few seconds, so this doesn't download the full source video, just the
- * byte range ffmpeg's input-side seek needs. */
+ * Resolving a direct, playable stream URL is done via Cobalt
+ * (youtubeDownloadCobalt.ts) — its own backend does the YouTube-facing
+ * work on its infrastructure, not this deployment's. Every method that
+ * tried to do that resolution here instead (a direct extraction library,
+ * then a different one, then a headless browser with a real signed-in
+ * session) hit the same "Sign in to confirm you're not a bot" wall every
+ * time, which is why none of them are still in this file. ffmpeg (bundled
+ * via ffmpeg-static, no system install required) then trims and
+ * re-encodes, reading directly from Cobalt's resolved URL over HTTP — the
+ * clip is only ever a few seconds, so this doesn't download the full
+ * source video, just the byte range ffmpeg's input-side seek needs. */
 export async function downloadYoutubeClip(
   videoId: string,
   start: number,
   end: number
 ): Promise<{ ok: true; buffer: Buffer } | { ok: false; error: string }> {
-  if (!ytdl.validateID(videoId)) return { ok: false, error: "That doesn't look like a valid YouTube video." };
+  if (!YOUTUBE_ID_PATTERN.test(videoId)) return { ok: false, error: "That doesn't look like a valid YouTube video." };
   const duration = end - start;
   if (!(duration > 0) || duration > MAX_CLIP_SECONDS) {
     return { ok: false, error: `Clip must be between 0 and ${MAX_CLIP_SECONDS} seconds.` };
   }
   if (!ffmpegPath) return { ok: false, error: "ffmpeg isn't available in this environment." };
 
+  let url: string;
+  let headers: Record<string, string>;
+  try {
+    ({ url, headers } = await resolveYoutubeFormatViaCobalt(videoId));
+  } catch (err) {
+    // Cobalt's own resolver already collects every candidate endpoint's
+    // individual failure reason (see youtubeDownloadCobalt.ts) — surfaced
+    // here verbatim, not summarized, so a failure names exactly which
+    // endpoint(s) were tried and what each one actually said back.
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: `Couldn't resolve a stream via Cobalt — ${message}` };
+  }
+
   let tmpDir: string | null = null;
   try {
-    const { url, headers } = await resolveFormat(videoId);
     const headerLines =
       Object.entries(headers).length > 0
         ? Object.entries(headers)
@@ -118,19 +113,14 @@ export async function downloadYoutubeClip(
     const buffer = await readFile(outputPath);
     return { ok: true, buffer };
   } catch (err) {
+    // Distinct from the resolve failure above — Cobalt *did* hand back a
+    // stream, but ffmpeg couldn't fetch or trim it. Including the resolved
+    // URL (truncated — these are long signed CDN links) makes it possible
+    // to tell a dead/expired link apart from an ffmpeg-side problem.
     const message = err instanceof Error ? err.message : String(err);
-    // Both resolveFormat's own methods (yt-dlp, then Piped) already failed
-    // by this point, or ffmpeg itself choked on whatever URL one of them
-    // did resolve — either way, the last resort is actually rendering the
-    // real watch page in a headless browser and screen-recording it (see
-    // youtubeScreenRecord.ts), a fundamentally different technique from
-    // either extraction method above. If that also fails, its own error
-    // gets appended so nothing upstream is lost.
-    const screenRecordResult = await recordYoutubeClipViaBrowser(videoId, start, end);
-    if (screenRecordResult.ok) return screenRecordResult;
     return {
       ok: false,
-      error: `Couldn't download/trim that clip. ${message} | ${screenRecordResult.error}`,
+      error: `Cobalt resolved a stream but ffmpeg couldn't download/trim it — ${message} (url: ${url.slice(0, 200)})`,
     };
   } finally {
     if (tmpDir) await rm(tmpDir, { recursive: true, force: true }).catch(() => {});

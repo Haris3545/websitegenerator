@@ -36,11 +36,6 @@ yarn-error.log*
 # vercel
 .vercel
 
-# yt-dlp's standalone binary — downloaded by scripts/download-yt-dlp.js's
-# postinstall hook (same pattern as ffmpeg-static's own binary, which lives
-# in node_modules and isn't committed either), not checked into git.
-/vendor/yt-dlp/
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts
