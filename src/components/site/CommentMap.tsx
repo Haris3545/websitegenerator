@@ -77,7 +77,11 @@ function mixColor(from: string, toward: string, amount: number): string {
 }
 
 const FLOW_AMOUNT = 0.82;
-const FLOW_STAGGER_MS = 40;
+// The whole ring finishes flowing (or retreating) in this long, sweeping
+// clockwise around from wherever the flow originated rather than each arc's
+// color just crossfading in place all at once.
+const FLOW_TOTAL_MS = 600;
+const FLOW_TRANSITION_MS = 260;
 
 const CENTER = 300;
 const RING_R = 220;
@@ -233,15 +237,17 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
           <svg viewBox="0 0 600 600" className="h-full w-full">
             {arcs.map((a, i) => {
               // The rest of the ring blends toward whichever segment is
-              // selected, staggered by each arc's distance (in either
-              // direction around the ring) from wherever the flow
-              // originated — so it visibly radiates outward on select and
-              // converges back on deselect, rather than an instant
-              // all-at-once crossfade.
+              // selected, staggered clockwise from wherever the flow
+              // originated so the whole ring reads as one ~600ms sweep
+              // around the circle (and the same sweep in reverse on
+              // deselect) rather than every arc crossfading at once.
               const flowTarget = selected !== null && selected !== i ? arcs[selected]?.color : null;
               const displayColor = flowTarget ? mixColor(a.color, flowTarget, FLOW_AMOUNT) : a.color;
               const origin = flowFrom ?? i;
-              const dist = Math.min(Math.abs(i - origin), arcs.length - Math.abs(i - origin));
+              const clockwiseDist = arcs.length > 0 ? (i - origin + arcs.length) % arcs.length : 0;
+              const maxDelay = FLOW_TOTAL_MS - FLOW_TRANSITION_MS;
+              const delayMs =
+                arcs.length > 1 ? Math.round((clockwiseDist / (arcs.length - 1)) * maxDelay) : 0;
               return (
                 <path
                   key={a.name}
@@ -254,8 +260,8 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
                   style={{
                     filter: selected === i ? "brightness(1.18)" : undefined,
                     opacity: selected === null || selected === i ? 1 : 0.55,
-                    transition: "stroke 480ms cubic-bezier(0.16, 1, 0.3, 1), filter 300ms ease, opacity 300ms ease",
-                    transitionDelay: `${dist * FLOW_STAGGER_MS}ms`,
+                    transition: `stroke ${FLOW_TRANSITION_MS}ms cubic-bezier(0.16, 1, 0.3, 1), filter 300ms ease, opacity 300ms ease`,
+                    transitionDelay: `${delayMs}ms`,
                   }}
                   onClick={() => {
                     if (drilledInto) toggle(i);

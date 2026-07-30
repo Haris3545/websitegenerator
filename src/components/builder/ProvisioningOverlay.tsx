@@ -19,6 +19,9 @@ import {
   type ProvisionResult,
 } from "@/app/builder/provisionActions";
 
+const MAX_STEP_RETRIES = 2;
+const STEP_RETRY_DELAY_MS = 1200;
+
 type StepStatus = "pending" | "running" | "done" | "error";
 
 interface Step {
@@ -134,9 +137,23 @@ export function ProvisioningOverlay({
     let cancelled = false;
     const byKey = Object.fromEntries(steps.map((s) => [s.key, s]));
 
+    // A step failing on the first try is usually a transient blip (a cold
+    // external API, a momentary network hiccup) rather than a permanent
+    // one, and this overlay only ever runs once per artist — so it's worth
+    // a couple of quiet retries before giving up and marking it "error",
+    // rather than sailing straight through to "Dashboard ready" with that
+    // source silently empty.
     async function runStep(key: string) {
       setStatuses((prev) => ({ ...prev, [key]: "running" }));
-      const result = await byKey[key].run();
+      let result = await byKey[key].run();
+      let attempt = 0;
+      while (!result.ok && attempt < MAX_STEP_RETRIES) {
+        if (cancelled) return;
+        await new Promise((resolve) => setTimeout(resolve, STEP_RETRY_DELAY_MS));
+        if (cancelled) return;
+        attempt += 1;
+        result = await byKey[key].run();
+      }
       if (cancelled) return;
       setStatuses((prev) => ({ ...prev, [key]: result.ok ? "done" : "error" }));
     }
@@ -170,11 +187,25 @@ export function ProvisioningOverlay({
         if (cancelled) return;
       }
 
-      await finalizeProvisioning(slug);
+      // Neither of these is a per-step result the checklist can show an
+      // error icon for, and both are best-effort on top of work that's
+      // already landed — so a throw here (a stale cache tag, a flaky count
+      // query) must never leave the overlay stuck on "checking" forever
+      // with no way for the user to get past it.
+      try {
+        await finalizeProvisioning(slug);
+      } catch {
+        // best-effort — worst case the site serves a stale cache until its next natural revalidation
+      }
       if (cancelled) return;
 
       setPhase("checking");
-      const counts = await checkProvisionedData(artistId);
+      let counts: Record<string, number> = {};
+      try {
+        counts = await checkProvisionedData(artistId);
+      } catch {
+        // best-effort — fall through to "done" even if the verification query itself failed
+      }
       if (cancelled) return;
       setCheckResults(counts);
       setPhase("done");
