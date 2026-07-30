@@ -8,7 +8,9 @@ export default async function ArtistsPage() {
   const [{ data: artists, error: artistsError }, { data: folders }] = await Promise.all([
     supabase
       .from("artists")
-      .select("id, name, slug, updated_at, folder_id, sort_order, primary_color, background_image_url")
+      .select(
+        "id, name, slug, updated_at, folder_id, sort_order, primary_color, background_image_url, theme_overrides"
+      )
       .order("sort_order", { ascending: true }),
     supabase.from("artist_folders").select("id, name, position").order("position", { ascending: true }),
   ]);

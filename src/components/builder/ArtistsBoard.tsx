@@ -10,6 +10,7 @@ import {
   moveArtist,
   deleteArtist,
 } from "@/app/builder/actions";
+import { DEFAULT_THEME_OVERRIDES, type ThemeOverrides } from "@/lib/theme";
 
 type ArtistLite = {
   id: string;
@@ -20,6 +21,7 @@ type ArtistLite = {
   sort_order: number;
   primary_color?: string | null;
   background_image_url?: string | null;
+  theme_overrides?: ThemeOverrides | null;
 };
 type FolderLite = { id: string; name: string; position: number };
 
@@ -31,7 +33,7 @@ type View = { level: "root" } | { level: "folder"; folderId: string };
 // drag and the gate preview's reposition drag elsewhere in the builder.
 const DRAG_MOVE_THRESHOLD = 5;
 // Two non-moved releases on the same icon within this window count as a
-// double-click (opens the artist for editing) rather than two separate
+// double-click (opens the artist's live site) rather than two separate
 // single-clicks (each of which would just toggle the quick menu).
 const DOUBLE_CLICK_MS = 350;
 // The sway is a rotation driven by the pointer's own recent horizontal
@@ -78,13 +80,16 @@ function FolderGlyph() {
 function SiteGlyph({
   color,
   imageUrl,
+  themeOverrides,
   className = "h-10 w-16",
 }: {
   color: string;
   imageUrl?: string;
+  themeOverrides?: ThemeOverrides | null;
   className?: string;
 }) {
   const [failed, setFailed] = useState(false);
+  const theme = { ...DEFAULT_THEME_OVERRIDES, ...themeOverrides };
 
   if (imageUrl && !failed) {
     return (
@@ -94,6 +99,10 @@ function SiteGlyph({
           src={imageUrl}
           alt=""
           className="h-full w-full object-cover"
+          style={{
+            objectPosition: `${theme.bg_position_x}% ${theme.bg_position_y}%`,
+            transform: `scale(${theme.bg_zoom})`,
+          }}
           draggable={false}
           onError={() => setFailed(true)}
         />
@@ -313,7 +322,7 @@ export function ArtistsBoard({
         if (last && last.id === ds.artist.id && now - last.time < DOUBLE_CLICK_MS) {
           lastClickRef.current = null;
           setMenuFor(null);
-          routerRef.current.push(`/builder/artists/${ds.artist.id}`);
+          routerRef.current.push(`/s/${ds.artist.slug}`);
           return;
         }
         lastClickRef.current = { id: ds.artist.id, time: now };
@@ -517,6 +526,7 @@ export function ArtistsBoard({
                 key={artist.background_image_url ?? "none"}
                 color={artist.primary_color || "#eab308"}
                 imageUrl={artist.background_image_url ?? undefined}
+                themeOverrides={artist.theme_overrides}
               />
               <span className="w-full truncate text-xs font-medium text-neutral-800 dark:text-white/90">
                 {artist.name}
@@ -593,6 +603,7 @@ export function ArtistsBoard({
           <SiteGlyph
             color={draggedArtist.primary_color || "#eab308"}
             imageUrl={draggedArtist.background_image_url ?? undefined}
+            themeOverrides={draggedArtist.theme_overrides}
             className="h-14 w-24 shadow-2xl shadow-black/40"
           />
         </div>
