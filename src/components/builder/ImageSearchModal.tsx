@@ -81,9 +81,20 @@ export function ImageSearchModal({
       onClick={requestClose}
     >
       <div
-        className={`flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border shadow-2xl ${
-          dark ? "border-white/10 bg-neutral-900" : "border-neutral-200 bg-white dark:border-white/10 dark:bg-neutral-900"
+        className={`flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden shadow-2xl ${
+          dark
+            ? "backdrop-blur-xl"
+            : "rounded-xl border border-neutral-200 bg-white dark:border-white/10 dark:bg-neutral-900"
         } ${closing ? "animate-modal-out" : "animate-modal-in"}`}
+        style={
+          dark
+            ? {
+                backgroundColor: "rgba(20,20,20,var(--card-bg-opacity, 0.4))",
+                border: "1px solid rgba(255,255,255,var(--card-border-opacity, 0.15))",
+                borderRadius: "var(--card-radius, 12px)",
+              }
+            : undefined
+        }
         onClick={(e) => e.stopPropagation()}
       >
         <div

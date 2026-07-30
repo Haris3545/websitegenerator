@@ -71,6 +71,15 @@ function visibleReactionKinds(post: DiscussionPostWithReactions): string[] {
 
 type PendingImage = { previewUrl: string; file: File | null; uploadedUrl: string | null };
 
+const UNDO_WINDOW_MS = 4000;
+
+type PendingDelete = {
+  id: string;
+  post: DiscussionPostWithReactions;
+  replies: DiscussionPostWithReactions[];
+  timer: number;
+};
+
 /** The Dashboard's Discussion section: anyone past the artist's password
  * gate can post a question/comment, reply to it, react with a fixed quick
  * row (thumbs up/down, heart, laugh, wow, cry) or any emoji via the "+"
@@ -136,6 +145,8 @@ function DiscussionBoardInner({
 
   const [emojiPickerPostId, setEmojiPickerPostId] = useState<string | null>(null);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const [justAddedIds, setJustAddedIds] = useState<Set<string>>(new Set());
+  const [pendingDeletes, setPendingDeletes] = useState<PendingDelete[]>([]);
 
   function withName(action: (name: string) => void) {
     if (myName) {
@@ -179,6 +190,7 @@ function DiscussionBoardInner({
         return;
       }
       setItems((prev) => [{ ...result.post, discussion_reactions: [] }, ...prev]);
+      setJustAddedIds((prev) => new Set(prev).add(result.post.id));
       setBody("");
       setPendingImage(null);
       setPendingGif(null);
@@ -200,6 +212,7 @@ function DiscussionBoardInner({
         return;
       }
       setItems((prev) => [...prev, { ...result.post, discussion_reactions: [] }]);
+      setJustAddedIds((prev) => new Set(prev).add(result.post.id));
       setReplyBody("");
       setReplyingToId(null);
     } catch (err) {
@@ -258,14 +271,39 @@ function DiscussionBoardInner({
     void toggleDiscussionReaction(postId, name, kind);
   }
 
+  // Deleting doesn't hit the server right away — after the poof animation
+  // clears the post from view, it sits in pendingDeletes for 4s with an
+  // Undo toast instead, and only actually calls deleteDiscussionPost once
+  // that window closes without an undo.
   function handleDelete(id: string, e: React.MouseEvent<HTMLButtonElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
     triggerPoof(rect.left + rect.width / 2, rect.top + rect.height / 2);
     setDeletingIds((prev) => new Set(prev).add(id));
+    const post = items.find((p) => p.id === id);
+    const replies = items.filter((p) => p.parent_id === id);
     window.setTimeout(() => {
       setItems((prev) => prev.filter((p) => p.id !== id && p.parent_id !== id));
-      void deleteDiscussionPost(id);
+      setDeletingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      if (post) {
+        const timer = window.setTimeout(() => {
+          void deleteDiscussionPost(id);
+          setPendingDeletes((pd) => pd.filter((d) => d.id !== id));
+        }, UNDO_WINDOW_MS);
+        setPendingDeletes((pd) => [...pd, { id, post, replies, timer }]);
+      }
     }, 220);
+  }
+
+  function handleUndoDelete(id: string) {
+    const entry = pendingDeletes.find((d) => d.id === id);
+    if (!entry) return;
+    window.clearTimeout(entry.timer);
+    setPendingDeletes((pd) => pd.filter((d) => d.id !== id));
+    setItems((prev) => [entry.post, ...entry.replies, ...prev]);
   }
 
   const topLevel = items.filter((p) => !p.parent_id);
@@ -426,7 +464,7 @@ function DiscussionBoardInner({
               key={post.id}
               className={`rounded-xl border border-white/10 bg-white/[0.02] p-3.5 transition-all duration-200 ${
                 deletingIds.has(post.id) ? "scale-95 opacity-0" : "scale-100 opacity-100"
-              }`}
+              } ${justAddedIds.has(post.id) ? "animate-poof-in" : ""}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -473,7 +511,7 @@ function DiscussionBoardInner({
                       key={reply.id}
                       className={`transition-all duration-200 ${
                         deletingIds.has(reply.id) ? "scale-95 opacity-0" : "scale-100 opacity-100"
-                      }`}
+                      } ${justAddedIds.has(reply.id) ? "animate-poof-in" : ""}`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
@@ -522,6 +560,26 @@ function DiscussionBoardInner({
                   {replyError && <p className="text-[11px] text-red-400">{replyError}</p>}
                 </div>
               )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {pendingDeletes.length > 0 && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-[95] flex flex-col items-center gap-2">
+          {pendingDeletes.map((d) => (
+            <div
+              key={d.id}
+              className="animate-poof-in pointer-events-auto flex items-center gap-3 rounded-full border border-white/10 bg-neutral-950/80 px-4 py-2 text-sm text-white/80 shadow-2xl backdrop-blur-md"
+            >
+              <span>Post deleted</span>
+              <button
+                type="button"
+                onClick={() => handleUndoDelete(d.id)}
+                className="font-semibold text-[var(--accent)] transition-colors hover:brightness-125"
+              >
+                Undo
+              </button>
             </div>
           ))}
         </div>

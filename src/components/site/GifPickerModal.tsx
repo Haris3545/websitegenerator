@@ -54,9 +54,14 @@ export function GifPickerModal({
       onClick={requestClose}
     >
       <div
-        className={`flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-white/10 bg-neutral-900 shadow-2xl ${
+        className={`flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden shadow-2xl backdrop-blur-xl ${
           closing ? "animate-modal-out" : "animate-modal-in"
         }`}
+        style={{
+          backgroundColor: "rgba(20,20,20,var(--card-bg-opacity, 0.4))",
+          border: "1px solid rgba(255,255,255,var(--card-border-opacity, 0.15))",
+          borderRadius: "var(--card-radius, 12px)",
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-5 py-4">

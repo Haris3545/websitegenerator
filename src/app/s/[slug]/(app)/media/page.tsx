@@ -89,20 +89,6 @@ export default async function MediaPage({ params }: { params: Promise<{ slug: st
         />
       </div>
 
-      {insights.length > 0 && (
-        <div className="mt-8">
-          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase text-white/70">
-            <span className="h-3 w-1 bg-[var(--accent)]" />
-            What we&apos;ve noticed
-          </h3>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {insights.map((insight, i) => (
-              <InsightCard key={i} insight={insight} />
-            ))}
-          </div>
-        </div>
-      )}
-
       <p className="mt-8 text-sm text-white/50">
         {articles?.length ?? 0} results · sourced from Google News
       </p>
@@ -122,6 +108,20 @@ export default async function MediaPage({ params }: { params: Promise<{ slug: st
         </div>
       ) : (
         <MediaList articles={articles} />
+      )}
+
+      {insights.length > 0 && (
+        <div className="mt-8">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase text-white/70">
+            <span className="h-3 w-1 bg-[var(--accent)]" />
+            What we&apos;ve noticed
+          </h3>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {insights.map((insight, i) => (
+              <InsightCard key={i} insight={insight} />
+            ))}
+          </div>
+        </div>
       )}
 
       <SiteFooter
