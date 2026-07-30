@@ -42,12 +42,34 @@ type RssItem = {
   description?: string;
 };
 
+// A curly apostrophe pulled off some other page doesn't match Google's own
+// straight-apostrophe spelling of an artist's name, and combined with
+// exact-phrase quoting below, is enough on its own to make the search come
+// back completely empty.
+function normalizeApostrophes(s: string): string {
+  return s.replace(/[‘’‚‛`´]/g, "'");
+}
+
 /** Fetches Google News' public RSS feed for the artist — free and keyless,
  * so this stays the baseline source even where NEWSAPI_KEY isn't set.
  * Throws on failure (unlike fetchNewsApiArticles) since this is the one
  * source the Media tab has always depended on. */
 async function fetchGoogleNewsArticles(artistName: string): Promise<NewsApiRow[]> {
-  const query = encodeURIComponent(`"${artistName}"`);
+  const name = normalizeApostrophes(artistName);
+  const strict = await fetchGoogleNewsRss(`"${name}"`);
+  if (strict.length > 0) return strict;
+  // Exact-phrase quoting is what makes this search useful for a common
+  // word/phrase artist name — but it can come back completely empty for a
+  // name Google's RSS search parses more strictly than its own web search
+  // does, punctuation like an apostrophe being a common case, even though
+  // that same name turns up plenty of coverage on news.google.com directly.
+  // A plain, unquoted query is more lenient and still relevant enough for
+  // an artist-name search, so it's a better empty result than none at all.
+  return fetchGoogleNewsRss(name);
+}
+
+async function fetchGoogleNewsRss(searchTerm: string): Promise<NewsApiRow[]> {
+  const query = encodeURIComponent(searchTerm);
   const feedUrl = `https://news.google.com/rss/search?q=${query}&hl=en-US&gl=US&ceid=US:en`;
 
   const res = await fetch(feedUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
@@ -88,10 +110,20 @@ async function fetchGoogleNewsArticles(artistName: string): Promise<NewsApiRow[]
  * this is a background data pipeline, not a request scoped to the visiting
  * user's own permissions. */
 export async function refreshMediaForArtist(artistId: string, artistName: string) {
-  const [rssRows, newsApiRows] = await Promise.all([
+  // allSettled rather than all — fetchGoogleNewsArticles is the one source
+  // documented to throw (a genuine fetch/RSS failure, not just an empty
+  // result), and Promise.all would have discarded whatever NewsAPI already
+  // found too, leaving the Media tab completely empty over a transient
+  // failure in just one of the two sources.
+  const [rssResult, newsApiResult] = await Promise.allSettled([
     fetchGoogleNewsArticles(artistName),
     fetchNewsApiArticles(artistName),
   ]);
+  if (rssResult.status === "rejected") {
+    console.error(`Google News RSS fetch failed for "${artistName}":`, rssResult.reason);
+  }
+  const rssRows = rssResult.status === "fulfilled" ? rssResult.value : [];
+  const newsApiRows = newsApiResult.status === "fulfilled" ? newsApiResult.value : [];
 
   const fetchedAt = new Date().toISOString();
   // Same URL can show up from both sources (wire syndication) — the DB
