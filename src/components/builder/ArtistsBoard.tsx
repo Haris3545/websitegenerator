@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   createFolder,
@@ -24,6 +24,18 @@ type FolderLite = { id: string; name: string; position: number };
 
 type View = { level: "root" } | { level: "folder"; folderId: string };
 
+// Grabbing an icon doesn't start a drag until the pointer has actually
+// moved this many px — below that, a pointerup is a click (opens the
+// menu), same threshold pattern used for the theme editor's background
+// drag and the gate preview's reposition drag elsewhere in the builder.
+const DRAG_MOVE_THRESHOLD = 5;
+// The sway is a rotation driven by the pointer's own recent horizontal
+// speed, eased toward its target via a CSS transition rather than
+// integrated frame-by-frame — an approximation of a swinging thumbnail,
+// not an actual spring/physics simulation.
+const MAX_SWAY_DEG = 16;
+const SWAY_SENSITIVITY = 45; // deg per (px/ms) of pointer speed
+
 function FolderGlyph() {
   return (
     <div className="relative h-12 w-14">
@@ -43,17 +55,26 @@ function FolderGlyph() {
  * mShots) capturing a purpose-built preview page, which repeatedly proved
  * unreliable — using an asset already sitting in Storage is instant and
  * can never come back blank. */
-function SiteGlyph({ color, imageUrl }: { color: string; imageUrl?: string }) {
+function SiteGlyph({
+  color,
+  imageUrl,
+  className = "h-10 w-16",
+}: {
+  color: string;
+  imageUrl?: string;
+  className?: string;
+}) {
   const [failed, setFailed] = useState(false);
 
   if (imageUrl && !failed) {
     return (
-      <div className="h-10 w-16 overflow-hidden rounded-xl border border-black/10 bg-neutral-800 shadow-sm dark:border-white/10">
+      <div className={`overflow-hidden rounded-xl border border-black/10 bg-neutral-800 shadow-sm dark:border-white/10 ${className}`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={imageUrl}
           alt=""
           className="h-full w-full object-cover"
+          draggable={false}
           onError={() => setFailed(true)}
         />
       </div>
@@ -62,7 +83,7 @@ function SiteGlyph({ color, imageUrl }: { color: string; imageUrl?: string }) {
 
   return (
     <div
-      className="flex h-10 w-16 items-center justify-center rounded-xl shadow-sm"
+      className={`flex items-center justify-center rounded-xl shadow-sm ${className}`}
       style={{ backgroundColor: color }}
     >
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className="opacity-90">
@@ -87,11 +108,38 @@ export function ArtistsBoard({
   const [view, setView] = useState<View>({ level: "root" });
   const [newFolderName, setNewFolderName] = useState("");
   const [isPending, startTransition] = useTransition();
-  const [dragId, setDragId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // The floating dragged thumbnail — null whenever nothing's being
+  // dragged. Position/rotation update on every pointermove; the id is
+  // what actually drives which real icon renders dimmed in its place.
+  const [draggedArtist, setDraggedArtist] = useState<ArtistLite | null>(null);
+  const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
+  const [dragRotation, setDragRotation] = useState(0);
+  const [dragGrab, setDragGrab] = useState({ dx: 0, dy: 0 });
+
+  const dragRef = useRef<{
+    artist: ArtistLite;
+    startX: number;
+    startY: number;
+    grabDx: number;
+    grabDy: number;
+    moved: boolean;
+    lastX: number;
+    lastT: number;
+    startRect: DOMRect;
+  } | null>(null);
+  const dropTargetRef = useRef<string | null>(null);
+  const menuForRef = useRef<string | null>(null);
+  const persistMoveRef = useRef<(artistId: string, destFolderId: string | null, beforeArtistId: string | null) => void>(
+    () => {}
+  );
+  useEffect(() => {
+    menuForRef.current = menuFor;
+  }, [menuFor]);
 
   // The menu for every artist stays mounted at all times (see
   // data-artist-menu below) and animates purely via CSS classes, so it can
@@ -141,6 +189,118 @@ export function ArtistsBoard({
       );
       if (!result.ok) setError(result.error);
     });
+  }
+  useEffect(() => {
+    persistMoveRef.current = persistMove;
+  });
+
+  function openMenuForRect(artistId: string, rect: DOMRect) {
+    // Fixed (viewport-relative) positioning, clamped to stay fully
+    // on-screen — an absolute-positioned menu centered on the icon with no
+    // awareness of the viewport edge would get clipped/pushed off-screen
+    // for an icon near the left/right edge on a narrow window.
+    const menuWidth = 160;
+    const margin = 12;
+    const left = Math.min(
+      Math.max(rect.left + rect.width / 2 - menuWidth / 2, margin),
+      window.innerWidth - menuWidth - margin
+    );
+    setMenuPos({ top: rect.bottom + 6, left });
+    setMenuFor(artistId);
+  }
+
+  // Global pointermove/pointerup so the drag keeps tracking even once the
+  // cursor leaves the original icon's bounds — kept to an empty dependency
+  // array (persistMove/artists accessed only via refs or DOM data
+  // attributes) so it subscribes exactly once rather than on every
+  // dropTarget/artists change during a drag.
+  useEffect(() => {
+    function onMove(e: PointerEvent) {
+      const ds = dragRef.current;
+      if (!ds) return;
+      const dx = e.clientX - ds.startX;
+      const dy = e.clientY - ds.startY;
+
+      if (!ds.moved) {
+        if (Math.hypot(dx, dy) < DRAG_MOVE_THRESHOLD) return;
+        ds.moved = true;
+        setDraggedArtist(ds.artist);
+        setDragGrab({ dx: ds.grabDx, dy: ds.grabDy });
+      }
+
+      const now = performance.now();
+      const dt = Math.max(1, now - ds.lastT);
+      const vx = (e.clientX - ds.lastX) / dt;
+      ds.lastX = e.clientX;
+      ds.lastT = now;
+
+      const targetRotation = Math.max(-MAX_SWAY_DEG, Math.min(MAX_SWAY_DEG, vx * SWAY_SENSITIVITY));
+      setDragRotation(targetRotation);
+      setDragPos({ x: e.clientX, y: e.clientY });
+
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const zone = el?.closest<HTMLElement>("[data-drop-zone]")?.dataset.dropZone ?? null;
+      const resolved = zone && zone !== `artist:${ds.artist.id}` ? zone : null;
+      dropTargetRef.current = resolved;
+      setDropTarget(resolved);
+    }
+
+    function onUp() {
+      const ds = dragRef.current;
+      dragRef.current = null;
+      if (!ds) return;
+
+      if (!ds.moved) {
+        if (menuForRef.current === ds.artist.id) {
+          setMenuFor(null);
+        } else {
+          openMenuForRect(ds.artist.id, ds.startRect);
+        }
+        return;
+      }
+
+      const zone = dropTargetRef.current;
+      if (zone === "back") {
+        persistMoveRef.current(ds.artist.id, null, null);
+      } else if (zone?.startsWith("folder:")) {
+        persistMoveRef.current(ds.artist.id, zone.slice("folder:".length), null);
+      } else if (zone?.startsWith("artist:")) {
+        const targetId = zone.slice("artist:".length);
+        const targetEl = document.querySelector<HTMLElement>(`[data-drop-zone="artist:${targetId}"]`);
+        const targetFolder = targetEl?.dataset.artistFolder || null;
+        persistMoveRef.current(ds.artist.id, targetFolder, targetId);
+      }
+
+      setDraggedArtist(null);
+      setDragRotation(0);
+      setDropTarget(null);
+      dropTargetRef.current = null;
+    }
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, []);
+
+  function makeIconPointerDown(artist: ArtistLite) {
+    return (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      dragRef.current = {
+        artist,
+        startX: e.clientX,
+        startY: e.clientY,
+        grabDx: e.clientX - rect.left,
+        grabDy: e.clientY - rect.top,
+        moved: false,
+        lastX: e.clientX,
+        lastT: performance.now(),
+        startRect: rect,
+      };
+    };
   }
 
   function handleCreateFolder() {
@@ -210,17 +370,9 @@ export function ArtistsBoard({
         </div>
       ) : (
         <div
-          onDragOver={(e) => e.preventDefault()}
-          onDragEnter={() => setDropTarget("__back__")}
-          onDragLeave={() => setDropTarget((z) => (z === "__back__" ? null : z))}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDropTarget(null);
-            if (dragId) persistMove(dragId, null, null);
-            setDragId(null);
-          }}
+          data-drop-zone="back"
           className={`flex items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-sm transition-colors ${
-            dropTarget === "__back__"
+            dropTarget === "back"
               ? "border-builder-accent bg-builder-accent/5 text-amber-700 dark:text-amber-300"
               : "border-neutral-300 text-neutral-600 dark:border-white/15 dark:text-white/60"
           }`}
@@ -253,7 +405,7 @@ export function ArtistsBoard({
               </>
             )}
           </span>
-          {dropTarget === "__back__" && <span className="text-xs">drop to remove from folder</span>}
+          {dropTarget === "back" && <span className="text-xs">drop to remove from folder</span>}
         </div>
       )}
 
@@ -265,18 +417,10 @@ export function ArtistsBoard({
               <button
                 key={folder.id}
                 type="button"
+                data-drop-zone={`folder:${folder.id}`}
                 onClick={() => setView({ level: "folder", folderId: folder.id })}
-                onDragOver={(e) => e.preventDefault()}
-                onDragEnter={() => setDropTarget(folder.id)}
-                onDragLeave={() => setDropTarget((z) => (z === folder.id ? null : z))}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setDropTarget(null);
-                  if (dragId) persistMove(dragId, folder.id, null);
-                  setDragId(null);
-                }}
                 className={`flex w-24 flex-col items-center gap-1.5 rounded-lg p-2 text-center transition-colors ${
-                  dropTarget === folder.id ? "bg-builder-accent/10 ring-2 ring-builder-accent" : "hover:bg-black/[0.03] dark:hover:bg-white/5"
+                  dropTarget === `folder:${folder.id}` ? "bg-builder-accent/10 ring-2 ring-builder-accent" : "hover:bg-black/[0.03] dark:hover:bg-white/5"
                 }`}
               >
                 <FolderGlyph />
@@ -293,47 +437,12 @@ export function ArtistsBoard({
         {visibleArtists.map((artist) => (
           <div key={artist.id} className="relative" data-artist-menu={artist.id}>
             <div
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer.setData("text/plain", artist.id);
-                setDragId(artist.id);
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setDropTarget(artist.id);
-              }}
-              onDragLeave={() => setDropTarget((z) => (z === artist.id ? null : z))}
-              onDrop={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setDropTarget(null);
-                if (dragId) persistMove(dragId, view.level === "folder" ? view.folderId : null, artist.id);
-                setDragId(null);
-              }}
-              onClick={(e) => {
-                if (menuFor === artist.id) {
-                  setMenuFor(null);
-                  return;
-                }
-                // Fixed (viewport-relative) positioning, clamped to stay
-                // fully on-screen — the old version centered the menu on
-                // the icon via absolute positioning with no awareness of
-                // the viewport edge, so an icon near the left/right side on
-                // a narrow screen had its menu clipped or pushed half off.
-                const rect = e.currentTarget.getBoundingClientRect();
-                const menuWidth = 160;
-                const margin = 12;
-                const left = Math.min(
-                  Math.max(rect.left + rect.width / 2 - menuWidth / 2, margin),
-                  window.innerWidth - menuWidth - margin
-                );
-                setMenuPos({ top: rect.bottom + 6, left });
-                setMenuFor(artist.id);
-              }}
-              className={`flex w-24 cursor-pointer select-none flex-col items-center gap-1.5 rounded-lg p-2 text-center transition-colors ${
-                dropTarget === artist.id ? "bg-builder-accent/10 ring-2 ring-builder-accent" : "hover:bg-black/[0.03] dark:hover:bg-white/5"
-              }`}
+              data-drop-zone={`artist:${artist.id}`}
+              data-artist-folder={artist.folder_id ?? ""}
+              onPointerDown={makeIconPointerDown(artist)}
+              className={`flex w-24 cursor-grab touch-none select-none flex-col items-center gap-1.5 rounded-lg p-2 text-center transition-colors active:cursor-grabbing ${
+                dropTarget === `artist:${artist.id}` ? "bg-builder-accent/10 ring-2 ring-builder-accent" : "hover:bg-black/[0.03] dark:hover:bg-white/5"
+              } ${draggedArtist?.id === artist.id ? "opacity-30" : ""}`}
             >
               <SiteGlyph
                 key={artist.background_image_url ?? "none"}
@@ -399,6 +508,24 @@ export function ArtistsBoard({
           </p>
         )}
       </div>
+
+      {draggedArtist && (
+        <div
+          className="pointer-events-none fixed z-50"
+          style={{
+            left: dragPos.x - dragGrab.dx,
+            top: dragPos.y - dragGrab.dy,
+            transform: `rotate(${dragRotation}deg) scale(1.08)`,
+            transition: "transform 150ms cubic-bezier(0.34, 1.2, 0.64, 1)",
+          }}
+        >
+          <SiteGlyph
+            color={draggedArtist.primary_color || "#eab308"}
+            imageUrl={draggedArtist.background_image_url ?? undefined}
+            className="h-14 w-24 shadow-2xl shadow-black/40"
+          />
+        </div>
+      )}
     </div>
   );
 }
