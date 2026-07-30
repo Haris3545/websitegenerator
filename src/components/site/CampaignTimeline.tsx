@@ -61,6 +61,7 @@ export function CampaignTimeline({
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const addPopoverRef = useRef<HTMLDivElement>(null);
+  const addInputRef = useRef<HTMLInputElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [adding, setAdding] = useState(false);
   const [label, setLabel] = useState("");
@@ -76,6 +77,16 @@ export function CampaignTimeline({
     startLeft: number;
     moved: boolean;
   } | null>(null);
+  // pointerup -> click is always the sequence, regardless of movement in
+  // between, and handleDotPointerUp clears dragRef.current before that
+  // click ever fires — reading dragRef.current?.moved from the click
+  // handler itself would always see it already nulled out, so every
+  // drag-then-release was immediately treated as a plain click and
+  // reopened the edit modal right after dropping a dot. This ref captures
+  // the moved flag at the moment of release, before it's cleared, so the
+  // click handler can still see it (same fix as CommentMap's own
+  // wasDraggingRef).
+  const wasDraggingRef = useRef(false);
   const [dragVisual, setDragVisual] = useState<{ id: string; left: number } | null>(null);
 
   const sorted = useMemo(() => sortMilestones(items), [items]);
@@ -93,6 +104,13 @@ export function CampaignTimeline({
 
   useEffect(() => {
     if (!adding) return;
+    // The panel now stays mounted so it can animate shut (see the unfurl
+    // wrapper below) instead of unmounting instantly — autoFocus only ever
+    // fires once, on mount, so it wouldn't refocus on a second open. A
+    // short delay lets the unfurl-open transition actually start first,
+    // matching how it visually reads (focusing an element still animating
+    // to size 0 does nothing useful).
+    const focusTimer = window.setTimeout(() => addInputRef.current?.focus(), 50);
     function handlePointerDown(e: PointerEvent) {
       if (addPopoverRef.current && !addPopoverRef.current.contains(e.target as Node)) setAdding(false);
     }
@@ -102,6 +120,7 @@ export function CampaignTimeline({
     document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
     return () => {
+      window.clearTimeout(focusTimer);
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
@@ -178,6 +197,7 @@ export function CampaignTimeline({
 
   async function handleDotPointerUp() {
     const ds = dragRef.current;
+    wasDraggingRef.current = ds?.moved ?? false;
     dragRef.current = null;
     if (!ds || !ds.moved || !dragVisual) {
       setDragVisual(null);
@@ -202,6 +222,13 @@ export function CampaignTimeline({
 
     const before = others.find((m) => m.id === beforeId);
     const after = others.find((m) => m.id === afterId);
+    // No before/after neighbour at all only happens when this is the only
+    // milestone on the line — nothing to reorder relative to, so its own
+    // current sort_order is as good a value as any (and, unlike Date.now(),
+    // doesn't trip the "components must be pure" rule for a value that's
+    // about to be overwritten by the server's real response a moment later
+    // anyway).
+    const draggedCurrent = sorted.find((m) => m.id === draggedId);
     const newSortOrder =
       before && after
         ? (before.sort_order + after.sort_order) / 2
@@ -209,7 +236,7 @@ export function CampaignTimeline({
           ? before.sort_order - 86400
           : after
             ? after.sort_order + 86400
-            : Date.now() / 1000;
+            : (draggedCurrent?.sort_order ?? 0);
     setItems((prev) => prev.map((m) => (m.id === draggedId ? { ...m, sort_order: newSortOrder } : m)));
 
     const result = await repositionCampaignMilestone(draggedId, beforeId, afterId);
@@ -222,7 +249,7 @@ export function CampaignTimeline({
     <div
       className="flex flex-col gap-3 p-5"
       style={{
-        backgroundColor: "rgba(0,0,0,0.4)",
+        backgroundColor: "rgba(0,0,0,var(--card-bg-opacity, 0.4))",
         border: "1px solid rgba(255,255,255,var(--card-border-opacity, 0.15))",
         borderRadius: "var(--card-radius, 12px)",
       }}
@@ -240,10 +267,23 @@ export function CampaignTimeline({
           >
             + Add
           </button>
-          {adding && (
-            <div className="absolute right-0 top-full z-20 mt-2 flex w-72 flex-col gap-2.5 rounded-xl border border-white/10 bg-neutral-950 p-3.5 shadow-2xl">
+          {/* Unfurls open/closed via a grid-template-rows 0fr<->1fr animation
+              (same technique FontPicker's dropdown uses) rather than
+              popping in/out instantly — the panel stays mounted so it can
+              actually animate shut instead of just disappearing. */}
+          <div
+            className={`absolute right-0 top-full z-20 mt-2 grid w-72 transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+              adding ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+            }`}
+          >
+            <div className="overflow-hidden">
+              <div
+                className={`flex flex-col gap-2.5 rounded-xl border border-white/10 bg-neutral-950 p-3.5 shadow-2xl transition-opacity duration-200 ${
+                  adding ? "opacity-100 delay-100" : "opacity-0"
+                }`}
+              >
               <input
-                autoFocus
+                ref={addInputRef}
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
                 placeholder="What's happening?"
@@ -290,8 +330,9 @@ export function CampaignTimeline({
                   {pending ? "Adding…" : "Add"}
                 </button>
               </div>
+              </div>
             </div>
-          )}
+          </div>
         </div>
       </div>
 
@@ -316,9 +357,12 @@ export function CampaignTimeline({
                   type="button"
                   onPointerDown={makeDotPointerDown(m, i)}
                   onPointerMove={handleDotPointerMove}
-                  onPointerUp={() => void handleDotPointerUp()}
+                  onPointerUp={handleDotPointerUp}
                   onClick={() => {
-                    if (dragRef.current?.moved) return;
+                    if (wasDraggingRef.current) {
+                      wasDraggingRef.current = false;
+                      return;
+                    }
                     setEditingId(m.id);
                   }}
                   className={`absolute top-0 flex flex-col items-center gap-1.5 ${

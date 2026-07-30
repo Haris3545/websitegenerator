@@ -431,6 +431,7 @@ export interface Database {
           body: string;
           image_url: string | null;
           gif_url: string | null;
+          parent_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -440,6 +441,7 @@ export interface Database {
           body?: string;
           image_url?: string | null;
           gif_url?: string | null;
+          parent_id?: string | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["discussion_posts"]["Insert"]>;

@@ -281,6 +281,14 @@ export default async function DashboardPage({
       </div>
 
       <div className="mt-6">
+        <DiscussionBoard
+          artistId={artist.id}
+          slug={slug}
+          posts={(discussionPosts ?? []) as unknown as DiscussionPostWithReactions[]}
+        />
+      </div>
+
+      <div className="mt-6">
         <DashboardKpiGrid
           key={otherTabs.map((t) => t.key).join(",")}
           artistId={artist.id}
@@ -297,14 +305,6 @@ export default async function DashboardPage({
           />
         </div>
       )}
-
-      <div className="mt-8">
-        <DiscussionBoard
-          artistId={artist.id}
-          slug={slug}
-          posts={(discussionPosts ?? []) as unknown as DiscussionPostWithReactions[]}
-        />
-      </div>
 
       <SiteFooter
         slug={slug}

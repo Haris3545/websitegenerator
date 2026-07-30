@@ -250,7 +250,7 @@ export function CampaignGanttBoard({
         style={{
           border: "1px solid rgba(255,255,255,var(--card-border-opacity, 0.15))",
           borderRadius: "var(--card-radius, 12px)",
-          backgroundColor: "rgba(0,0,0,0.4)",
+          backgroundColor: "rgba(0,0,0,var(--card-bg-opacity, 0.4))",
         }}
       >
         <div className="flex shrink-0 flex-col border-r border-white/10" style={{ width: LABEL_WIDTH }}>
@@ -415,7 +415,7 @@ export function CampaignGanttBoard({
         <div
           className="flex items-center justify-between gap-3 p-3.5"
           style={{
-            backgroundColor: "rgba(0,0,0,0.4)",
+            backgroundColor: "rgba(0,0,0,var(--card-bg-opacity, 0.4))",
             border: "1px solid rgba(255,255,255,var(--card-border-opacity, 0.15))",
             borderRadius: "var(--card-radius, 12px)",
           }}

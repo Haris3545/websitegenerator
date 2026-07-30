@@ -99,7 +99,7 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
     <div
       className="flex flex-col gap-5 p-5"
       style={{
-        backgroundColor: "rgba(0,0,0,0.55)",
+        backgroundColor: "rgba(0,0,0,var(--card-bg-opacity, 0.4))",
         border: "1px solid rgba(255,255,255,var(--card-border-opacity, 0.15))",
         borderRadius: "var(--card-radius, 12px)",
       }}

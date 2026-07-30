@@ -42,15 +42,64 @@ export async function uploadDiscussionImage(
   return { ok: true, url: data.publicUrl };
 }
 
+/** Same idea as the builder's importImageFromUrl (searchActions.ts) — a
+ * picked Google Images search result gets downloaded and re-hosted here
+ * rather than hotlinked, since the third-party source can disappear or
+ * block hotlinking at any time. Uses the service-role client (not the
+ * authenticated builder client that one uses) since this runs from the
+ * live site itself, gated only by the artist's password cookie. No size
+ * preference here (unlike the builder's own picker) — any search result
+ * is fine for a Discussion post attachment. */
+export async function importDiscussionImageFromUrl(
+  url: string,
+  artistSlug: string
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      throw new Error("That doesn't look like a valid image URL.");
+    }
+
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; websitegenerator-image-import/1.0)" },
+    });
+    if (!res.ok) throw new Error(`Couldn't download that image (${res.status}).`);
+
+    const contentType = res.headers.get("content-type") ?? "";
+    if (!contentType.startsWith("image/")) {
+      throw new Error("That link doesn't point to an image.");
+    }
+
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const ext = contentType.split("/")[1]?.split(";")[0]?.replace("jpeg", "jpg") || "jpg";
+    const path = `${artistSlug}/discussion/${crypto.randomUUID()}.${ext}`;
+
+    const supabase = createServiceRoleClient();
+    const { error } = await supabase.storage
+      .from("artist-media")
+      .upload(path, buffer, { contentType, cacheControl: "31536000" });
+    if (error) throw new Error(error.message);
+
+    const { data } = supabase.storage.from("artist-media").getPublicUrl(path);
+    return { ok: true, url: data.publicUrl };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Import failed." };
+  }
+}
+
 /** Every visitor is just a typed-once display name (see DiscussionBoard's
  * localStorage prompt) — there's no real per-visitor login on this site, so
- * author_name isn't an authenticated identity, just a courtesy label. */
+ * author_name isn't an authenticated identity, just a courtesy label.
+ * parentId set means this is a reply to another post rather than a new
+ * top-level one — one level of nesting only (a reply's own parentId is
+ * always the top-level post, never another reply). */
 export async function addDiscussionPost(
   artistId: string,
   authorName: string,
   body: string,
   imageUrl: string | null,
-  gifUrl: string | null
+  gifUrl: string | null,
+  parentId: string | null = null
 ): Promise<{ ok: true; post: DiscussionPost } | { ok: false; error: string }> {
   if (!authorName.trim()) return { ok: false, error: "Name can't be empty." };
   if (!body.trim() && !imageUrl && !gifUrl) return { ok: false, error: "Post can't be empty." };
@@ -64,6 +113,7 @@ export async function addDiscussionPost(
       body: body.trim(),
       image_url: imageUrl,
       gif_url: gifUrl,
+      parent_id: parentId,
     })
     .select()
     .single();
