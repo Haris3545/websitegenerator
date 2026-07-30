@@ -4,6 +4,7 @@ import { getSiteArtist } from "@/lib/getSiteArtist";
 import { refreshEventsForArtist, refreshEventsIfStale } from "@/lib/events";
 import { CalendarBoard } from "@/components/site/CalendarBoard";
 import { CampaignGanttBoard } from "@/components/site/CampaignGanttBoard";
+import { CollapsibleSection } from "@/components/site/CollapsibleSection";
 import { TabHeading } from "@/components/site/TabHeading";
 import { SiteFooter } from "@/components/site/SiteFooter";
 
@@ -62,27 +63,29 @@ export default async function CalendarPage({ params }: { params: Promise<{ slug:
         subtitle="Upcoming dates by month"
       />
 
-      {!events?.length && (
-        <p className="mt-4 text-sm text-white/50">
-          No upcoming dates cached yet — hit &quot;Refresh Everything&quot; below, or add one yourself
-          with &quot;+ Add event&quot;. If nothing shows up after refreshing, ask whoever manages this
-          app to set TICKETMASTER_API_KEY for broader coverage.
-        </p>
-      )}
-      <CalendarBoard
-        artistId={artist.id}
-        slug={slug}
-        initialEvents={events ?? []}
-        initialTbcIdeas={tbcIdeas ?? []}
-      />
-
-      <div className="mt-8">
+      <div className="mt-4">
         <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase text-white/70">
           <span className="h-3 w-1 bg-[var(--accent)]" />
           Campaign timeline
         </h3>
         <CampaignGanttBoard artistId={artist.id} initialBlocks={campaignBlocks ?? []} />
       </div>
+
+      <CollapsibleSection title="Month view">
+        {!events?.length && (
+          <p className="mb-4 text-sm text-white/50">
+            No upcoming dates cached yet — hit &quot;Refresh Everything&quot; below, or add one
+            yourself with &quot;+ Add event&quot;. If nothing shows up after refreshing, ask
+            whoever manages this app to set TICKETMASTER_API_KEY for broader coverage.
+          </p>
+        )}
+        <CalendarBoard
+          artistId={artist.id}
+          slug={slug}
+          initialEvents={events ?? []}
+          initialTbcIdeas={tbcIdeas ?? []}
+        />
+      </CollapsibleSection>
 
       <SiteFooter
         slug={slug}
