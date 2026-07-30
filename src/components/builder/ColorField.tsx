@@ -43,7 +43,7 @@ export function ColorField({
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          className="h-8 w-8 rounded-lg border border-neutral-300 shadow-inner dark:border-white/15"
+          className="h-8 w-8 rounded-lg border border-neutral-300 shadow-inner transition-transform duration-150 ease-out active:scale-[0.97] dark:border-white/15"
           style={{ backgroundColor: value }}
           aria-label={`Pick ${label}`}
         />
@@ -59,7 +59,7 @@ export function ColorField({
         // above) — closing on every pointerup here meant the popover slammed
         // shut after the very first drag release, before you could also
         // touch the hue strip or fine-tune further.
-        <div className="absolute top-full z-10 mt-1">
+        <div className="animate-dropdown-unfurl absolute top-full z-10 mt-1 origin-top-left">
           <HexColorPicker color={value} onChange={onChange} />
         </div>
       )}

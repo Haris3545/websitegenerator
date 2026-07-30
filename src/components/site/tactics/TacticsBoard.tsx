@@ -78,7 +78,7 @@ function TacticsBoardInner({
         <button
           type="button"
           onClick={openAdd}
-          className="self-start rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-black transition-all duration-150 ease-out hover:-translate-y-0.5 hover:brightness-110"
+          className="self-start rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-black transition-[transform,filter] duration-150 ease-out [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 hover:brightness-110"
         >
           + New tactic
         </button>

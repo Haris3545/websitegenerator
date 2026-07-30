@@ -1,6 +1,6 @@
 # 017 — Animate the ProvisioningOverlay completion moment
 
-- **Status**: TODO
+- **Status**: DONE (plan 015 was dropped, so used the local-keyframe fallback path described in this plan)
 - **Commit**: 46a1b7b
 - **Severity**: MEDIUM (missed opportunity — additive, not corrective)
 - **Category**: Missed opportunities

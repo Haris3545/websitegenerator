@@ -79,7 +79,7 @@ export function WikipediaTrendsSection({ trends, artistName }: { trends: Wikiped
         {trends.articles.map((article) => (
           <div
             key={article.title}
-            className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/20 p-3 transition-all duration-150 ease-out hover:-translate-y-0.5 hover:border-white/20"
+            className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/20 p-3 transition-[transform,border-color] duration-150 ease-out [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 hover:border-white/20"
           >
             <div className="min-w-0">
               <div className="flex items-center justify-between gap-2">

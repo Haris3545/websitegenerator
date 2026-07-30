@@ -46,7 +46,7 @@ export function ConversationThemes({ themes }: { themes: ConversationTheme[] }) 
                 </span>
                 <div className="h-2 overflow-hidden rounded-full bg-white/10">
                   <div
-                    className="h-full rounded-full transition-all duration-500 ease-out"
+                    className="h-full rounded-full transition-[width] duration-500 ease-out"
                     style={{ width: `${Math.max(4, pct)}%`, backgroundColor: color }}
                   />
                 </div>
@@ -57,13 +57,23 @@ export function ConversationThemes({ themes }: { themes: ConversationTheme[] }) 
                   {pct.toFixed(0)}%
                 </span>
               </button>
-              {isOpen && theme.examples.length > 0 && (
-                <div className="mb-2 ml-1 mt-1 flex flex-col gap-1.5 border-l-2 pl-3" style={{ borderColor: color }}>
-                  {theme.examples.map((example, i) => (
-                    <p key={i} className="text-xs italic text-white/60">
-                      &quot;{example}&quot;
-                    </p>
-                  ))}
+              {theme.examples.length > 0 && (
+                <div
+                  className="grid transition-[grid-template-rows,opacity] duration-200 ease-out"
+                  style={{ gridTemplateRows: isOpen ? "1fr" : "0fr", opacity: isOpen ? 1 : 0 }}
+                >
+                  <div className="overflow-hidden">
+                    <div
+                      className="mb-2 ml-1 mt-1 flex flex-col gap-1.5 border-l-2 pl-3"
+                      style={{ borderColor: color }}
+                    >
+                      {theme.examples.map((example, i) => (
+                        <p key={i} className="text-xs italic text-white/60">
+                          &quot;{example}&quot;
+                        </p>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

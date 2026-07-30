@@ -97,7 +97,7 @@ export function TacticCard({
 
   return (
     <div
-      className={`overflow-hidden shadow-lg shadow-black/30 backdrop-blur-md transition-all duration-150 ease-out hover:-translate-y-0.5 hover:brightness-110 ${
+      className={`overflow-hidden shadow-lg shadow-black/30 backdrop-blur-md transition-[transform,filter] duration-150 ease-out [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 hover:brightness-110 ${
         removing ? "animate-poof" : justAdded ? "animate-poof-in" : ""
       }`}
       style={cardStyle}

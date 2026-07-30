@@ -1,6 +1,13 @@
 # 004 — Make modal/sheet close interruptible (retarget instead of restart)
 
-- **Status**: TODO
+- **Status**: DROPPED — the proposed `open` boolean is set via a mount-only
+  `useEffect(() => {...}, [])`, which won't re-fire if a caller keeps the
+  same hook instance mounted across repeated open→close→open cycles (the
+  exact case `useClosableOverlay`'s own code comment says it was built to
+  handle, per the already-fixed bug in task #202 of this project's history).
+  Executing this as written risks reintroducing that same class of bug
+  across every modal in the app. Needs a corrected design before retrying —
+  not executed.
 - **Commit**: 46a1b7b
 - **Severity**: HIGH
 - **Category**: Interruptibility

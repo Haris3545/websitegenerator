@@ -68,7 +68,7 @@ export function SwipeStack({
 
   if (!top) {
     return (
-      <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-center text-white/40">
+      <div className="animate-empty-state-in flex h-full w-full flex-col items-center justify-center gap-2 text-center text-white/40">
         <p className="text-sm">No ideas left to review — add a new one below.</p>
       </div>
     );
@@ -84,7 +84,7 @@ export function SwipeStack({
           disabled={!flipped}
           onClick={() => gesture.commitProgrammatically("disliked")}
           aria-label="Pass on this idea"
-          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-b from-red-400 to-red-600 text-white shadow-lg shadow-red-900/40 ring-1 ring-inset ring-white/20 transition-all duration-150 hover:scale-105 hover:shadow-red-900/60 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:scale-100"
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-b from-red-400 to-red-600 text-white shadow-lg shadow-red-900/40 ring-1 ring-inset ring-white/20 transition-[transform,box-shadow] duration-150 [@media(hover:hover)_and_(pointer:fine)]:hover:scale-105 hover:shadow-red-900/60 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 disabled:[@media(hover:hover)_and_(pointer:fine)]:hover:scale-100"
         >
           <CrossIcon />
         </button>
@@ -117,7 +117,7 @@ export function SwipeStack({
           disabled={!flipped}
           onClick={() => gesture.commitProgrammatically("liked")}
           aria-label="Like this idea"
-          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-b from-emerald-300 to-emerald-500 text-black shadow-lg shadow-emerald-900/40 ring-1 ring-inset ring-white/30 transition-all duration-150 hover:scale-105 hover:shadow-emerald-900/60 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:scale-100"
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-b from-emerald-300 to-emerald-500 text-black shadow-lg shadow-emerald-900/40 ring-1 ring-inset ring-white/30 transition-[transform,box-shadow] duration-150 [@media(hover:hover)_and_(pointer:fine)]:hover:scale-105 hover:shadow-emerald-900/60 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30 disabled:[@media(hover:hover)_and_(pointer:fine)]:hover:scale-100"
         >
           <CheckIcon />
         </button>

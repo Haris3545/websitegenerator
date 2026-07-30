@@ -4,6 +4,12 @@ import { useCallback, useRef, useState } from "react";
 
 const COMMIT_DISTANCE_PX = 120;
 const COMMIT_VELOCITY_PX_MS = 0.6;
+// Must match SwipeCard.tsx's own "transform 0.4s" transition on the card
+// wrapper — settling shorter than that cut the CSS transition off mid-flight
+// (most visibly on the fly-out/commit path, where the offset reset used to
+// fire at 220ms while the card was still 180ms from finishing its exit),
+// showing as a snap-back partway through the animation.
+const SETTLE_TRANSITION_MS = 400;
 
 export type SwipeDirection = "liked" | "disliked";
 
@@ -59,7 +65,7 @@ export function useSwipeGesture({
       if (!direction) {
         setIsSettling(true);
         setOffset({ x: 0, y: 0 });
-        window.setTimeout(() => setIsSettling(false), 300);
+        window.setTimeout(() => setIsSettling(false), SETTLE_TRANSITION_MS);
         return;
       }
       const flyX = direction === "liked" ? window.innerWidth : -window.innerWidth;
@@ -71,10 +77,13 @@ export function useSwipeGesture({
         // never unmounts it) — without resetting here, isSettling would
         // stay stuck true forever after the very first swipe, permanently
         // blocking every card after it, and the new top card would render
-        // pre-translated off-screen at the old fly-out offset.
+        // pre-translated off-screen at the old fly-out offset. Waiting the
+        // full SETTLE_TRANSITION_MS (matching the CSS transition duration)
+        // before resetting means the outgoing card's own fly-out animation
+        // has already finished by the time this fires, instead of snapping.
         setOffset({ x: 0, y: 0 });
         setIsSettling(false);
-      }, 220);
+      }, SETTLE_TRANSITION_MS);
     },
     [offset.y, onCommit]
   );

@@ -1,6 +1,6 @@
 # 010 — Add repo-wide prefers-reduced-motion and hover-capability gating
 
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: 46a1b7b
 - **Severity**: MEDIUM
 - **Category**: Accessibility

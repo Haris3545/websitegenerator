@@ -6,6 +6,7 @@ import { useTriggerPoof } from "@/hooks/usePoofEffect";
 import type { BoardItem } from "@/lib/database.types";
 
 const DRAG_UP_COMMIT_PX = 80;
+const DRAG_UP_COMMIT_VELOCITY_PX_MS = 0.11;
 
 function BinIcon() {
   return (
@@ -46,8 +47,8 @@ function IdeaGridCard({
 }) {
   return (
     <div
-      className={`relative aspect-[3/4] touch-none select-none overflow-hidden rounded-xl shadow-lg shadow-black/30 transition-opacity duration-150 ${
-        selectMode && !faded ? "animate-jiggle" : ""
+      className={`relative aspect-[3/4] touch-none select-none overflow-hidden rounded-xl shadow-lg shadow-black/30 transition-[opacity,transform] duration-150 ease-out ${
+        selectMode && !faded ? "animate-jiggle" : "active:scale-[0.97]"
       } ${faded ? "opacity-25" : ""}`}
       style={{
         border: "1px solid rgba(255,255,255,0.12)",
@@ -172,7 +173,7 @@ function IdeaDetailSheet({
             <button
               type="button"
               onClick={onSchedule}
-              className="rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-black transition-transform hover:-translate-y-0.5"
+              className="rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-black transition-transform [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5"
             >
               Add to calendar
             </button>
@@ -235,6 +236,7 @@ export function IdeaFolderView({
   const [dragStarted, setDragStarted] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [overBin, setOverBin] = useState(false);
+  const dragStartTimeRef = useRef(0);
   const wasDraggedRef = useRef(false);
   const binRef = useRef<HTMLDivElement>(null);
   const { closing, requestClose } = useClosableOverlay(onClose);
@@ -276,6 +278,8 @@ export function IdeaFolderView({
     // along for the ride, or just this one card.
     if (e.button !== 0) return;
     setDragStart({ x: e.clientX, y: e.clientY });
+    // eslint-disable-next-line react-hooks/purity -- only ever invoked from a pointer event, never during render
+    dragStartTimeRef.current = performance.now();
     setDragStarted(false);
     setDraggedId(id);
     setDragPos({ x: e.clientX, y: e.clientY });
@@ -311,7 +315,10 @@ export function IdeaFolderView({
       setSelectMode(false);
     } else {
       const dy = dragPos.y - dragStart.y;
-      const committed = dragStarted && dy <= -DRAG_UP_COMMIT_PX;
+      const elapsedMs = Math.max(1, performance.now() - dragStartTimeRef.current);
+      const velocity = Math.abs(dy) / elapsedMs;
+      const committed =
+        dragStarted && dy < 0 && (dy <= -DRAG_UP_COMMIT_PX || velocity > DRAG_UP_COMMIT_VELOCITY_PX_MS);
       if (committed) commitMove(ids, "pending");
     }
 
@@ -491,7 +498,7 @@ export function IdeaFolderView({
           <button
             type="button"
             onClick={() => commitMove(Array.from(selectedIds), folder === "liked" ? "disliked" : "liked")}
-            className="rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-black transition-transform hover:-translate-y-0.5"
+            className="rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-black transition-transform [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5"
           >
             Switch {selectedIds.size} to {folder === "liked" ? "disliked" : "liked"}
           </button>

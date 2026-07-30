@@ -232,11 +232,16 @@ export function ProvisioningOverlay({
       <div className="w-full max-w-sm">
         <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
           <div
-            className="h-full rounded-full bg-builder-accent transition-all duration-300 ease-out"
+            className="h-full rounded-full bg-builder-accent transition-[width] duration-300 ease-out"
             style={{ width: `${progress * 100}%` }}
           />
         </div>
-        <p className="mt-2 text-center text-xs uppercase tracking-wide text-white/40">
+        <p
+          key={phase}
+          className={`mt-2 text-center text-xs uppercase tracking-wide text-white/40 ${
+            phase === "done" ? "animate-provisioning-done-in" : ""
+          }`}
+        >
           {phase === "checking"
             ? "Confirming everything landed…"
             : phase === "done"
@@ -267,7 +272,8 @@ export function ProvisioningOverlay({
         <button
           type="button"
           onClick={onComplete}
-          className="rounded-full bg-builder-accent px-6 py-2.5 text-sm font-semibold text-black transition-transform duration-150 ease-out hover:-translate-y-0.5"
+          className="animate-provisioning-done-in rounded-full bg-builder-accent px-6 py-2.5 text-sm font-semibold text-black transition-transform duration-150 ease-out [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 active:scale-[0.97]"
+          style={{ animationDelay: "150ms", animationFillMode: "backwards" }}
         >
           Continue now
         </button>

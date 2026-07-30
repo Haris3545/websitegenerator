@@ -111,7 +111,7 @@ export function GifPickerModal({
                 key={g.id}
                 type="button"
                 onClick={() => pick(g)}
-                className="group relative aspect-square overflow-hidden rounded-lg border border-white/10 bg-white/5 transition-transform hover:-translate-y-0.5 hover:shadow-lg"
+                className="group relative aspect-square overflow-hidden rounded-lg border border-white/10 bg-white/5 transition-transform [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 hover:shadow-lg"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={g.previewUrl} alt="" loading="lazy" className="h-full w-full object-cover" />

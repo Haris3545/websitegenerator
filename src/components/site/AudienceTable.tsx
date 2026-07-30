@@ -19,7 +19,7 @@ export function AudienceTable({ statements }: { statements: Statement[] }) {
   }, [statements, activeSegment]);
 
   function pill(active: boolean) {
-    return `rounded-full border px-3 py-1.5 text-xs font-medium transition-all duration-150 ease-out hover:-translate-y-0.5 ${
+    return `rounded-full border px-3 py-1.5 text-xs font-medium transition-[transform,background-color,border-color,color] duration-150 ease-out [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 ${
       active
         ? "border-[var(--accent)] bg-[var(--accent)] text-black"
         : "border-[var(--accent)]/50 text-[var(--accent)] hover:border-[var(--accent)]"

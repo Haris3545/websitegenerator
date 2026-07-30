@@ -41,7 +41,7 @@ export function RestoreDeletedPopover<T extends DeletableItem>({
       {open && (
         <>
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="animate-poof-in absolute left-0 top-full z-30 mt-2 max-h-72 w-64 overflow-y-auto custom-scrollbar rounded-xl border border-white/10 bg-neutral-950/95 p-1.5 shadow-2xl backdrop-blur-md">
+          <div className="animate-poof-in absolute left-0 top-full z-30 mt-2 max-h-72 w-64 origin-top-left overflow-y-auto custom-scrollbar rounded-xl border border-white/10 bg-neutral-950/95 p-1.5 shadow-2xl backdrop-blur-md">
             {items.map((item) => (
               <button
                 key={item.id}

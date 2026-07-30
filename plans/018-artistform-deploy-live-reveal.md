@@ -1,6 +1,6 @@
 # 018 — Animate the "Live." deploy-status reveal in ArtistForm
 
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: 46a1b7b
 - **Severity**: LOW (missed opportunity — additive, not corrective)
 - **Category**: Missed opportunities

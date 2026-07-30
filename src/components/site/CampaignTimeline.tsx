@@ -331,7 +331,7 @@ export function CampaignTimeline({
                   type="button"
                   disabled={!label.trim() || pending}
                   onClick={() => void handleAdd()}
-                  className="rounded-full bg-[var(--accent)] px-3 py-1 text-xs font-semibold text-black transition-transform hover:-translate-y-0.5 disabled:opacity-40"
+                  className="rounded-full bg-[var(--accent)] px-3 py-1 text-xs font-semibold text-black transition-transform [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 disabled:opacity-40"
                 >
                   {pending ? "Adding…" : "Add"}
                 </button>
@@ -552,7 +552,7 @@ function MilestoneEditModal({
               type="button"
               disabled={!label.trim() || saving}
               onClick={() => void handleSave()}
-              className="rounded-full bg-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-black transition-transform hover:-translate-y-0.5 disabled:opacity-40"
+              className="rounded-full bg-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-black transition-transform [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 disabled:opacity-40"
             >
               {saving ? "Saving…" : "Save"}
             </button>

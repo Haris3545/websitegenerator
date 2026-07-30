@@ -169,7 +169,7 @@ function LoginForm() {
           <button
             type="submit"
             disabled={loading}
-            className="rounded-lg bg-builder-accent px-3 py-2 text-sm font-semibold text-black transition-transform duration-150 ease-out hover:-translate-y-0.5 hover:brightness-95 disabled:opacity-50"
+            className="rounded-lg bg-builder-accent px-3 py-2 text-sm font-semibold text-black transition-[transform,filter] duration-150 ease-out [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 hover:brightness-95 active:scale-[0.97] disabled:opacity-50"
           >
             {loading ? "Signing in..." : "Sign in"}
           </button>

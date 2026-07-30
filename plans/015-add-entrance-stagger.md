@@ -1,6 +1,11 @@
 # 015 — Add entrance stagger to 8 list/grid bulk-mount surfaces
 
-- **Status**: TODO
+- **Status**: DROPPED — several target components don't accept a
+  className/style pass-through, and the plan's own fallback (wrapping mapped
+  items in an extra `<div>`) risks breaking CSS Grid/Flexbox layouts that
+  depend on the mapped components being direct children — the Gantt board's
+  per-pillar rows and the artist folder grid are the two highest-risk
+  targets. Not executed.
 - **Commit**: 46a1b7b
 - **Severity**: LOW
 - **Category**: Cohesion & tokens

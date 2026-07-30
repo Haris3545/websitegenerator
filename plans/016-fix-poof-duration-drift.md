@@ -1,6 +1,6 @@
 # 016 — Fix poof-particle JS/CSS duration drift
 
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: 46a1b7b
 - **Severity**: LOW
 - **Category**: Cohesion & tokens

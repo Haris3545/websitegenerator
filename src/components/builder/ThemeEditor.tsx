@@ -273,7 +273,7 @@ export function ThemeEditor({
             key={tab.id}
             type="button"
             onClick={() => setSelected(selected === tab.id ? null : tab.id)}
-            className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+            className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-[background-color,border-color,color,transform] duration-150 ease-out active:scale-[0.97] ${
               selected === tab.id
                 ? "border-builder-accent bg-builder-accent text-black"
                 : "border-neutral-300 text-neutral-700 hover:bg-neutral-100 dark:border-white/15 dark:text-white/80 dark:hover:bg-white/5"

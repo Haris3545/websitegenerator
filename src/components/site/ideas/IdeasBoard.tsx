@@ -129,7 +129,7 @@ export function IdeasBoard({
         <button
           type="button"
           onClick={() => setShowNewIdeaModal(true)}
-          className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-black transition-all duration-150 ease-out hover:-translate-y-0.5 hover:brightness-110"
+          className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-black transition-[transform,filter] duration-150 ease-out [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 hover:brightness-110"
         >
           + New idea
         </button>

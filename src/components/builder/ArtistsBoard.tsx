@@ -497,7 +497,7 @@ export function ArtistsBoard({
                 type="button"
                 data-drop-zone={`folder:${folder.id}`}
                 onClick={() => setView({ level: "folder", folderId: folder.id })}
-                className={`flex w-24 flex-col items-center gap-1.5 rounded-lg p-2 text-center transition-colors ${
+                className={`flex w-24 flex-col items-center gap-1.5 rounded-lg p-2 text-center transition-[background-color,box-shadow,transform] duration-150 ease-out active:scale-[0.97] ${
                   dropTarget === `folder:${folder.id}` ? "bg-builder-accent/10 ring-2 ring-builder-accent" : "hover:bg-black/[0.03] dark:hover:bg-white/5"
                 }`}
               >
@@ -546,14 +546,14 @@ export function ArtistsBoard({
                 requestDelete(artist);
               }}
               aria-label={`Delete ${artist.name}`}
-              className="absolute -right-1.5 -top-1.5 z-20 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold leading-none text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100"
+              className="absolute -right-1.5 -top-1.5 z-20 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold leading-none text-white opacity-0 shadow-sm transition-[opacity,transform] duration-150 ease-out group-hover:opacity-100 active:scale-[0.97]"
             >
               ×
             </button>
 
             <div
               style={menuFor === artist.id && menuPos ? { top: menuPos.top, left: menuPos.left } : undefined}
-              className={`fixed z-30 w-40 origin-top overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-xl transition-all duration-150 ease-out dark:border-white/10 dark:bg-neutral-900 ${
+              className={`fixed z-30 w-40 origin-top overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-xl transition-[transform,opacity] duration-150 ease-out dark:border-white/10 dark:bg-neutral-900 ${
                 menuFor === artist.id
                   ? "scale-100 opacity-100"
                   : "pointer-events-none scale-95 opacity-0"

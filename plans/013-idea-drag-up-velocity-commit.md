@@ -1,6 +1,6 @@
 # 013 — Add velocity-based commit to IdeaFolderView's drag-up-to-return gesture
 
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: 46a1b7b
 - **Severity**: MEDIUM
 - **Category**: Interruptibility

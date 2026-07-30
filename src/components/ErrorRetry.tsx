@@ -66,7 +66,7 @@ export function ErrorRetry({
       <button
         type="button"
         onClick={retryNow}
-        className="mt-2 rounded-full bg-amber-400 px-5 py-2 text-sm font-semibold text-black transition-transform hover:-translate-y-0.5"
+        className="mt-2 rounded-full bg-amber-400 px-5 py-2 text-sm font-semibold text-black transition-transform [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5"
       >
         Refresh now
       </button>

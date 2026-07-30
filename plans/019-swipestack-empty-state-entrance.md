@@ -1,6 +1,6 @@
 # 019 — Animate the Ideas tab's "No ideas left to review" empty state
 
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: 46a1b7b
 - **Severity**: LOW (missed opportunity — additive, not corrective)
 - **Category**: Missed opportunities

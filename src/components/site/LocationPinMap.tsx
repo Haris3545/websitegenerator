@@ -104,7 +104,7 @@ function ColorSwatchRow({ value, onChange }: { value: string; onChange: (c: stri
           type="button"
           onClick={() => onChange(c)}
           aria-label={`Colour ${c}`}
-          className={`h-6 w-6 rounded-full transition-transform duration-150 ease-out hover:scale-110 ${
+          className={`h-6 w-6 rounded-full transition-transform duration-150 ease-out [@media(hover:hover)_and_(pointer:fine)]:hover:scale-110 active:scale-[0.97] ${
             value === c ? "scale-110 ring-2 ring-white ring-offset-2 ring-offset-neutral-950" : ""
           }`}
           style={{ backgroundColor: c }}
@@ -421,10 +421,10 @@ function LocationPinMapInner({
         <button
           type="button"
           onClick={() => setPlacing((v) => !v)}
-          className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-wide transition-all duration-150 ease-out ${
+          className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-semibold uppercase tracking-wide transition-[transform,background-color,border-color,color] duration-150 ease-out active:scale-[0.97] ${
             placing
               ? "animate-hint-pulse bg-[var(--accent)] text-black"
-              : "border border-white/20 text-white/80 hover:-translate-y-0.5 hover:border-white/40"
+              : "border border-white/20 text-white/80 [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 hover:border-white/40"
           }`}
         >
           <PinGlyph color={placing ? "black" : "var(--accent)"} />
@@ -490,7 +490,7 @@ function LocationPinMapInner({
                   key={tag.id}
                   type="button"
                   onClick={() => toggleActiveTag(tag.id)}
-                  className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all duration-150 ${
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-[background-color,border-color,color] duration-150 ${
                     active
                       ? "bg-[var(--accent)] text-black"
                       : "border border-white/15 text-white/60 hover:border-white/30 hover:text-white"
@@ -575,7 +575,7 @@ function LocationPinMapInner({
                         key={tag.id}
                         type="button"
                         onClick={() => toggleSelectedTag(tag.id)}
-                        className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all duration-150 ${
+                        className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-[background-color,border-color,color] duration-150 ${
                           selected
                             ? "bg-[var(--accent)] text-black"
                             : "border border-white/15 text-white/60 hover:border-white/30"
@@ -623,7 +623,7 @@ function LocationPinMapInner({
                 <button
                   type="submit"
                   disabled={!newName.trim()}
-                  className="rounded-full bg-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-black transition-transform duration-150 ease-out hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-50"
+                  className="rounded-full bg-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-black transition-transform duration-150 ease-out [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-50"
                 >
                   Add pin
                 </button>

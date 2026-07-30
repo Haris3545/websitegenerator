@@ -3,7 +3,7 @@ import type { ArtistInsight } from "@/lib/database.types";
 export function InsightCard({ insight }: { insight: ArtistInsight }) {
   return (
     <div
-      className="p-4 shadow-lg shadow-black/30 backdrop-blur-md transition-all duration-150 ease-out hover:-translate-y-0.5 hover:brightness-110"
+      className="p-4 shadow-lg shadow-black/30 backdrop-blur-md transition-[transform,filter] duration-150 ease-out [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 hover:brightness-110"
       style={{
         borderRadius: "var(--card-radius, 12px)",
         backgroundColor: "rgba(0,0,0,var(--card-bg-opacity, 0.4))",

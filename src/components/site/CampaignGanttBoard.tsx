@@ -828,7 +828,7 @@ function BlockFormModal({
             type="button"
             disabled={!name.trim() || saving}
             onClick={() => void handleSave()}
-            className="rounded-full bg-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-black transition-transform hover:-translate-y-0.5 disabled:opacity-40"
+            className="rounded-full bg-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-black transition-transform [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 disabled:opacity-40"
           >
             {saving ? "Saving…" : isEditing ? "Save changes" : "Add block"}
           </button>

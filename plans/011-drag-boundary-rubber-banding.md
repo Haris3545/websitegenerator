@@ -1,6 +1,12 @@
 # 011 — Add rising resistance at drag boundaries instead of hard stops
 
-- **Status**: TODO
+- **Status**: DROPPED — this plan's own Steps flag uncertainty about whether
+  the live "soft" drag-visual position is cleanly separated from what
+  actually gets persisted on release in all three target components. If an
+  executor doesn't verify that separation carefully, the rubber-banded
+  (temporarily out-of-domain) value could leak into a saved campaign
+  block's date/position — a data-integrity risk, not just a visual one. Not
+  executed.
 - **Commit**: 46a1b7b
 - **Severity**: MEDIUM
 - **Category**: Interruptibility

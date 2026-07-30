@@ -1,6 +1,6 @@
 # 005 — Stop AestheticPanel from writing 11 CSS vars to the site root on every slider tick
 
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: 46a1b7b
 - **Severity**: HIGH
 - **Category**: Performance

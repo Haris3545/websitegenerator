@@ -1,6 +1,6 @@
 # 012 — Fix SwipeCard JS timer / CSS transition duration mismatch
 
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: 46a1b7b
 - **Severity**: MEDIUM
 - **Category**: Interruptibility

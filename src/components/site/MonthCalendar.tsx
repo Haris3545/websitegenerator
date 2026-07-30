@@ -169,7 +169,7 @@ function AddEventModal({
           <button
             type="submit"
             disabled={isPending}
-            className="rounded-full bg-[var(--accent)] px-5 py-2 text-sm font-semibold text-black transition-transform duration-150 ease-out hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-50"
+            className="rounded-full bg-[var(--accent)] px-5 py-2 text-sm font-semibold text-black transition-transform duration-150 ease-out [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-50"
           >
             {isPending ? "Adding..." : "Add event"}
           </button>
@@ -407,7 +407,7 @@ export function MonthCalendar({
           <button
             type="button"
             onClick={() => setShowAddModal(true)}
-            className="self-start rounded-full border border-white/20 px-4 py-1.5 text-xs font-medium text-white/70 transition-all duration-150 ease-out hover:-translate-y-0.5 hover:border-white/40 hover:text-white"
+            className="self-start rounded-full border border-white/20 px-4 py-1.5 text-xs font-medium text-white/70 transition-[transform,border-color,color] duration-150 ease-out [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 hover:border-white/40 hover:text-white"
           >
             + Add event
           </button>

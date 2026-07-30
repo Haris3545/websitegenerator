@@ -1,6 +1,6 @@
 # 003 — Fix scale(0) entrance keyframes (poof-particle, pin-drop-in)
 
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: 46a1b7b
 - **Severity**: HIGH
 - **Category**: Physicality & origin

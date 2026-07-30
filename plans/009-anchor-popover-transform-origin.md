@@ -1,6 +1,6 @@
 # 009 — Anchor 5 trigger-attached popovers to their transform-origin
 
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: 46a1b7b
 - **Severity**: MEDIUM
 - **Category**: Physicality & origin

@@ -95,7 +95,7 @@ export function BoardList({
           <button
             type="submit"
             disabled={isPending}
-            className="self-start rounded-full bg-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-black transition-all duration-150 ease-out hover:-translate-y-0.5 hover:brightness-110 disabled:pointer-events-none disabled:opacity-50"
+            className="self-start rounded-full bg-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-black transition-[transform,filter] duration-150 ease-out [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 hover:brightness-110 disabled:pointer-events-none disabled:opacity-50"
           >
             {isPending ? "Adding..." : `+ New ${singular}`}
           </button>
@@ -117,7 +117,7 @@ export function BoardList({
           {items.map((item) => (
             <div
               key={item.id}
-              className="p-4 shadow-lg shadow-black/30 backdrop-blur-md transition-all duration-150 ease-out hover:-translate-y-0.5 hover:brightness-110"
+              className="p-4 shadow-lg shadow-black/30 backdrop-blur-md transition-[transform,filter] duration-150 ease-out [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 hover:brightness-110"
               style={cardStyle}
             >
               <div className="flex items-start justify-between gap-2">

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MusicAlbum } from "@/lib/database.types";
+import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 
 const COVER_GAP = 130; // px between cover centers at rest
 const COVER_SIZE = 176; // px, the centered cover's width/height
@@ -15,31 +16,11 @@ const SWIPE_MAX_DURATION_MS = 300;
 const SWIPE_MIN_DISTANCE_PX = 24;
 const SWIPE_MIN_VELOCITY_PX_MS = 0.3;
 
-function subscribeReducedMotion(callback: () => void) {
-  const mql = window.matchMedia("(prefers-reduced-motion: reduce)");
-  mql.addEventListener("change", callback);
-  return () => mql.removeEventListener("change", callback);
-}
-function getReducedMotionSnapshot() {
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-function getReducedMotionServerSnapshot() {
-  return false;
-}
-
 export function AlbumCoverFlow({ albums }: { albums: MusicAlbum[] }) {
   const [index, setIndex] = useState(0);
   const [dragOffset, setDragOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
-  // useSyncExternalStore is the React-sanctioned way to read a value that
-  // can differ between server and client render (here, an OS preference)
-  // without a hydration mismatch — it renders the server snapshot through
-  // hydration, then swaps to the real client value right after.
-  const reducedMotion = useSyncExternalStore(
-    subscribeReducedMotion,
-    getReducedMotionSnapshot,
-    getReducedMotionServerSnapshot
-  );
+  const reducedMotion = usePrefersReducedMotion();
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Real DOM listeners on the container handle both dragging AND clicking a
@@ -217,8 +198,14 @@ export function AlbumCoverFlow({ albums }: { albums: MusicAlbum[] }) {
                   transform: `translateX(${translateX}px) rotateY(${rotateY}deg) scale(${scale})`,
                   zIndex: 100 - Math.round(abs * 10),
                   opacity,
-                  transition:
-                    isDragging || reducedMotion ? "none" : "transform 0.35s ease, opacity 0.35s ease",
+                  // Reduced motion drops the transform settle (movement)
+                  // but keeps the opacity fade — it aids comprehension of
+                  // which cover just became selected, not just decoration.
+                  transition: isDragging
+                    ? "none"
+                    : reducedMotion
+                      ? "opacity 0.2s ease"
+                      : "transform 0.35s ease, opacity 0.35s ease",
                 }}
               >
                 {album.artworkUrl ? (

@@ -508,7 +508,7 @@ export function BackgroundMediaField({
                   type="button"
                   disabled={downloading || capturing}
                   onClick={() => void confirmDraft()}
-                  className="rounded-lg bg-builder-accent px-3 py-1.5 text-xs font-semibold text-black transition-transform hover:-translate-y-0.5 disabled:opacity-50"
+                  className="rounded-lg bg-builder-accent px-3 py-1.5 text-xs font-semibold text-black transition-transform [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 disabled:opacity-50"
                 >
                   {downloading ? "Uploading…" : capturing ? "Recording…" : "Confirm clip"}
                 </button>

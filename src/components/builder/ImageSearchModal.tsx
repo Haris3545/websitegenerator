@@ -169,7 +169,7 @@ export function ImageSearchModal({
                   onClick={() => void pick(r, key)}
                   disabled={!!importingKey}
                   title={r.title}
-                  className={`group relative aspect-square overflow-hidden rounded-lg border transition-transform hover:-translate-y-0.5 hover:shadow-lg disabled:hover:translate-y-0 disabled:hover:shadow-none ${
+                  className={`group relative aspect-square overflow-hidden rounded-lg border transition-transform [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 hover:shadow-lg disabled:[@media(hover:hover)_and_(pointer:fine)]:hover:translate-y-0 disabled:hover:shadow-none ${
                     dark ? "border-white/10 bg-white/5" : "border-neutral-200 bg-neutral-100 dark:border-white/10 dark:bg-white/5"
                   }`}
                 >
@@ -185,7 +185,7 @@ export function ImageSearchModal({
                       <span className="block h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white/90" />
                     </span>
                   )}
-                  <span className="absolute inset-x-0 bottom-0 translate-y-full bg-black/70 px-1.5 py-1 text-[10px] text-white transition-transform group-hover:translate-y-0 line-clamp-2">
+                  <span className="absolute inset-x-0 bottom-0 translate-y-full bg-black/70 px-1.5 py-1 text-[10px] text-white transition-transform [@media(hover:hover)_and_(pointer:fine)]:group-hover:translate-y-0 line-clamp-2">
                     {r.title}
                   </span>
                 </button>

@@ -329,13 +329,13 @@ function DiscussionBoardInner({
         <button
           type="button"
           onClick={() => setEmojiPickerPostId((id) => (id === post.id ? null : post.id))}
-          className="flex h-6 w-6 items-center justify-center rounded-full border border-white/10 text-xs text-white/40 transition-colors hover:border-white/25 hover:text-white/70"
+          className="flex h-6 w-6 items-center justify-center rounded-full border border-white/10 text-xs text-white/40 transition-[color,border-color,transform] duration-150 ease-out hover:border-white/25 hover:text-white/70 active:scale-[0.97]"
           aria-label="Add reaction"
         >
           +
         </button>
         {emojiPickerPostId === post.id && (
-          <div className="absolute left-0 top-full z-[60] mt-1 grid w-56 grid-cols-8 gap-1 rounded-xl border border-white/10 bg-neutral-950 p-2.5 shadow-2xl">
+          <div className="animate-dropdown-unfurl absolute left-0 top-full z-[60] mt-1 grid w-56 origin-top-left grid-cols-8 gap-1 rounded-xl border border-white/10 bg-neutral-950 p-2.5 shadow-2xl">
             {EXTRA_EMOJIS.map((emoji) => (
               <button
                 key={emoji}
@@ -446,7 +446,7 @@ function DiscussionBoardInner({
             type="button"
             disabled={posting || (!body.trim() && !pendingImage && !pendingGif)}
             onClick={() => withName(handlePost)}
-            className="rounded-full bg-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-black transition-transform hover:-translate-y-0.5 disabled:opacity-40"
+            className="rounded-full bg-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-black transition-transform [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 disabled:opacity-40"
           >
             {posting ? "Posting…" : "Post"}
           </button>
@@ -462,7 +462,7 @@ function DiscussionBoardInner({
           {topLevel.map((post) => (
             <div
               key={post.id}
-              className={`rounded-xl border border-white/10 bg-white/[0.02] p-3.5 transition-all duration-200 ${
+              className={`rounded-xl border border-white/10 bg-white/[0.02] p-3.5 transition-[transform,opacity] duration-200 ${
                 deletingIds.has(post.id) ? "scale-95 opacity-0" : "scale-100 opacity-100"
               } ${justAddedIds.has(post.id) ? "animate-poof-in" : ""}`}
             >
@@ -509,7 +509,7 @@ function DiscussionBoardInner({
                   {repliesFor(post.id).map((reply) => (
                     <div
                       key={reply.id}
-                      className={`transition-all duration-200 ${
+                      className={`transition-[transform,opacity] duration-200 ${
                         deletingIds.has(reply.id) ? "scale-95 opacity-0" : "scale-100 opacity-100"
                       } ${justAddedIds.has(reply.id) ? "animate-poof-in" : ""}`}
                     >
@@ -552,7 +552,7 @@ function DiscussionBoardInner({
                       type="button"
                       disabled={!replyBody.trim() || replying}
                       onClick={() => withName((name) => void handleReply(post.id, name))}
-                      className="shrink-0 rounded-full bg-[var(--accent)] px-3 py-1 text-xs font-semibold text-black transition-transform hover:-translate-y-0.5 disabled:opacity-40"
+                      className="shrink-0 rounded-full bg-[var(--accent)] px-3 py-1 text-xs font-semibold text-black transition-transform [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 disabled:opacity-40"
                     >
                       {replying ? "…" : "Send"}
                     </button>
@@ -639,7 +639,7 @@ function DiscussionBoardInner({
                 type="button"
                 disabled={!nameDraft.trim()}
                 onClick={confirmName}
-                className="rounded-full bg-[var(--accent)] px-3.5 py-1.5 text-xs font-semibold text-black transition-transform hover:-translate-y-0.5 disabled:opacity-40"
+                className="rounded-full bg-[var(--accent)] px-3.5 py-1.5 text-xs font-semibold text-black transition-transform [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 disabled:opacity-40"
               >
                 Continue
               </button>

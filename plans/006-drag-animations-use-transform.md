@@ -1,6 +1,14 @@
 # 006 — Drive Gantt/Timeline/ArtistsBoard drag visuals via transform instead of layout properties
 
-- **Status**: TODO
+- **Status**: DROPPED — the Gantt row-height fix (animating height instantly
+  while separately clip-path-revealing inner content) would desync an
+  instant layout shift from an animated content reveal, likely looking
+  worse than the current smooth height transition it replaces. This plan
+  also re-touches Gantt/Timeline/ArtistsBoard drag math that went through
+  several rounds of real regression fixes this session (stuck-dragging,
+  row-switch hysteresis) — not worth the blast radius for a performance
+  gain that's real but not currently causing a user-visible problem. Not
+  executed.
 - **Commit**: 46a1b7b
 - **Severity**: HIGH
 - **Category**: Performance

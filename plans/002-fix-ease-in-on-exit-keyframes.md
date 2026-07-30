@@ -1,6 +1,6 @@
 # 002 — Fix ease-in curve on exit keyframes (modal/sheet/dropdown close)
 
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: 46a1b7b
 - **Severity**: HIGH
 - **Category**: Easing & duration

@@ -140,7 +140,7 @@ export default async function MusicPage({ params }: { params: Promise<{ slug: st
                     href={track.url || undefined}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center justify-between p-3 shadow-lg shadow-black/30 transition-all duration-150 ease-out hover:-translate-y-0.5 hover:shadow-[0_0_28px_var(--accent)]"
+                    className="flex items-center justify-between p-3 shadow-lg shadow-black/30 transition-[transform,box-shadow] duration-150 ease-out [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 hover:shadow-[0_0_28px_var(--accent)]"
                     style={{
                       borderRadius: "var(--card-radius, 12px)",
                       backgroundColor: "rgba(0,0,0,var(--card-bg-opacity, 0.4))",

@@ -1,6 +1,6 @@
 # 014 — Scope `transition-all` down to the properties actually animated
 
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: 46a1b7b
 - **Severity**: LOW
 - **Category**: Performance

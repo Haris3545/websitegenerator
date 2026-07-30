@@ -76,31 +76,60 @@ export function AestheticPanel({ artistId, initial }: { artistId: string; initia
   const [values, setValues] = useState(initial);
   const isFirstRender = useRef(true);
   const panelRef = useRef<HTMLDivElement>(null);
+  const pendingValuesRef = useRef(values);
+  const rafIdRef = useRef<number | null>(null);
+
+  // Coalesces every slider tick within a frame into a single DOM write —
+  // without this, dragging a slider fires setProperty() on #site-root
+  // (an ancestor wrapping the whole live-previewed site) once per input
+  // event, forcing a style recalc across every descendant that reads any
+  // of these variables on every one of those events instead of once per
+  // ~16ms frame. Deliberately no cleanup returned here — a cleanup tied to
+  // this effect would fire (and cancel the queued frame) on every single
+  // value change, since that's how React runs effect cleanup between
+  // re-runs, defeating the coalescing entirely. The already-queued frame
+  // is left to fire on schedule and pick up the latest value via the ref;
+  // only actual unmount cancels it (see the separate effect below).
+  useEffect(() => {
+    pendingValuesRef.current = values;
+    if (rafIdRef.current !== null) return;
+
+    rafIdRef.current = requestAnimationFrame(() => {
+      rafIdRef.current = null;
+      const root = document.getElementById("site-root");
+      if (!root) return;
+      const v = pendingValuesRef.current;
+      const t = { ...DEFAULT_THEME_OVERRIDES, ...v.theme_overrides };
+      root.style.setProperty("--primary", v.primary_color);
+      root.style.setProperty("--accent", v.accent_color);
+      root.style.fontFamily = `"${v.font_family}", sans-serif`;
+      root.style.setProperty("--card-radius", `${t.card_radius}px`);
+      root.style.setProperty("--card-bg-opacity", String(t.card_bg_opacity));
+      root.style.setProperty("--card-border-opacity", String(t.card_border_opacity));
+      root.style.setProperty("--card-text-color", t.card_text_color);
+      root.style.setProperty("--header-font-weight", t.header_bold ? "700" : "400");
+      root.style.setProperty("--header-font-style", t.header_italic ? "italic" : "normal");
+
+      const a = { ...DEFAULT_AESTHETIC_PARAMS, tint_color: v.primary_color, ...v.aesthetic_params };
+      root.style.setProperty("--bg-blur", `${a.blur * 12}px`);
+      root.style.setProperty("--bg-tint-color", a.tint_color);
+      root.style.setProperty("--bg-tint-opacity", String(a.tint_opacity * 0.65));
+      root.style.setProperty("--bg-vignette", String(a.vignette));
+      root.style.setProperty("--bg-grain-opacity", String(a.grain_intensity));
+      root.style.setProperty("--bg-grain-image", grainTexture(a.grain_monochrome));
+      document.getElementById("chroma-offset-r")?.setAttribute("dx", String(a.chromatic_aberration * 8));
+      document.getElementById("chroma-offset-b")?.setAttribute("dx", String(a.chromatic_aberration * -8));
+    });
+  }, [values]);
 
   useEffect(() => {
-    const root = document.getElementById("site-root");
-    if (!root) return;
-    const t = { ...DEFAULT_THEME_OVERRIDES, ...values.theme_overrides };
-    root.style.setProperty("--primary", values.primary_color);
-    root.style.setProperty("--accent", values.accent_color);
-    root.style.fontFamily = `"${values.font_family}", sans-serif`;
-    root.style.setProperty("--card-radius", `${t.card_radius}px`);
-    root.style.setProperty("--card-bg-opacity", String(t.card_bg_opacity));
-    root.style.setProperty("--card-border-opacity", String(t.card_border_opacity));
-    root.style.setProperty("--card-text-color", t.card_text_color);
-    root.style.setProperty("--header-font-weight", t.header_bold ? "700" : "400");
-    root.style.setProperty("--header-font-style", t.header_italic ? "italic" : "normal");
-
-    const a = { ...DEFAULT_AESTHETIC_PARAMS, tint_color: values.primary_color, ...values.aesthetic_params };
-    root.style.setProperty("--bg-blur", `${a.blur * 12}px`);
-    root.style.setProperty("--bg-tint-color", a.tint_color);
-    root.style.setProperty("--bg-tint-opacity", String(a.tint_opacity * 0.65));
-    root.style.setProperty("--bg-vignette", String(a.vignette));
-    root.style.setProperty("--bg-grain-opacity", String(a.grain_intensity));
-    root.style.setProperty("--bg-grain-image", grainTexture(a.grain_monochrome));
-    document.getElementById("chroma-offset-r")?.setAttribute("dx", String(a.chromatic_aberration * 8));
-    document.getElementById("chroma-offset-b")?.setAttribute("dx", String(a.chromatic_aberration * -8));
-  }, [values]);
+    return () => {
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (isFirstRender.current) {
@@ -148,7 +177,7 @@ export function AestheticPanel({ artistId, initial }: { artistId: string; initia
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="fixed bottom-6 right-6 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--accent)] text-lg shadow-lg shadow-black/40 transition-transform duration-150 ease-out hover:scale-110 active:scale-95"
+        className="fixed bottom-6 right-6 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--accent)] text-lg shadow-lg shadow-black/40 transition-transform duration-150 ease-out [@media(hover:hover)_and_(pointer:fine)]:hover:scale-110 active:scale-95"
         aria-label="Aesthetic settings"
         title="Tweak the look"
       >
@@ -157,7 +186,7 @@ export function AestheticPanel({ artistId, initial }: { artistId: string; initia
 
       <div
         ref={panelRef}
-        className={`dark fixed bottom-24 right-6 z-50 flex max-h-[70vh] w-80 origin-bottom-right flex-col gap-4 overflow-y-auto rounded-xl border border-white/15 bg-neutral-950/95 p-4 text-white shadow-2xl shadow-black/50 backdrop-blur-md transition-all duration-200 ease-out ${
+        className={`dark fixed bottom-24 right-6 z-50 flex max-h-[70vh] w-80 origin-bottom-right flex-col gap-4 overflow-y-auto rounded-xl border border-white/15 bg-neutral-950/95 p-4 text-white shadow-2xl shadow-black/50 backdrop-blur-md transition-[transform,opacity] duration-200 ease-out ${
           open ? "translate-y-0 scale-100 opacity-100" : "pointer-events-none translate-y-2 scale-95 opacity-0"
         }`}
       >

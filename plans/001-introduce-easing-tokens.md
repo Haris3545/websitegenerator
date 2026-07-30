@@ -1,6 +1,6 @@
 # 001 — Introduce shared easing custom properties
 
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: 46a1b7b
 - **Severity**: HIGH
 - **Category**: Cohesion & tokens

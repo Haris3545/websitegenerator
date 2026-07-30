@@ -608,7 +608,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
         than being scoped to wherever the form happens to scroll. */}
     <div className="fixed inset-x-0 top-0 z-[60] h-[2px] bg-transparent">
       <div
-        className="h-full bg-builder-accent transition-all duration-500 ease-out"
+        className="h-full bg-builder-accent transition-[width] duration-500 ease-out"
         style={{ width: `${formProgress * 100}%`, opacity: formProgress > 0 ? 0.7 : 0 }}
       />
     </div>
@@ -720,7 +720,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
             </button>
 
             {channelDropdownOpen && (searchingChannels || channelResults.length > 0) && (
-              <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-xl border border-neutral-200 bg-white py-1 shadow-lg dark:border-white/10 dark:bg-neutral-900">
+              <div className="animate-dropdown-unfurl absolute left-0 right-0 top-full z-20 mt-1 max-h-64 origin-top overflow-y-auto rounded-xl border border-neutral-200 bg-white py-1 shadow-lg dark:border-white/10 dark:bg-neutral-900">
                 {searchingChannels && channelResults.length === 0 && (
                   <p className="px-3 py-2 text-xs text-neutral-400 dark:text-white/40">Searching…</p>
                 )}
@@ -1071,7 +1071,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
       <button
         type="submit"
         disabled={isPending}
-        className="self-start rounded-full bg-builder-accent px-6 py-2.5 text-sm font-semibold text-black shadow-sm transition-all duration-150 ease-out hover:-translate-y-0.5 hover:shadow-md hover:brightness-95 disabled:opacity-50"
+        className="self-start rounded-full bg-builder-accent px-6 py-2.5 text-sm font-semibold text-black shadow-sm transition-[transform,box-shadow,filter] duration-150 ease-out [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 hover:shadow-md hover:brightness-95 disabled:opacity-50"
       >
         {isPending ? "Saving..." : artist ? "Save changes" : "Create artist"}
       </button>
@@ -1094,9 +1094,14 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
                         : "text-neutral-600 dark:text-white/70"
                   }
                 >
-                  {deployStatus === "ready"
-                    ? "Live."
-                    : deployStatus === "queued"
+                  {deployStatus === "ready" ? (
+                    <span
+                      className="inline-block"
+                      style={{ animation: "deploy-live-reveal 200ms var(--ease-out)" }}
+                    >
+                      Live.
+                    </span>
+                  ) : deployStatus === "queued"
                       ? "Queued to deploy..."
                       : deployStatus === "building"
                         ? "Building..."
@@ -1110,7 +1115,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
                 <div className="my-1 flex flex-col gap-1">
                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-200 dark:bg-white/10">
                     <div
-                      className="h-full rounded-full bg-builder-accent transition-all duration-700 ease-out"
+                      className="h-full rounded-full bg-builder-accent transition-[width] duration-700 ease-out"
                       style={{ width: `${Math.min(92, (elapsedSeconds / 90) * 100)}%` }}
                     />
                   </div>

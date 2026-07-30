@@ -1,6 +1,6 @@
 # 020 — Animate the ConversationThemes quote accordion open/close
 
-- **Status**: TODO
+- **Status**: DONE (deviated from the literal clip-path target: clip-path doesn't collapse box height, which would have left a permanent layout gap under every closed theme row — used the standard grid-template-rows 0fr/1fr collapse technique instead, which still avoids animating height/max-height directly)
 - **Commit**: 46a1b7b
 - **Severity**: MEDIUM (missed opportunity — additive, not corrective)
 - **Category**: Missed opportunities

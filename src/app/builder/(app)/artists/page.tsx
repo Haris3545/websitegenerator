@@ -26,7 +26,7 @@ export default async function ArtistsPage() {
         </div>
         <Link
           href="/builder/artists/new"
-          className="rounded-lg bg-builder-accent px-4 py-2 text-sm font-semibold text-black transition-transform duration-150 ease-out hover:-translate-y-0.5 hover:brightness-95"
+          className="rounded-lg bg-builder-accent px-4 py-2 text-sm font-semibold text-black transition-transform duration-150 ease-out [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 hover:brightness-95"
         >
           + New artist
         </Link>

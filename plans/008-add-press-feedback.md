@@ -1,14 +1,19 @@
-# 008 — Add :active press feedback to 14 pressable elements with none
+# 008 — Add :active press feedback to 11 pressable elements with none
 
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: 46a1b7b
 - **Severity**: MEDIUM
 - **Category**: Physicality & origin
-- **Estimated scope**: 12 files, 1-3 lines each
+- **Estimated scope**: 11 files, 1-3 lines each
+- **Scope note**: originally 14 sites; the 3 `CampaignGanttBoard.tsx` drag-handle
+  rows (469/488/562) are dropped from this plan — a press-scale on an element
+  that's about to hand off to a separately-rendered drag clone/ghost risks a
+  jarring double-transform moment (shrink, then hand off) rather than clean
+  feedback, and drag-start is already communicated by the clone appearing.
 
 ## Problem
 
-14 pressable elements across both apps have no `:active`/press-feedback state at all — hover styling exists in most, but nothing confirms to the user that a press was registered. All share the same fix pattern, so this is one plan covering all of them (per this skill's own merge guidance for identical fixes across files).
+11 pressable elements across both apps have no `:active`/press-feedback state at all — hover styling exists in most, but nothing confirms to the user that a press was registered. All share the same fix pattern, so this is one plan covering all of them (per this skill's own merge guidance for identical fixes across files).
 
 ```tsx
 /* src/components/site/DiscussionBoard.tsx:332 — current */
@@ -81,9 +86,6 @@ className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors 
   disabled={loading}
   className="rounded-lg bg-builder-accent px-3 py-2 text-sm font-semibold text-black transition-transform duration-150 ease-out hover:-translate-y-0.5 hover:brightness-95 disabled:opacity-50"
 >
-
-/* src/components/site/CampaignGanttBoard.tsx:469 (also 488, 562) — current */
-className="flex cursor-grab border-b border-white/10 active:cursor-grabbing"
 ```
 
 ## Target
@@ -96,8 +98,6 @@ className="... transition-transform duration-150 ease-out active:scale-[0.97] ..
 ```
 
 For elements using `transition-colors` or `transition-opacity` only, add `transform` to the transitioned properties (e.g. `transition-[color,transform]` or split into two Tailwind transition utilities) so the press scale is actually eased rather than snapping.
-
-For `CampaignGanttBoard.tsx`'s three drag-handle rows (lines 469/488/562), which are `cursor-grab` elements rather than buttons, add the same `active:scale-[0.97] transition-transform duration-150 ease-out` — a drag handle benefits from press feedback exactly as much as a button does, confirming a press was registered before the drag threshold is crossed.
 
 ## Repo conventions to follow
 
@@ -118,17 +118,17 @@ For `CampaignGanttBoard.tsx`'s three drag-handle rows (lines 469/488/562), which
 10. `src/components/builder/ThemeEditor.tsx:276` — add `active:scale-[0.97] transition-transform duration-150 ease-out`.
 11. `src/components/builder/ProvisioningOverlay.tsx:267-272` — add `active:scale-[0.97]` (already has `transition-transform duration-150 ease-out`).
 12. `src/app/builder/login/page.tsx:170-174` — add `active:scale-[0.97]` (already has `transition-transform duration-150 ease-out`).
-13. `src/components/site/CampaignGanttBoard.tsx:469,488,562` — add `active:scale-[0.97] transition-transform duration-150 ease-out` to all three drag-handle row elements.
 
 ## Boundaries
 
 - Do NOT change any element's hover behavior, color, or existing transform values beyond adding the active-scale utility.
 - Do NOT touch `DiscussionBoard.tsx:322`'s existing `active:scale-90` reaction pill — that's a separate, already-animated element outside this plan's list.
-- Do NOT add press feedback to any element not explicitly listed above — this plan's scope is exactly these 14 sites, not a general sweep.
+- Do NOT touch `CampaignGanttBoard.tsx`'s drag-handle rows — explicitly dropped from this plan's scope (see the Status note above).
+- Do NOT add press feedback to any element not explicitly listed above — this plan's scope is exactly these 11 sites, not a general sweep.
 - If any listed line no longer matches the className shown (drift since commit 46a1b7b), STOP and report that specific site rather than guessing where in a changed className to insert the new utility.
 
 ## Verification
 
-- **Mechanical**: `npx tsc --noEmit`, `npx eslint <all 12 touched files>`, `npm run build` — all clean.
-- **Feel check**: click-and-hold (don't release) each of the 14 elements in turn and confirm a visible, subtle scale-down while held, releasing back to full size on mouseup. In DevTools' Animations panel at 10% playback on one example (e.g. the login submit button), confirm the scale change is smooth over ~150ms, not instant.
-- **Done when**: all 14 sites show a `scale(0.97)` press state with a 150ms ease-out transition, and no existing hover/drag behavior regressed.
+- **Mechanical**: `npx tsc --noEmit`, `npx eslint <all 11 touched files>`, `npm run build` — all clean.
+- **Feel check**: click-and-hold (don't release) each of the 11 elements in turn and confirm a visible, subtle scale-down while held, releasing back to full size on mouseup. In DevTools' Animations panel at 10% playback on one example (e.g. the login submit button), confirm the scale change is smooth over ~150ms, not instant.
+- **Done when**: all 11 sites show a `scale(0.97)` press state with a 150ms ease-out transition, and no existing hover/drag behavior regressed.

@@ -193,7 +193,7 @@ export function FontPicker({
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="shrink-0 rounded-full bg-builder-accent px-3.5 py-1.5 text-xs font-semibold text-black transition-transform hover:-translate-y-0.5"
+                  className="shrink-0 rounded-full bg-builder-accent px-3.5 py-1.5 text-xs font-semibold text-black transition-transform [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5"
                 >
                   Done
                 </button>

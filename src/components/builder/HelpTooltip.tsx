@@ -27,8 +27,8 @@ export function HelpTooltip({ children }: { children: React.ReactNode }) {
       </button>
       <span
         role="tooltip"
-        className={`pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 w-56 -translate-x-1/2 rounded-lg border border-neutral-200 bg-white px-2.5 py-2 text-[11px] font-normal normal-case leading-snug text-neutral-600 shadow-lg transition-opacity duration-100 dark:border-white/15 dark:bg-neutral-900 dark:text-white/70 ${
-          open ? "opacity-100" : "opacity-0"
+        className={`pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 w-56 origin-bottom -translate-x-1/2 rounded-lg border border-neutral-200 bg-white px-2.5 py-2 text-[11px] font-normal normal-case leading-snug text-neutral-600 shadow-lg transition-[opacity,transform] duration-[125ms] ease-out dark:border-white/15 dark:bg-neutral-900 dark:text-white/70 ${
+          open ? "scale-100 opacity-100" : "scale-95 opacity-0"
         }`}
       >
         {children}

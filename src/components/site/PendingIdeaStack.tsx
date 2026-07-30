@@ -117,8 +117,8 @@ export function PendingIdeaStack({
           return (
             <div
               key={item.id}
-              className={`relative w-36 shrink-0 touch-none select-none overflow-hidden rounded-xl border border-white/15 bg-white/5 text-left shadow-lg shadow-black/20 transition-all duration-150 ease-out ${
-                isBeingDragged ? "opacity-30" : "cursor-grab hover:-translate-y-0.5 active:cursor-grabbing"
+              className={`relative w-36 shrink-0 touch-none select-none overflow-hidden rounded-xl border border-white/15 bg-white/5 text-left shadow-lg shadow-black/20 transition-[transform,opacity] duration-150 ease-out ${
+                isBeingDragged ? "opacity-30" : "cursor-grab [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 active:cursor-grabbing"
               }`}
               onPointerDown={(e) => handlePointerDown(e, item)}
               onPointerMove={handlePointerMove}

@@ -465,7 +465,7 @@ export function YoutubeCaptureCard({
               type="button"
               disabled={!allChecked}
               onClick={() => void handleConfirm()}
-              className="rounded-lg bg-builder-accent px-3 py-1.5 text-xs font-semibold text-black transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
+              className="rounded-lg bg-builder-accent px-3 py-1.5 text-xs font-semibold text-black transition-transform [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 disabled:[@media(hover:hover)_and_(pointer:fine)]:hover:translate-y-0"
             >
               Share &amp; record
             </button>
@@ -531,7 +531,7 @@ export function YoutubeCaptureCard({
                 type="button"
                 disabled={cropping}
                 onClick={() => void confirmReview()}
-                className="rounded-lg bg-builder-accent px-4 py-1.5 text-xs font-semibold text-black transition-transform hover:-translate-y-0.5 disabled:opacity-50"
+                className="rounded-lg bg-builder-accent px-4 py-1.5 text-xs font-semibold text-black transition-transform [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 disabled:opacity-50"
               >
                 {cropping ? "Cropping…" : "Use this clip"}
               </button>

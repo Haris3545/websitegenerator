@@ -5,7 +5,9 @@ import { createContext, useContext, useState, type ReactNode } from "react";
 const PoofContext = createContext<((x: number, y: number) => void) | null>(null);
 
 const PARTICLE_COUNT = 8;
-const POOF_DURATION_MS = 550;
+const PARTICLE_STAGGER_MS = 10;
+const PARTICLE_ANIMATION_MS = 500; // must match .animate-poof-particle's own duration in globals.css
+const POOF_DURATION_MS = PARTICLE_ANIMATION_MS + (PARTICLE_COUNT - 1) * PARTICLE_STAGGER_MS;
 
 function PoofBurst({ x, y }: { x: number; y: number }) {
   const particles = Array.from({ length: PARTICLE_COUNT }, (_, i) => {
@@ -25,7 +27,7 @@ function PoofBurst({ x, y }: { x: number; y: number }) {
             {
               "--poof-x": `${p.dx}px`,
               "--poof-y": `${p.dy}px`,
-              animationDelay: `${i * 0.01}s`,
+              animationDelay: `${i * PARTICLE_STAGGER_MS}ms`,
             } as React.CSSProperties
           }
         />

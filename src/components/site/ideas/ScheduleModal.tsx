@@ -137,7 +137,7 @@ export function ScheduleModal({
           <button
             type="submit"
             disabled={isPending}
-            className="rounded-full bg-[var(--accent)] px-5 py-2 text-sm font-semibold text-black transition-transform duration-150 ease-out hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-50"
+            className="rounded-full bg-[var(--accent)] px-5 py-2 text-sm font-semibold text-black transition-transform duration-150 ease-out [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-50"
           >
             {isPending ? "Saving..." : "Save"}
           </button>

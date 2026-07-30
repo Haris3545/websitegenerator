@@ -1,6 +1,6 @@
 # 007 — Reduce animation on the app's highest-frequency action (tab switching)
 
-- **Status**: TODO
+- **Status**: DONE
 - **Commit**: 46a1b7b
 - **Severity**: HIGH
 - **Category**: Purpose & frequency
