@@ -139,11 +139,32 @@ export function CampaignGanttBoard({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- rowHeight closes over blocksByPillar, which is the real dependency
   }, [blocksByPillar]);
 
-  function pillarFromClientY(clientY: number): TacticPillar {
+  // Once a drag is locked onto a row, it takes clearing that row's boundary
+  // by ROW_SWITCH_MARGIN (not just crossing the line by a pixel) to switch
+  // to a neighbour — without this, a fast, mostly-horizontal drag with any
+  // natural vertical jitter would flip back and forth between two rows
+  // every time the pointer straddled the boundary, which is what read as
+  // the block "moving back and forth weirdly."
+  const ROW_SWITCH_MARGIN = 14;
+
+  function pillarFromClientY(clientY: number, preferred?: TacticPillar): TacticPillar {
     const el = scrollRef.current;
     if (!el) return TACTIC_PILLARS[0].value;
     const rect = el.getBoundingClientRect();
     const yInRows = clientY - rect.top - HEADER_TOTAL_HEIGHT;
+
+    if (preferred) {
+      let top = 0;
+      for (const p of TACTIC_PILLARS) {
+        const h = rowHeight(p.value);
+        if (p.value === preferred) {
+          if (yInRows >= top - ROW_SWITCH_MARGIN && yInRows < top + h + ROW_SWITCH_MARGIN) return preferred;
+          break;
+        }
+        top += h;
+      }
+    }
+
     let cursor = 0;
     for (const p of TACTIC_PILLARS) {
       const h = rowHeight(p.value);
@@ -364,14 +385,25 @@ export function CampaignGanttBoard({
     const duration = ms.endIdx - ms.startIdx;
     const newStart = clampIdx(ms.startIdx + dayDelta);
     const newEnd = clampIdx(newStart + duration);
-    setMoveVisual({ id: ms.id, startIdx: newStart, endIdx: newEnd, pillar: pillarFromClientY(e.clientY) });
+    setMoveVisual((prev) => ({
+      id: ms.id,
+      startIdx: newStart,
+      endIdx: newEnd,
+      pillar: pillarFromClientY(e.clientY, prev?.id === ms.id ? prev.pillar : undefined),
+    }));
   }
   function handleBlockPointerUp(b: Block) {
     return () => {
       const ms = moveRef.current;
+      // onLostPointerCapture fires right after a plain onPointerUp too (a
+      // normal release ends capture as well) — without this guard, that
+      // redundant second call would find moveRef already cleared and stomp
+      // wasMovingRef back to false right before the click fires, letting a
+      // real drag still reopen the select footer.
+      if (!ms) return;
       moveRef.current = null;
-      wasMovingRef.current = ms?.moved ?? false;
-      if (!ms || !ms.moved || !moveVisual) {
+      wasMovingRef.current = ms.moved;
+      if (!ms.moved || !moveVisual) {
         setMoveVisual(null);
         return;
       }

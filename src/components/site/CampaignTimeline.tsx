@@ -197,9 +197,15 @@ export function CampaignTimeline({
 
   async function handleDotPointerUp() {
     const ds = dragRef.current;
-    wasDraggingRef.current = ds?.moved ?? false;
+    // A plain pointerup always fires onLostPointerCapture right after it
+    // (releasing implicitly ends capture too) — without this guard, that
+    // second call would find dragRef already cleared and stomp
+    // wasDraggingRef back to false right before the click fires, which is
+    // exactly what let the edit modal reopen after a real drag.
+    if (!ds) return;
     dragRef.current = null;
-    if (!ds || !ds.moved || !dragVisual) {
+    wasDraggingRef.current = ds.moved;
+    if (!ds.moved || !dragVisual) {
       setDragVisual(null);
       return;
     }
