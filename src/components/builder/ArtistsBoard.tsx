@@ -505,28 +505,19 @@ export function ArtistsBoard({
               </span>
             </div>
 
-            {/* Doubles as: a quick-delete click target always reachable on
-                hover, and (while THIS artist is the one being dragged) the
-                drop zone the icon morphs a trash can for — since it stays
-                anchored at the icon's original slot while the dragged
-                clone follows the pointer, dropping back over your own
-                corner is the natural "drop it in the trash" gesture. */}
+            {/* A quick-delete click target, always reachable on hover —
+                separate from the drag-to-trash-bin gesture below. */}
             <button
               type="button"
-              data-drop-zone="trash"
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
                 requestDelete(artist);
               }}
               aria-label={`Delete ${artist.name}`}
-              className={`absolute -right-1.5 -top-1.5 z-20 flex items-center justify-center rounded-full text-white shadow-sm transition-all duration-150 ${
-                draggedArtist?.id === artist.id
-                  ? `h-8 w-8 ${dropTarget === "trash" ? "scale-110 bg-red-500 ring-2 ring-red-300" : "bg-red-500/90"}`
-                  : "h-4 w-4 bg-red-500 text-[10px] font-bold leading-none opacity-0 group-hover:opacity-100"
-              }`}
+              className="absolute -right-1.5 -top-1.5 z-20 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold leading-none text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100"
             >
-              {draggedArtist?.id === artist.id ? <TrashIcon className="h-4 w-4" /> : "×"}
+              ×
             </button>
 
             <div
@@ -585,6 +576,42 @@ export function ArtistsBoard({
           />
         </div>
       )}
+
+      {/* A static drop target for deleting a site outright — stays mounted
+          the whole time so it can animate both in and back out (a
+          conditionally-rendered element can only ever animate its
+          arrival), sliding up and fading in the instant a drag starts and
+          reversing the moment it ends, regardless of whether that drag
+          dropped it here or somewhere else. */}
+      <div
+        data-drop-zone="trash"
+        className={`fixed inset-x-0 bottom-8 z-50 flex justify-center transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+          draggedArtist ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-6 opacity-0"
+        }`}
+      >
+        <div
+          className={`flex flex-col items-center gap-1.5 transition-transform duration-150 ${
+            dropTarget === "trash" ? "scale-110" : "scale-100"
+          }`}
+        >
+          <div
+            className={`flex h-16 w-16 items-center justify-center rounded-full border-2 shadow-xl shadow-black/40 backdrop-blur-md transition-colors duration-150 ${
+              dropTarget === "trash"
+                ? "border-red-400 bg-red-500/90 text-white"
+                : "border-neutral-300 bg-white/90 text-neutral-500 dark:border-white/25 dark:bg-black/70 dark:text-white/70"
+            }`}
+          >
+            <TrashIcon className="h-6 w-6" />
+          </div>
+          <span
+            className={`text-xs font-semibold uppercase tracking-wide transition-colors duration-150 ${
+              dropTarget === "trash" ? "text-red-400" : "text-neutral-500 dark:text-white/50"
+            }`}
+          >
+            Drop to delete
+          </span>
+        </div>
+      </div>
 
       {pendingDeletes.length > 0 && (
         <div className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex flex-col items-center gap-2">
