@@ -37,7 +37,7 @@ function colorFor(categoryName: string): string {
 }
 
 // Lightens a hex color toward white by `amount` (0 = unchanged, 1 = white)
-// — used to give an expanded category's subcategories their own
+// — used to give a drilled-into category's subcategories their own
 // distinguishable segments while still visibly reading as "part of the
 // same family" as the parent's own color.
 function tint(hex: string, amount: number): string {
@@ -92,9 +92,10 @@ const RING_R = 220;
 const RING_STROKE = 46;
 const GAP_DEG = 2.2;
 
-// The subcategory band sits just inside the main ring, thinner, so it reads
-// as a nested breakdown of that one arc's own angular span rather than a
-// second competing ring.
+// The subcategory preview band sits just inside the main ring, thinner, so
+// it reads as a peek at a category's own breakdown without committing to
+// anything — actually selecting one of its subcategories (see below) is
+// what switches the outer ring over to it.
 const INNER_RING_R = 182;
 const INNER_RING_STROKE = 20;
 const INNER_GAP_DEG = 1.2;
@@ -142,11 +143,28 @@ function buildArcs(entries: { name: string; color: string; comments: SocialComme
   });
 }
 
+// A category's own subcategories, reproportioned to fill the entire ring
+// (not just that category's own slice) — this is what the outer ring
+// switches to once you actually select one of them, so its share reads
+// against its real total (e.g. "20% of this category") instead of the tiny
+// sliver that same 20% would be against every category combined.
+function buildArcsForCategory(cat: SocialCommentCategory): Arc[] {
+  const baseColor = colorFor(cat.name);
+  const n = cat.subcategories.length;
+  return buildArcs(
+    cat.subcategories.map((sub, i) => ({
+      name: sub.name,
+      color: n <= 1 ? baseColor : tint(baseColor, (i / (n - 1)) * 0.55),
+      comments: sub.comments,
+    }))
+  );
+}
+
 // Subdivides one top-level arc's own angular span (not the full circle) by
-// its subcategories' share of that category's comments — so the inner band
-// sits exactly under the outer arc it belongs to, rather than needing to
-// replace the whole ring to show a breakdown.
-function buildSubArcsForCategory(cat: SocialCommentCategory, topArc: Arc): Arc[] {
+// its subcategories' share of that category's comments — a non-committal
+// preview of the breakdown, sitting exactly under the outer arc it belongs
+// to, so you can glance at proportions before deciding to drill in.
+function buildPreviewArcsForCategory(cat: SocialCommentCategory, topArc: Arc): Arc[] {
   const baseColor = colorFor(cat.name);
   const withCounts = cat.subcategories
     .map((sub) => ({ name: sub.name, comments: sub.comments, count: sub.comments.length }))
@@ -174,13 +192,20 @@ function buildSubArcsForCategory(cat: SocialCommentCategory, topArc: Arc): Arc[]
 /** An Activity-ring-style segmented ring: arc length reads as each
  * category's share of all comments, colour reads as category, and the
  * legend beside it gives the exact percentage/count so nothing depends on
- * judging an angle by eye. Clicking a segment (ring or legend row) selects
- * it — its colour flows around the rest of the ring and its sample
- * comments appear below. Expanding a category in the legend (via its
- * chevron) reveals its own subcategories as nested rows, and draws a thinner
- * inner band on the ring, subdividing that one arc's own angular span —
- * so exploring subcategories never requires replacing the whole ring. */
+ * judging an angle by eye. Clicking a segment selects it — its colour
+ * flows around the rest of the ring and its sample comments appear below.
+ * Expanding a category (via its "N subcategories" pill) previews its own
+ * breakdown as nested rows plus a thin inner band on the ring, without
+ * committing to anything. Actually selecting one of those subcategories
+ * switches the whole outer ring over to that category's own subcategories
+ * (reproportioned to fill the circle) — so a sub-selection is always read
+ * against its real parent, never left looking unrelated to whatever the
+ * outer ring happens to be showing. */
 export function CommentMap({ categories }: { categories: SocialCommentCategory[] }) {
+  // The category currently "drilled into" — when set, the outer ring and
+  // legend both show that category's own subcategories instead of the
+  // top-level breakdown.
+  const [drilledCat, setDrilledCat] = useState<SocialCommentCategory | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   // Stays put (doesn't reset to null) even after deselecting — the flow's
   // stagger distance is computed from whichever segment was most recently
@@ -188,9 +213,9 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
   // flow-out came from instead of snapping in from nowhere.
   const [flowFrom, setFlowFrom] = useState<number | null>(null);
 
+  // Non-committal previews (chevron-expanded categories) — only relevant
+  // at the top level, cleared the moment something is actually drilled into.
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
-  const [selectedSub, setSelectedSub] = useState<{ cat: string; index: number } | null>(null);
-  const [subFlowFrom, setSubFlowFrom] = useState<{ cat: string; index: number } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -206,42 +231,46 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
     [categories]
   );
 
-  const expandedSubArcsByCat = useMemo(() => {
+  const drilledArcs = useMemo(
+    () => (drilledCat ? buildArcsForCategory(drilledCat) : []),
+    [drilledCat]
+  );
+
+  const arcs = drilledCat ? drilledArcs : topArcs;
+
+  const previewArcsByCat = useMemo(() => {
     const map = new Map<string, Arc[]>();
+    if (drilledCat) return map;
     for (const cat of categories) {
       if (!expandedCats.has(cat.name)) continue;
       const topArc = topArcs.find((a) => a.name === cat.name);
       if (!topArc) continue;
-      const subs = buildSubArcsForCategory(cat, topArc);
+      const subs = buildPreviewArcsForCategory(cat, topArc);
       if (subs.length > 1) map.set(cat.name, subs);
     }
     return map;
-  }, [categories, expandedCats, topArcs]);
+  }, [categories, expandedCats, topArcs, drilledCat]);
 
   const grandTotal = topArcs.reduce((s, a) => s + a.count, 0);
+  const displayedTotal = arcs.reduce((s, a) => s + a.count, 0);
 
   // Clicking off the ring/legend (anywhere else in the card, or outside it
   // entirely) retreats the flow the same way toggling the same segment
-  // again would — for whichever of the top ring or an inner subcategory
-  // band is currently selected. Runs before the early return below so hook
-  // order stays consistent regardless of whether there's any data to show.
+  // again would (staying drilled in, if drilled — only "All categories"
+  // explicitly leaves that view). Runs before the early return below so
+  // hook order stays consistent regardless of whether there's any data.
   useEffect(() => {
-    if (selected === null && selectedSub === null) return;
+    if (selected === null) return;
     function onPointerDown(e: PointerEvent) {
-      if (!containerRef.current?.contains(e.target as Node)) {
-        setSelected(null);
-        setSelectedSub(null);
-      }
+      if (!containerRef.current?.contains(e.target as Node)) setSelected(null);
     }
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [selected, selectedSub]);
+  }, [selected]);
 
   if (topArcs.length === 0) return null;
 
-  const selectedTopArc = selected !== null ? topArcs[selected] : null;
-  const selectedSubArc = selectedSub ? expandedSubArcsByCat.get(selectedSub.cat)?.[selectedSub.index] ?? null : null;
-  const activeArc = selectedSubArc ?? selectedTopArc;
+  const selectedArc = selected !== null ? arcs[selected] : null;
 
   function toggle(i: number) {
     setFlowFrom(i);
@@ -257,9 +286,22 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
     });
   }
 
-  function toggleSub(catName: string, i: number) {
-    setSubFlowFrom({ cat: catName, index: i });
-    setSelectedSub((s) => (s && s.cat === catName && s.index === i ? null : { cat: catName, index: i }));
+  // Committing to a subcategory (from the preview list or its inner band)
+  // switches the whole outer ring over to that subcategory's own parent
+  // category, proportioned to fill the circle, with it selected — matching
+  // preview order (both filtered to count > 0, sorted by count descending)
+  // means the clicked preview index lines up with the drilled arcs' index.
+  function drillIntoSub(cat: SocialCommentCategory, subIndex: number) {
+    setDrilledCat(cat);
+    setSelected(subIndex);
+    setFlowFrom(subIndex);
+    setExpandedCats(new Set());
+  }
+
+  function backToTop() {
+    setDrilledCat(null);
+    setSelected(null);
+    setFlowFrom(null);
   }
 
   return (
@@ -272,26 +314,39 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
         borderRadius: "var(--card-radius, 12px)",
       }}
     >
-      <p className="text-[11px] uppercase tracking-wide text-white/30">
-        Click a category to see samples · expand one to see its subcategories
-      </p>
+      {drilledCat ? (
+        <button
+          type="button"
+          onClick={backToTop}
+          className="flex w-fit items-center gap-1.5 text-xs font-medium text-white/50 transition-colors hover:text-white/80"
+        >
+          <svg viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5" aria-hidden>
+            <path d="m12.5 5.5-5 4.5 5 4.5" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          All categories
+          <span style={{ color: colorFor(drilledCat.name) }}>· {drilledCat.name}</span>
+        </button>
+      ) : (
+        <p className="text-[11px] uppercase tracking-wide text-white/30">
+          Click a category to see samples · expand one to preview its subcategories
+        </p>
+      )}
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-[auto_1fr] sm:items-center">
         <div className="relative mx-auto flex h-56 w-56 shrink-0 items-center justify-center sm:h-64 sm:w-64">
           <svg viewBox="0 0 600 600" className="h-full w-full">
-            {topArcs.map((a, i) => {
+            {arcs.map((a, i) => {
               // The rest of the ring blends toward whichever segment is
               // selected, staggered clockwise from wherever the flow
               // originated so the whole ring reads as one ~600ms sweep
               // around the circle (and the same sweep in reverse on
               // deselect) rather than every arc crossfading at once.
-              const flowTarget = selected !== null && selected !== i ? topArcs[selected]?.color : null;
+              const flowTarget = selected !== null && selected !== i ? arcs[selected]?.color : null;
               const displayColor = flowTarget ? mixColor(a.color, flowTarget, FLOW_AMOUNT) : a.color;
               const origin = flowFrom ?? i;
-              const clockwiseDist = (i - origin + topArcs.length) % topArcs.length;
+              const clockwiseDist = (i - origin + arcs.length) % arcs.length;
               const maxDelay = FLOW_TOTAL_MS - FLOW_TRANSITION_MS;
-              const delayMs =
-                topArcs.length > 1 ? Math.round((clockwiseDist / (topArcs.length - 1)) * maxDelay) : 0;
+              const delayMs = arcs.length > 1 ? Math.round((clockwiseDist / (arcs.length - 1)) * maxDelay) : 0;
               return (
                 <path
                   key={a.name}
@@ -314,56 +369,45 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
               );
             })}
 
-            {Array.from(expandedSubArcsByCat.entries()).map(([catName, subs]) =>
-              subs.map((s, si) => {
-                const isThisCatSelected = selectedSub?.cat === catName;
-                const flowTarget =
-                  isThisCatSelected && selectedSub!.index !== si ? subs[selectedSub!.index]?.color : null;
-                const displayColor = flowTarget ? mixColor(s.color, flowTarget, FLOW_AMOUNT) : s.color;
-                const origin = subFlowFrom?.cat === catName ? subFlowFrom.index : si;
-                const clockwiseDist = (si - origin + subs.length) % subs.length;
-                const maxDelay = FLOW_TOTAL_MS - FLOW_TRANSITION_MS;
-                const delayMs = subs.length > 1 ? Math.round((clockwiseDist / (subs.length - 1)) * maxDelay) : 0;
-                return (
+            {!drilledCat &&
+              Array.from(previewArcsByCat.entries()).map(([catName, subs]) =>
+                subs.map((s, si) => (
                   <path
                     key={`${catName}:${s.name}`}
                     d={s.path}
-                    stroke={displayColor}
+                    stroke={s.color}
                     strokeWidth={INNER_RING_STROKE}
                     fill="none"
                     strokeLinecap="round"
                     className="cursor-pointer"
-                    style={{
-                      filter: isThisCatSelected && selectedSub!.index === si ? "brightness(1.18)" : undefined,
-                      transition: `stroke ${FLOW_TRANSITION_MS}ms ${FLOW_EASE}, filter 300ms ease`,
-                      transitionDelay: `${delayMs}ms`,
+                    onClick={() => {
+                      const cat = categories.find((c) => c.name === catName);
+                      if (cat) drillIntoSub(cat, si);
                     }}
-                    onClick={() => toggleSub(catName, si)}
                   />
-                );
-              })
-            )}
+                ))
+              )}
           </svg>
           <div className="pointer-events-none absolute flex flex-col items-center gap-0.5">
             <span
               className="text-4xl font-bold tabular-nums"
               style={{ color: "var(--card-text-color, #fff)" }}
             >
-              {formatCount(grandTotal)}
+              {drilledCat ? formatCount(displayedTotal) : formatCount(grandTotal)}
             </span>
             <span className="max-w-[7rem] truncate text-[11px] uppercase tracking-wide text-white/40">
-              comments
+              {drilledCat ? drilledCat.name : "comments"}
             </span>
           </div>
         </div>
 
         <div className="flex min-w-0 flex-col gap-1">
-          {topArcs.map((a, i) => {
-            const cat = categories.find((c) => c.name === a.name);
+          {arcs.map((a, i) => {
+            const cat = drilledCat ? null : categories.find((c) => c.name === a.name);
             const nonEmptySubcats = cat?.subcategories.filter((s) => s.comments.length > 0) ?? [];
-            const canExpand = nonEmptySubcats.length > 1;
+            const canExpand = !drilledCat && nonEmptySubcats.length > 1;
             const isExpanded = expandedCats.has(a.name);
-            const subs = expandedSubArcsByCat.get(a.name) ?? [];
+            const subs = previewArcsByCat.get(a.name) ?? [];
             return (
               <div key={a.name} className="flex flex-col gap-1">
                 <div
@@ -400,7 +444,7 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
                     <button
                       type="button"
                       onClick={() => toggleExpand(a.name)}
-                      aria-label={isExpanded ? "Collapse subcategories" : "Expand subcategories"}
+                      aria-label={isExpanded ? "Collapse subcategories" : "Preview subcategories"}
                       className={`flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
                         isExpanded
                           ? "border-white/25 bg-white/[0.1] text-white/85"
@@ -429,12 +473,8 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
                       <button
                         key={sub.name}
                         type="button"
-                        onClick={() => toggleSub(a.name, si)}
-                        className={`grid grid-cols-[10px_1fr_auto_auto] items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-colors ${
-                          selectedSub?.cat === a.name && selectedSub.index === si
-                            ? "border-white/15 bg-white/[0.05]"
-                            : "border-transparent hover:bg-white/[0.03]"
-                        }`}
+                        onClick={() => drillIntoSub(cat!, si)}
+                        className="grid grid-cols-[10px_1fr_auto_auto] items-center gap-2.5 rounded-lg border border-transparent px-2.5 py-2 text-left transition-colors hover:border-white/15 hover:bg-white/[0.04]"
                       >
                         <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: sub.color }} />
                         <span className="truncate text-[12.5px] font-medium text-white/70">{sub.name}</span>
@@ -454,22 +494,22 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
         </div>
       </div>
 
-      {activeArc && (
+      {selectedArc && (
         <div
           className="flex flex-col gap-2.5 pt-4"
           style={{ borderTop: "1px solid rgba(255,255,255,var(--card-border-opacity, 0.15))" }}
         >
-          <p className="text-sm font-semibold" style={{ color: activeArc.color }}>
-            {activeArc.name} — sample comments
+          <p className="text-sm font-semibold" style={{ color: selectedArc.color }}>
+            {selectedArc.name} — sample comments
           </p>
-          {activeArc.comments.slice(0, 4).map((c, i) => (
+          {selectedArc.comments.slice(0, 4).map((c, i) => (
             <a
               key={i}
               href={c.url}
               target="_blank"
               rel="noopener noreferrer"
               className="block border-l-2 pl-3 text-sm opacity-90 transition-opacity hover:opacity-100"
-              style={{ borderColor: activeArc.color, color: "var(--card-text-color, #fff)" }}
+              style={{ borderColor: selectedArc.color, color: "var(--card-text-color, #fff)" }}
             >
               <span className="line-clamp-3">&ldquo;{c.text}&rdquo;</span>
               <span className="mt-0.5 block text-xs opacity-50">

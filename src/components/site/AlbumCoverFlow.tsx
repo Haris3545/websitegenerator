@@ -7,6 +7,14 @@ const COVER_GAP = 130; // px between cover centers at rest
 const COVER_SIZE = 176; // px, the centered cover's width/height
 const CLICK_THRESHOLD = 6; // px of movement below which a release counts as a click, not a drag
 
+// A real swipe (quick flick) rarely travels the full COVER_GAP distance —
+// without this, only a slow drag past half the gap would ever change the
+// album, so a normal quick swipe just snapped back to where it started,
+// reading as "swiping doesn't work."
+const SWIPE_MAX_DURATION_MS = 300;
+const SWIPE_MIN_DISTANCE_PX = 24;
+const SWIPE_MIN_VELOCITY_PX_MS = 0.3;
+
 function subscribeReducedMotion(callback: () => void) {
   const mql = window.matchMedia("(prefers-reduced-motion: reduce)");
   mql.addEventListener("change", callback);
@@ -45,6 +53,7 @@ export function AlbumCoverFlow({ albums }: { albums: MusicAlbum[] }) {
 
     let pointerId: number | null = null;
     let startX = 0;
+    let downTime = 0;
     let moved = false;
     let clickedIndex: number | null = null;
     let wheelAccum = 0;
@@ -82,6 +91,7 @@ export function AlbumCoverFlow({ albums }: { albums: MusicAlbum[] }) {
     function onPointerDown(e: PointerEvent) {
       pointerId = e.pointerId;
       startX = e.clientX;
+      downTime = e.timeStamp;
       moved = false;
       const target = (e.target as HTMLElement).closest("[data-cover-index]");
       clickedIndex = target ? Number(target.getAttribute("data-cover-index")) : null;
@@ -93,18 +103,31 @@ export function AlbumCoverFlow({ albums }: { albums: MusicAlbum[] }) {
       if (pointerId === null || e.pointerId !== pointerId) return;
       const delta = e.clientX - startX;
       if (Math.abs(delta) > CLICK_THRESHOLD) moved = true;
-      setDragOffset(delta);
+      // Negated: the release below already resolves a rightward drag to the
+      // PREVIOUS album (content following the finger), but the live render
+      // was fed the raw, un-negated delta — so covers visibly slid the
+      // opposite way from where the drag was actually going to land,
+      // reading as "the swipe is inverted."
+      setDragOffset(-delta);
     }
 
     function onPointerUp(e: PointerEvent) {
       if (pointerId === null || e.pointerId !== pointerId) return;
       const delta = e.clientX - startX;
+      const duration = e.timeStamp - downTime;
       pointerId = null;
       setIsDragging(false);
       setDragOffset(0);
 
       if (moved) {
-        setIndex((i) => Math.max(0, Math.min(albums.length - 1, i + Math.round(-delta / COVER_GAP))));
+        const distanceSteps = Math.round(-delta / COVER_GAP);
+        const velocity = Math.abs(delta) / Math.max(duration, 1);
+        const isQuickSwipe =
+          duration < SWIPE_MAX_DURATION_MS &&
+          Math.abs(delta) > SWIPE_MIN_DISTANCE_PX &&
+          velocity > SWIPE_MIN_VELOCITY_PX_MS;
+        const steps = distanceSteps !== 0 ? distanceSteps : isQuickSwipe ? (delta > 0 ? -1 : 1) : 0;
+        if (steps !== 0) setIndex((i) => Math.max(0, Math.min(albums.length - 1, i + steps)));
       } else if (clickedIndex !== null) {
         setIndex(Math.max(0, Math.min(albums.length - 1, clickedIndex)));
       }
