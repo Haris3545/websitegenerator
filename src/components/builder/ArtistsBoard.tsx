@@ -35,6 +35,21 @@ const DRAG_MOVE_THRESHOLD = 5;
 // not an actual spring/physics simulation.
 const MAX_SWAY_DEG = 16;
 const SWAY_SENSITIVITY = 45; // deg per (px/ms) of pointer speed
+const DELETE_UNDO_MS = 5000;
+
+function TrashIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
+      <path
+        d="M4 6h16M9 6V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V6m2 0-.7 13.1A2 2 0 0 1 14.3 21H9.7a2 2 0 0 1-2-1.9L7 6"
+        stroke="currentColor"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 function FolderGlyph() {
   return (
@@ -112,6 +127,7 @@ export function ArtistsBoard({
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pendingDeletes, setPendingDeletes] = useState<{ artist: ArtistLite; timer: number }[]>([]);
 
   // The floating dragged thumbnail — null whenever nothing's being
   // dragged. Position/rotation update on every pointermove; the id is
@@ -194,6 +210,36 @@ export function ArtistsBoard({
     persistMoveRef.current = persistMove;
   });
 
+  // Deleting doesn't actually call deleteArtist right away — it hides the
+  // icon immediately and holds it in pendingDeletes with an Undo toast for
+  // a few seconds, since the real action unpublishes any live site and
+  // permanently drops all cached dashboard data. Only once that window
+  // closes without an undo does the irreversible part actually happen.
+  function requestDelete(artist: ArtistLite) {
+    setMenuFor(null);
+    setArtists((prev) => prev.filter((a) => a.id !== artist.id));
+    const timer = window.setTimeout(() => {
+      startTransition(async () => {
+        const result = await deleteArtist(artist.id);
+        if (!result.ok) setError(result.error);
+      });
+      setPendingDeletes((prev) => prev.filter((d) => d.artist.id !== artist.id));
+    }, DELETE_UNDO_MS);
+    setPendingDeletes((prev) => [...prev, { artist, timer }]);
+  }
+  const requestDeleteRef = useRef(requestDelete);
+  useEffect(() => {
+    requestDeleteRef.current = requestDelete;
+  });
+
+  function undoDelete(artistId: string) {
+    const entry = pendingDeletes.find((d) => d.artist.id === artistId);
+    if (!entry) return;
+    window.clearTimeout(entry.timer);
+    setPendingDeletes((prev) => prev.filter((d) => d.artist.id !== artistId));
+    setArtists((prev) => [...prev, entry.artist]);
+  }
+
   function openMenuForRect(artistId: string, rect: DOMRect) {
     // Fixed (viewport-relative) positioning, clamped to stay fully
     // on-screen — an absolute-positioned menu centered on the icon with no
@@ -260,7 +306,9 @@ export function ArtistsBoard({
       }
 
       const zone = dropTargetRef.current;
-      if (zone === "back") {
+      if (zone === "trash") {
+        requestDeleteRef.current(ds.artist);
+      } else if (zone === "back") {
         persistMoveRef.current(ds.artist.id, null, null);
       } else if (zone?.startsWith("folder:")) {
         persistMoveRef.current(ds.artist.id, zone.slice("folder:".length), null);
@@ -435,7 +483,7 @@ export function ArtistsBoard({
           })}
 
         {visibleArtists.map((artist) => (
-          <div key={artist.id} className="relative" data-artist-menu={artist.id}>
+          <div key={artist.id} className="group relative" data-artist-menu={artist.id}>
             <div
               data-drop-zone={`artist:${artist.id}`}
               data-artist-folder={artist.folder_id ?? ""}
@@ -456,6 +504,30 @@ export function ArtistsBoard({
                 /s/{artist.slug}
               </span>
             </div>
+
+            {/* Doubles as: a quick-delete click target always reachable on
+                hover, and (while THIS artist is the one being dragged) the
+                drop zone the icon morphs a trash can for — since it stays
+                anchored at the icon's original slot while the dragged
+                clone follows the pointer, dropping back over your own
+                corner is the natural "drop it in the trash" gesture. */}
+            <button
+              type="button"
+              data-drop-zone="trash"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                requestDelete(artist);
+              }}
+              aria-label={`Delete ${artist.name}`}
+              className={`absolute -right-1.5 -top-1.5 z-20 flex items-center justify-center rounded-full text-white shadow-sm transition-all duration-150 ${
+                draggedArtist?.id === artist.id
+                  ? `h-8 w-8 ${dropTarget === "trash" ? "scale-110 bg-red-500 ring-2 ring-red-300" : "bg-red-500/90"}`
+                  : "h-4 w-4 bg-red-500 text-[10px] font-bold leading-none opacity-0 group-hover:opacity-100"
+              }`}
+            >
+              {draggedArtist?.id === artist.id ? <TrashIcon className="h-4 w-4" /> : "×"}
+            </button>
 
             <div
               style={menuFor === artist.id && menuPos ? { top: menuPos.top, left: menuPos.left } : undefined}
@@ -480,20 +552,7 @@ export function ArtistsBoard({
               </Link>
               <button
                 type="button"
-                onClick={() => {
-                  setMenuFor(null);
-                  if (
-                    !window.confirm(
-                      `Delete "${artist.name}" for good? This removes its dashboard, all cached data, and (if published) its standalone site. This can't be undone.`
-                    )
-                  )
-                    return;
-                  setArtists((prev) => prev.filter((a) => a.id !== artist.id));
-                  startTransition(async () => {
-                    const result = await deleteArtist(artist.id);
-                    if (!result.ok) setError(result.error);
-                  });
-                }}
+                onClick={() => requestDelete(artist)}
                 className="block w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
               >
                 Delete
@@ -524,6 +583,26 @@ export function ArtistsBoard({
             imageUrl={draggedArtist.background_image_url ?? undefined}
             className="h-14 w-24 shadow-2xl shadow-black/40"
           />
+        </div>
+      )}
+
+      {pendingDeletes.length > 0 && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex flex-col items-center gap-2">
+          {pendingDeletes.map((d) => (
+            <div
+              key={d.artist.id}
+              className="animate-poof-in pointer-events-auto flex items-center gap-3 rounded-full border border-neutral-200 bg-white px-4 py-2 text-sm shadow-xl dark:border-white/10 dark:bg-neutral-900"
+            >
+              <span className="text-neutral-700 dark:text-white/80">Deleted &quot;{d.artist.name}&quot;</span>
+              <button
+                type="button"
+                onClick={() => undoDelete(d.artist.id)}
+                className="font-semibold text-builder-accent transition-colors hover:brightness-110"
+              >
+                Undo
+              </button>
+            </div>
+          ))}
         </div>
       )}
     </div>
