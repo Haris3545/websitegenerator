@@ -140,6 +140,13 @@ export default async function ArtistSiteLayout({
                 filter: `blur(var(--bg-blur)) contrast(${theme.bg_contrast}) saturate(${theme.bg_saturate}) url(#chroma-filter)`,
                 objectPosition: `${theme.bg_position_x}% ${theme.bg_position_y}%`,
                 transform: `scale(${theme.bg_zoom})`,
+                // Forces the browser to promote this onto its own compositor
+                // layer up front instead of only once the SVG-referencing
+                // filter is first asked to apply — without it, Chromium can
+                // paint one unfiltered frame (briefly showing the image
+                // sharp/unblurred) the first time this element needs
+                // filtering after a navigation.
+                willChange: "filter",
               }}
             />
           ) : (
@@ -152,6 +159,7 @@ export default async function ArtistSiteLayout({
                 filter: `blur(var(--bg-blur)) contrast(${theme.bg_contrast}) saturate(${theme.bg_saturate}) url(#chroma-filter)`,
                 objectPosition: `${theme.bg_position_x}% ${theme.bg_position_y}%`,
                 transform: `scale(${theme.bg_zoom})`,
+                willChange: "filter",
               }}
             />
           ))}
