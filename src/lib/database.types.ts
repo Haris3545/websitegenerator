@@ -309,6 +309,7 @@ export interface Database {
           campaign_start_date: string | null;
           campaign_end_date: string | null;
           created_at: string;
+          deleted_at: string | null;
         };
         Insert: {
           id?: string;
@@ -321,6 +322,7 @@ export interface Database {
           timeline?: string | null;
           calendar_status?: "confirmed" | "tbc" | null;
           scheduled_date?: string | null;
+          deleted_at?: string | null;
           scheduled_time?: string | null;
           calendar_event_id?: string | null;
           channel?: "Social" | "OOH" | "PPC" | "Audio" | "Video" | "Experiential" | null;

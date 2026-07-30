@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { deleteBoardItem } from "@/app/s/[slug]/actions";
+import { deleteBoardItem, restoreBoardItem } from "@/app/s/[slug]/actions";
 import { PoofEffectProvider } from "@/hooks/usePoofEffect";
+import { RestoreDeletedPopover } from "@/components/site/RestoreDeletedPopover";
 import { TacticCard } from "@/components/site/tactics/TacticCard";
 import { TacticFormModal } from "@/components/site/tactics/TacticFormModal";
 import type { BoardItem } from "@/lib/database.types";
@@ -19,12 +20,15 @@ function TacticsBoardInner({
   artistId,
   slug,
   initialItems,
+  initialDeletedItems = [],
 }: {
   artistId: string;
   slug: string;
   initialItems: BoardItem[];
+  initialDeletedItems?: BoardItem[];
 }) {
   const [items, setItems] = useState(initialItems);
+  const [deletedItems, setDeletedItems] = useState(initialDeletedItems);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<BoardItem | undefined>(undefined);
   const [justAddedId, setJustAddedId] = useState<string | null>(null);
@@ -52,19 +56,34 @@ function TacticsBoardInner({
   }
 
   function handleDelete(id: string) {
-    setItems((prev) => prev.filter((i) => i.id !== id));
+    setItems((prev) => {
+      const item = prev.find((i) => i.id === id);
+      if (item) setDeletedItems((d) => [{ ...item, deleted_at: new Date().toISOString() }, ...d]);
+      return prev.filter((i) => i.id !== id);
+    });
     void deleteBoardItem(id);
+  }
+
+  function handleRestore(id: string) {
+    const item = deletedItems.find((i) => i.id === id);
+    if (!item) return;
+    setDeletedItems((prev) => prev.filter((i) => i.id !== id));
+    setItems((prev) => [{ ...item, deleted_at: null }, ...prev]);
+    void restoreBoardItem(id);
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <button
-        type="button"
-        onClick={openAdd}
-        className="self-start rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-black transition-all duration-150 ease-out hover:-translate-y-0.5 hover:brightness-110"
-      >
-        + New tactic
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={openAdd}
+          className="self-start rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-black transition-all duration-150 ease-out hover:-translate-y-0.5 hover:brightness-110"
+        >
+          + New tactic
+        </button>
+        <RestoreDeletedPopover items={deletedItems} onRestore={handleRestore} />
+      </div>
 
       {items.length === 0 ? (
         <div
@@ -105,7 +124,12 @@ function TacticsBoardInner({
 /** Wraps the board in its own PoofEffectProvider — same pattern as
  * IdeasBoard — so add/delete can each fire the particle-burst effect
  * without reaching outside this feature for a shared provider. */
-export function TacticsBoard(props: { artistId: string; slug: string; initialItems: BoardItem[] }) {
+export function TacticsBoard(props: {
+  artistId: string;
+  slug: string;
+  initialItems: BoardItem[];
+  initialDeletedItems?: BoardItem[];
+}) {
   return (
     <PoofEffectProvider>
       <TacticsBoardInner {...props} />

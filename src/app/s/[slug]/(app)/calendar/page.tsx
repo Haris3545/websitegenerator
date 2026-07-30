@@ -49,6 +49,7 @@ export default async function CalendarPage({ params }: { params: Promise<{ slug:
     .select("*")
     .eq("artist_id", artist.id)
     .eq("board_key", "tactics")
+    .is("deleted_at", null)
     .not("pillar", "is", null)
     .not("campaign_start_date", "is", null)
     .not("campaign_end_date", "is", null);

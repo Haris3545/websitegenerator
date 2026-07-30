@@ -29,7 +29,17 @@ export async function SiteBoardTab({
     .select("*")
     .eq("artist_id", artist.id)
     .eq("board_key", tabKey)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
+
+  const { data: deletedItems } = await supabase
+    .from("board_items")
+    .select("*")
+    .eq("artist_id", artist.id)
+    .eq("board_key", tabKey)
+    .not("deleted_at", "is", null)
+    .order("deleted_at", { ascending: false })
+    .limit(20);
 
   return (
     <div>
@@ -60,6 +70,7 @@ export async function SiteBoardTab({
           boardKey={tabKey}
           noun={noun}
           initialItems={items ?? []}
+          initialDeletedItems={deletedItems ?? []}
         />
       </div>
       <SiteFooter

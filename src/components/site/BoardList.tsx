@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { addBoardItem, deleteBoardItem } from "@/app/s/[slug]/actions";
+import { addBoardItem, deleteBoardItem, restoreBoardItem } from "@/app/s/[slug]/actions";
+import { RestoreDeletedPopover } from "@/components/site/RestoreDeletedPopover";
 import type { BoardItem } from "@/lib/database.types";
 
 const cardStyle = {
@@ -17,13 +18,16 @@ export function BoardList({
   boardKey,
   noun,
   initialItems,
+  initialDeletedItems = [],
 }: {
   artistId: string;
   boardKey: string;
   noun: string;
   initialItems: BoardItem[];
+  initialDeletedItems?: BoardItem[];
 }) {
   const [items, setItems] = useState(initialItems);
+  const [deletedItems, setDeletedItems] = useState(initialDeletedItems);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -47,8 +51,22 @@ export function BoardList({
   }
 
   function handleDelete(id: string) {
-    setItems((prev) => prev.filter((i) => i.id !== id));
+    setItems((prev) => {
+      const item = prev.find((i) => i.id === id);
+      if (item) setDeletedItems((d) => [{ ...item, deleted_at: new Date().toISOString() }, ...d]);
+      return prev.filter((i) => i.id !== id);
+    });
     startTransition(() => deleteBoardItem(id));
+  }
+
+  function handleRestore(id: string) {
+    const item = deletedItems.find((i) => i.id === id);
+    if (!item) return;
+    setDeletedItems((prev) => prev.filter((i) => i.id !== id));
+    setItems((prev) => [{ ...item, deleted_at: null }, ...prev]);
+    startTransition(() => {
+      void restoreBoardItem(id);
+    });
   }
 
   return (
@@ -73,13 +91,16 @@ export function BoardList({
           className="rounded border border-white/20 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-white/40 transition-colors focus:border-[var(--accent)] focus:outline-none"
         />
         {error && <p className="text-xs text-red-400">{error}</p>}
-        <button
-          type="submit"
-          disabled={isPending}
-          className="self-start rounded-full bg-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-black transition-all duration-150 ease-out hover:-translate-y-0.5 hover:brightness-110 disabled:pointer-events-none disabled:opacity-50"
-        >
-          {isPending ? "Adding..." : `+ New ${singular}`}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="submit"
+            disabled={isPending}
+            className="self-start rounded-full bg-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-black transition-all duration-150 ease-out hover:-translate-y-0.5 hover:brightness-110 disabled:pointer-events-none disabled:opacity-50"
+          >
+            {isPending ? "Adding..." : `+ New ${singular}`}
+          </button>
+          <RestoreDeletedPopover items={deletedItems} onRestore={handleRestore} />
+        </div>
       </form>
 
       {items.length === 0 ? (

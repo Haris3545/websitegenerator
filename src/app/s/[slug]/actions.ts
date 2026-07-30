@@ -302,11 +302,35 @@ export async function addBoardItem(
   return { ok: true, item: data };
 }
 
+/** Soft-deletes a Strategy/Tactics/Research card (used by BoardList and
+ * TacticsBoard, not Ideas — that board has its own like/dislike-driven
+ * delete flow) rather than removing the row, so it can be brought back
+ * later from the "restore" popover on those boards. Since Tactics rows
+ * double as Calendar Gantt blocks, this also hides it from the Gantt until
+ * restored. */
 export async function deleteBoardItem(itemId: string) {
   const supabase = createServiceRoleClient();
-  const { error } = await supabase.from("board_items").delete().eq("id", itemId);
+  const { error } = await supabase
+    .from("board_items")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", itemId);
   if (error) throw new Error(error.message);
   revalidatePath(`/s/[slug]`, "layout");
+}
+
+export async function restoreBoardItem(
+  itemId: string
+): Promise<{ ok: true; item: BoardItem } | { ok: false; error: string }> {
+  const supabase = createServiceRoleClient();
+  const { data, error } = await supabase
+    .from("board_items")
+    .update({ deleted_at: null })
+    .eq("id", itemId)
+    .select()
+    .single();
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/s/[slug]`, "layout");
+  return { ok: true, item: data };
 }
 
 /** Adds a dot to the Dashboard's Campaign timeline widget — a lightweight,

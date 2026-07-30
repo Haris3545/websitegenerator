@@ -20,7 +20,17 @@ export default async function TacticsPage({ params }: { params: Promise<{ slug: 
     .select("*")
     .eq("artist_id", artist.id)
     .eq("board_key", "tactics")
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
+
+  const { data: deletedItems } = await supabase
+    .from("board_items")
+    .select("*")
+    .eq("artist_id", artist.id)
+    .eq("board_key", "tactics")
+    .not("deleted_at", "is", null)
+    .order("deleted_at", { ascending: false })
+    .limit(20);
 
   return (
     <div>
@@ -46,7 +56,12 @@ export default async function TacticsPage({ params }: { params: Promise<{ slug: 
         </div>
       </div>
       <div className="mt-6">
-        <TacticsBoard artistId={artist.id} slug={slug} initialItems={items ?? []} />
+        <TacticsBoard
+          artistId={artist.id}
+          slug={slug}
+          initialItems={items ?? []}
+          initialDeletedItems={deletedItems ?? []}
+        />
       </div>
       <SiteFooter
         slug={slug}

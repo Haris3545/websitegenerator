@@ -78,12 +78,14 @@ export default async function DashboardPage({
       .from("board_items")
       .select("id", { count: "exact", head: true })
       .eq("artist_id", artist.id)
-      .eq("board_key", "strategy"),
+      .eq("board_key", "strategy")
+      .is("deleted_at", null),
     supabase
       .from("board_items")
       .select("id", { count: "exact", head: true })
       .eq("artist_id", artist.id)
-      .eq("board_key", "tactics"),
+      .eq("board_key", "tactics")
+      .is("deleted_at", null),
     supabase
       .from("board_items")
       .select("id", { count: "exact", head: true })
@@ -93,7 +95,8 @@ export default async function DashboardPage({
       .from("board_items")
       .select("id", { count: "exact", head: true })
       .eq("artist_id", artist.id)
-      .eq("board_key", "research"),
+      .eq("board_key", "research")
+      .is("deleted_at", null),
     supabase
       .from("campaign_milestones")
       .select("*")
