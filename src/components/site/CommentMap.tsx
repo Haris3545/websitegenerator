@@ -232,6 +232,12 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
         </button>
       )}
 
+      {!drilledInto && (
+        <p className="text-[11px] uppercase tracking-wide text-white/30">
+          Click a category to see samples · double-click to explore its subcategories
+        </p>
+      )}
+
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-[auto_1fr] sm:items-center">
         <div className="relative mx-auto flex h-56 w-56 shrink-0 items-center justify-center sm:h-64 sm:w-64">
           <svg viewBox="0 0 600 600" className="h-full w-full">
@@ -263,12 +269,11 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
                     transition: `stroke ${FLOW_TRANSITION_MS}ms cubic-bezier(0.16, 1, 0.3, 1), filter 300ms ease, opacity 300ms ease`,
                     transitionDelay: `${delayMs}ms`,
                   }}
-                  onClick={() => {
-                    if (drilledInto) toggle(i);
-                    else {
-                      const cat = categories.find((c) => c.name === a.name);
-                      if (cat) drillInto(cat);
-                    }
+                  onClick={() => toggle(i)}
+                  onDoubleClick={() => {
+                    if (drilledInto) return;
+                    const cat = categories.find((c) => c.name === a.name);
+                    if (cat) drillInto(cat);
                   }}
                 />
               );
@@ -292,12 +297,11 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
             <button
               key={a.name}
               type="button"
-              onClick={() => {
-                if (drilledInto) toggle(i);
-                else {
-                  const cat = categories.find((c) => c.name === a.name);
-                  if (cat) drillInto(cat);
-                }
+              onClick={() => toggle(i)}
+              onDoubleClick={() => {
+                if (drilledInto) return;
+                const cat = categories.find((c) => c.name === a.name);
+                if (cat) drillInto(cat);
               }}
               className={`grid grid-cols-[12px_1fr_auto_auto] items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors ${
                 selected === i
