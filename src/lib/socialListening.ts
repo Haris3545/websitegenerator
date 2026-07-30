@@ -140,7 +140,11 @@ type YoutubeCommentThreadsResponse = {
       topLevelComment?: {
         snippet?: {
           authorDisplayName?: string;
-          textDisplay?: string;
+          // textOriginal is the plain-text comment body — unlike
+          // textDisplay (meant for embedding as HTML), it has no markup and
+          // no HTML-entity-encoded characters, so an apostrophe reads as `'`
+          // rather than the literal `&#39;` textDisplay would give us.
+          textOriginal?: string;
           likeCount?: number;
           publishedAt?: string;
         };
@@ -166,11 +170,11 @@ async function fetchYoutubeVideoComments(
 
     return (data.items ?? [])
       .map((item) => item.snippet?.topLevelComment?.snippet)
-      .filter((s): s is NonNullable<typeof s> => !!s?.textDisplay)
+      .filter((s): s is NonNullable<typeof s> => !!s?.textOriginal)
       .map((s) => ({
         platform: "youtube" as const,
         author: s.authorDisplayName ?? "unknown",
-        text: (s.textDisplay ?? "").replace(/<[^>]*>/g, "").slice(0, 500),
+        text: (s.textOriginal ?? "").slice(0, 500),
         score: s.likeCount ?? null,
         url: `https://youtube.com/watch?v=${videoId}`,
         context: videoTitle,
