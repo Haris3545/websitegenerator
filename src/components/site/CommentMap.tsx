@@ -265,8 +265,7 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
                   className="cursor-pointer"
                   style={{
                     filter: selected === i ? "brightness(1.18)" : undefined,
-                    opacity: selected === null || selected === i ? 1 : 0.55,
-                    transition: `stroke ${FLOW_TRANSITION_MS}ms cubic-bezier(0.16, 1, 0.3, 1), filter 300ms ease, opacity 300ms ease`,
+                    transition: `stroke ${FLOW_TRANSITION_MS}ms cubic-bezier(0.16, 1, 0.3, 1), filter 300ms ease`,
                     transitionDelay: `${delayMs}ms`,
                   }}
                   onClick={() => toggle(i)}
