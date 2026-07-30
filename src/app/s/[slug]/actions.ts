@@ -32,6 +32,7 @@ import type {
   ArtistEvent,
   LocationPin,
   LocationPinTag,
+  CampaignMilestone,
 } from "@/lib/database.types";
 
 /** Deliberately excludes anything that calls Gemini (sentiment analysis,
@@ -304,6 +305,36 @@ export async function addBoardItem(
 export async function deleteBoardItem(itemId: string) {
   const supabase = createServiceRoleClient();
   const { error } = await supabase.from("board_items").delete().eq("id", itemId);
+  if (error) throw new Error(error.message);
+  revalidatePath(`/s/[slug]`, "layout");
+}
+
+/** Adds a dot to the Dashboard's Campaign timeline widget — a lightweight,
+ * dated milestone list independent of the Calendar tab's Tease/Release/
+ * Sustain campaign blocks (see CampaignTimeline.tsx). */
+export async function addCampaignMilestone(
+  artistId: string,
+  label: string,
+  milestoneDate: string
+): Promise<{ ok: true; milestone: CampaignMilestone } | { ok: false; error: string }> {
+  if (!label.trim()) return { ok: false, error: "Label can't be empty." };
+  if (!milestoneDate.trim()) return { ok: false, error: "Date can't be empty." };
+
+  const supabase = createServiceRoleClient();
+  const { data, error } = await supabase
+    .from("campaign_milestones")
+    .insert({ artist_id: artistId, label: label.trim(), milestone_date: milestoneDate })
+    .select()
+    .single();
+
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/s/[slug]`, "layout");
+  return { ok: true, milestone: data };
+}
+
+export async function deleteCampaignMilestone(id: string) {
+  const supabase = createServiceRoleClient();
+  const { error } = await supabase.from("campaign_milestones").delete().eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath(`/s/[slug]`, "layout");
 }

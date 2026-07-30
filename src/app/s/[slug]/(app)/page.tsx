@@ -7,6 +7,7 @@ import { refreshWikipediaTrendsNow, refreshWikipediaTrendsIfStale } from "@/lib/
 import { resolveContent } from "@/lib/contentOverrides";
 import { ArticleCard } from "@/components/site/ArticleCard";
 import { WikipediaTrendsSection } from "@/components/site/WikipediaTrends";
+import { CampaignTimeline } from "@/components/site/CampaignTimeline";
 import { DashboardKpiGrid, type KpiEntry } from "@/components/site/DashboardKpiGrid";
 import { DashboardSections, type DashboardSectionEntry } from "@/components/site/DashboardSections";
 import { TabHeading } from "@/components/site/TabHeading";
@@ -50,6 +51,7 @@ export default async function DashboardPage({
     { count: tacticsCount },
     { count: ideasCount },
     { count: researchCount },
+    { data: campaignMilestones },
     trends,
   ] = await Promise.all([
     supabase.from("media_articles").select("id", { count: "exact", head: true }).eq("artist_id", artist.id),
@@ -88,6 +90,11 @@ export default async function DashboardPage({
       .select("id", { count: "exact", head: true })
       .eq("artist_id", artist.id)
       .eq("board_key", "research"),
+    supabase
+      .from("campaign_milestones")
+      .select("*")
+      .eq("artist_id", artist.id)
+      .order("milestone_date", { ascending: true }),
     getRecentTrends(artist.id),
   ]);
 
@@ -261,6 +268,10 @@ export default async function DashboardPage({
         title="Dashboard"
         subtitle="Summary of current activity"
       />
+
+      <div className="mt-6">
+        <CampaignTimeline artistId={artist.id} milestones={campaignMilestones ?? []} />
+      </div>
 
       <div className="mt-6">
         <DashboardKpiGrid

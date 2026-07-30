@@ -399,6 +399,24 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["location_pins"]["Insert"]>;
         Relationships: [];
       };
+      campaign_milestones: {
+        Row: {
+          id: string;
+          artist_id: string;
+          label: string;
+          milestone_date: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          artist_id: string;
+          label: string;
+          milestone_date: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["campaign_milestones"]["Insert"]>;
+        Relationships: [];
+      };
       location_pin_tags: {
         Row: {
           id: string;
@@ -602,6 +620,7 @@ export type BoardItem = Database["public"]["Tables"]["board_items"]["Row"];
 export type ArtistEvent = Database["public"]["Tables"]["artist_events"]["Row"];
 export type LocationPin = Database["public"]["Tables"]["location_pins"]["Row"];
 export type LocationPinTag = Database["public"]["Tables"]["location_pin_tags"]["Row"];
+export type CampaignMilestone = Database["public"]["Tables"]["campaign_milestones"]["Row"];
 export type YoutubeStats = Database["public"]["Tables"]["youtube_stats"]["Row"];
 export type SocialMention = Database["public"]["Tables"]["social_mentions"]["Row"];
 export type MusicStats = Database["public"]["Tables"]["music_stats"]["Row"];
