@@ -11,6 +11,39 @@ import { AutoFitHeading } from "@/components/site/AutoFitHeading";
 // a plain neutral rather than anything configurable.
 const FALLBACK_BACKGROUND = "#0a0a0a";
 
+// Same pair the builder login page uses (see EyeIcon/EyeOffIcon in
+// app/builder/login/page.tsx) — kept local here rather than shared since
+// each site only ever needs its own copy and the two pickers already style
+// them completely differently (light form vs. this dark gate).
+function EyeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden>
+      <path
+        d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"
+        stroke="currentColor"
+        strokeWidth={1.6}
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="12" r="2.75" stroke="currentColor" strokeWidth={1.6} />
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden>
+      <path
+        d="M2 12s3.5-7 10-7c1.9 0 3.5.5 4.8 1.2M22 12s-1.2 2.4-3.5 4.3M9.9 9.9a2.75 2.75 0 0 0 3.9 3.9"
+        stroke="currentColor"
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M4.5 4.5 19.5 19.5" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function GateForm({
   slug,
   backgroundUrl,
@@ -39,6 +72,7 @@ export function GateForm({
   bgZoom?: number;
 }) {
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -54,7 +88,13 @@ export function GateForm({
           result.error ??
             "That password isn't right — check with whoever shared this dashboard with you."
         );
+        return;
       }
+      // A real navigation (not router.push) — the dashboard's own first
+      // render does real data-fetching that can take a few seconds, and a
+      // hard navigation shows the browser's own loading state for that
+      // instead of leaving this button stuck on "Checking…" the whole time.
+      window.location.href = `/s/${slug}`;
     });
   }
 
@@ -112,15 +152,25 @@ export function GateForm({
         <div className="mt-6 h-px w-24" style={{ backgroundColor: accentColor }} />
 
         <form onSubmit={handleSubmit} className="mt-10 flex w-full max-w-sm flex-col gap-4">
-          <input
-            type="password"
-            required
-            autoFocus
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password"
-            className="w-full rounded-full border border-white/30 bg-black/30 px-6 py-3 text-center text-sm tracking-wide text-white placeholder-white/40 backdrop-blur-sm focus:border-white/60 focus:outline-none"
-          />
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              required
+              autoFocus
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
+              className="w-full rounded-full border border-white/30 bg-black/30 px-6 py-3 text-center text-sm tracking-wide text-white placeholder-white/40 backdrop-blur-sm focus:border-white/60 focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              className="absolute right-5 top-1/2 -translate-y-1/2 text-white/50 transition-colors hover:text-white/90"
+            >
+              {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+            </button>
+          </div>
           {error && <p className="text-sm text-red-400">{error}</p>}
           <button
             type="submit"

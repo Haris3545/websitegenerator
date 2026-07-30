@@ -5,12 +5,13 @@ import { googleFontsCssUrl } from "@/lib/fonts";
 
 /** A single-field font picker: closed, it's just a button showing the
  * current font (rendered in that font). Opening it unfurls a dropdown with
- * a search box and the filtered list underneath — clicking a font (or
- * arrowing to it and pressing Enter) applies it immediately (so whatever
+ * a search box and the filtered list underneath — clicking a font, or
+ * arrowing up/down through the list, applies it immediately (so whatever
  * else on the page previews the font, e.g. the password page preview,
  * updates live as you go) without closing the dropdown, so cycling through
  * several candidates to see which one "feels right" doesn't mean reopening
- * it each time. It only closes on a deliberate click outside, Escape, or
+ * it each time. Enter just closes the dropdown on whatever's already
+ * showing. It only closes on a deliberate click outside, Escape, Enter, or
  * the Done button.
  *
  * The dropdown expands in normal document flow (a CSS grid-rows 0fr->1fr
@@ -66,14 +67,19 @@ export function FontPicker({
       setOpen(false);
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
-      setHighlighted((i) => Math.min(i + 1, filtered.length - 1));
+      const next = Math.min(highlighted + 1, filtered.length - 1);
+      setHighlighted(next);
+      const font = filtered[next];
+      if (font) onChange(font);
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setHighlighted((i) => Math.max(i - 1, 0));
+      const next = Math.max(highlighted - 1, 0);
+      setHighlighted(next);
+      const font = filtered[next];
+      if (font) onChange(font);
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const font = filtered[highlighted];
-      if (font) onChange(font);
+      setOpen(false);
     }
   }
 
@@ -183,7 +189,7 @@ export function FontPicker({
                 The quick brown fox jumps
               </p>
               <div className="flex shrink-0 items-center gap-2">
-                <span className="hidden text-[10px] text-neutral-400 dark:text-white/30 sm:inline">↑↓ to cycle, Enter to apply</span>
+                <span className="hidden text-[10px] text-neutral-400 dark:text-white/30 sm:inline">↑↓ to preview, Enter to close</span>
                 <button
                   type="button"
                   onClick={() => setOpen(false)}

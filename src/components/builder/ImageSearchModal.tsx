@@ -8,12 +8,21 @@ import type { ImageSearchResult } from "@/lib/googleImageSearch";
 /** A picker over Google Images (via SerpApi) — search, browse a thumbnail
  * grid, click one to hand it back to the caller. Search only fires on
  * submit (not per keystroke) since each query spends against SERPAPI_KEY's
- * paid quota, same reasoning as the rest of this app's Gemini-throttling. */
+ * paid quota, same reasoning as the rest of this app's Gemini-throttling.
+ *
+ * onSelect actually attempts the download+import server-side (the thumbnail
+ * shown here is never the real file) and reports back whether it worked —
+ * a fair few SerpApi results turn out, once fetched for real, to not be an
+ * image at all (an HTML page, a dead hotlink, etc.). Rather than surfacing
+ * that as an error someone has to read and dismiss before trying again, a
+ * failed pick just vanishes from the grid and the modal stays open on
+ * whatever's left, so picking a working one instead never has any dead-end
+ * in between. */
 export function ImageSearchModal({
   onSelect,
   onClose,
 }: {
-  onSelect: (result: ImageSearchResult) => void;
+  onSelect: (result: ImageSearchResult) => Promise<boolean>;
   onClose: () => void;
 }) {
   const { closing, requestClose } = useClosableOverlay(onClose);
@@ -22,7 +31,20 @@ export function ImageSearchModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
+  const [importingKey, setImportingKey] = useState<string | null>(null);
   const requestIdRef = useRef(0);
+
+  async function pick(result: ImageSearchResult, key: string) {
+    if (importingKey) return;
+    setImportingKey(key);
+    const ok = await onSelect(result);
+    if (!ok) {
+      setResults((prev) => prev.filter((r, i) => `${r.original}-${i}` !== key));
+      setImportingKey(null);
+    }
+    // On success the caller closes the modal itself, so there's nothing
+    // left here to reset importingKey for.
+  }
 
   async function runSearch() {
     const trimmed = query.trim();
@@ -98,26 +120,36 @@ export function ImageSearchModal({
             </p>
           )}
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
-            {results.map((r, i) => (
-              <button
-                key={`${r.original}-${i}`}
-                type="button"
-                onClick={() => onSelect(r)}
-                title={r.title}
-                className="group relative aspect-square overflow-hidden rounded-lg border border-neutral-200 bg-neutral-100 transition-transform hover:-translate-y-0.5 hover:shadow-lg dark:border-white/10 dark:bg-white/5"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={r.thumbnail}
-                  alt={r.title}
-                  loading="lazy"
-                  className="h-full w-full object-cover"
-                />
-                <span className="absolute inset-x-0 bottom-0 translate-y-full bg-black/70 px-1.5 py-1 text-[10px] text-white transition-transform group-hover:translate-y-0 line-clamp-2">
-                  {r.title}
-                </span>
-              </button>
-            ))}
+            {results.map((r, i) => {
+              const key = `${r.original}-${i}`;
+              const busy = importingKey === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => void pick(r, key)}
+                  disabled={!!importingKey}
+                  title={r.title}
+                  className="group relative aspect-square overflow-hidden rounded-lg border border-neutral-200 bg-neutral-100 transition-transform hover:-translate-y-0.5 hover:shadow-lg disabled:hover:translate-y-0 disabled:hover:shadow-none dark:border-white/10 dark:bg-white/5"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={r.thumbnail}
+                    alt={r.title}
+                    loading="lazy"
+                    className={`h-full w-full object-cover transition-opacity ${busy ? "opacity-40" : ""}`}
+                  />
+                  {busy && (
+                    <span className="absolute inset-0 flex items-center justify-center">
+                      <span className="block h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white/90" />
+                    </span>
+                  )}
+                  <span className="absolute inset-x-0 bottom-0 translate-y-full bg-black/70 px-1.5 py-1 text-[10px] text-white transition-transform group-hover:translate-y-0 line-clamp-2">
+                    {r.title}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

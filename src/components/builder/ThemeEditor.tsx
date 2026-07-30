@@ -3,6 +3,7 @@
 import { useRef, useState, type CSSProperties } from "react";
 import { DEFAULT_THEME_OVERRIDES, type ThemeOverrides } from "@/lib/theme";
 import { DEFAULT_AESTHETIC_PARAMS } from "@/lib/aesthetics";
+import { grainTexture } from "@/lib/grainTexture";
 import { ColorField } from "@/components/builder/ColorField";
 import { HelpTooltip } from "@/components/builder/HelpTooltip";
 import type { AestheticParams } from "@/lib/database.types";
@@ -134,6 +135,36 @@ export function ThemeEditor({
         </p>
       </div>
 
+      {/* Same chromatic-aberration technique the live site's layout.tsx uses
+          (see the "Effects" tab below) — a scoped filter id so this preview
+          never collides with the live site's own #chroma-filter def. */}
+      <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden="true">
+        <filter id="builder-chroma-filter">
+          <feColorMatrix
+            in="SourceGraphic"
+            type="matrix"
+            values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"
+            result="red"
+          />
+          <feOffset in="red" dx={a.chromatic_aberration * 8} dy="0" result="redOffset" />
+          <feColorMatrix
+            in="SourceGraphic"
+            type="matrix"
+            values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0"
+            result="blue"
+          />
+          <feOffset in="blue" dx={a.chromatic_aberration * -8} dy="0" result="blueOffset" />
+          <feColorMatrix
+            in="SourceGraphic"
+            type="matrix"
+            values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0"
+            result="green"
+          />
+          <feBlend mode="screen" in="redOffset" in2="blueOffset" result="rb" />
+          <feBlend mode="screen" in="rb" in2="green" />
+        </filter>
+      </svg>
+
       <div
         onPointerDown={handleBgPointerDown}
         onPointerMove={handleBgPointerMove}
@@ -152,13 +183,26 @@ export function ThemeEditor({
             draggable={false}
             className="absolute inset-0 h-full w-full object-cover select-none"
             style={{
-              filter: `contrast(${t.bg_contrast}) saturate(${t.bg_saturate})`,
+              filter: `blur(${a.blur * 12}px) contrast(${t.bg_contrast}) saturate(${t.bg_saturate}) url(#builder-chroma-filter)`,
               objectPosition: `${t.bg_position_x}% ${t.bg_position_y}%`,
               transform: `scale(${t.bg_zoom})`,
             }}
           />
         )}
         <div className="absolute inset-0" style={{ backgroundColor: `rgba(0,0,0,${t.bg_scrim_opacity})` }} />
+        <div className="absolute inset-0" style={{ backgroundColor: a.tint_color, opacity: a.tint_opacity * 0.65 }} />
+        <div
+          className="absolute inset-0"
+          style={{ boxShadow: `inset 0 0 ${a.vignette * 260}px rgba(0,0,0,${a.vignette * 1.3})` }}
+        />
+        <div
+          className="animate-grain absolute inset-0 mix-blend-overlay"
+          style={{
+            opacity: a.grain_intensity,
+            backgroundImage: grainTexture(a.grain_monochrome),
+            backgroundSize: "90px 90px",
+          }}
+        />
 
         <div className="relative flex h-full flex-col justify-between p-4">
           <div

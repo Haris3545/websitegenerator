@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BrandLogoAnimation } from "@/components/BrandLogoAnimation";
 import {
   provisionMedia,
@@ -82,6 +82,30 @@ export function ProvisioningOverlay({
   const [statuses, setStatuses] = useState<Record<string, StepStatus>>({});
   const [phase, setPhase] = useState<"running" | "checking" | "done">("running");
   const [checkResults, setCheckResults] = useState<Record<string, number> | null>(null);
+
+  // Always-latest ref rather than calling onComplete straight from the
+  // auto-advance effect below — onComplete is a fresh closure from the
+  // caller every render, so depending on it directly there would restart
+  // the timer on every re-render while already sitting at "done" (e.g. the
+  // BrandLogoAnimation's own re-renders), and it would never actually fire.
+  const onCompleteRef = useRef(onComplete);
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  });
+
+  // Auto-advances once everything's confirmed landed, rather than waiting
+  // on a manual "Continue" click — this is also what makes the second
+  // browser tab opened on create (see ArtistForm's handleSubmit) actually
+  // navigate to the finished site instead of sitting on its placeholder
+  // for however long provisioning takes, unnoticed, until someone remembers
+  // to come back to this tab and click through. A brief pause first so the
+  // completed checklist is still readable for a moment rather than
+  // vanishing the instant the last item lands.
+  useEffect(() => {
+    if (phase !== "done") return;
+    const timer = setTimeout(() => onCompleteRef.current(), 1400);
+    return () => clearTimeout(timer);
+  }, [phase]);
 
   const allSteps = useMemo<Step[]>(
     () => [
@@ -214,7 +238,7 @@ export function ProvisioningOverlay({
           onClick={onComplete}
           className="rounded-full bg-builder-accent px-6 py-2.5 text-sm font-semibold text-black transition-transform duration-150 ease-out hover:-translate-y-0.5"
         >
-          Continue
+          Continue now
         </button>
       )}
     </div>

@@ -230,17 +230,19 @@ export function BackgroundMediaField({
     }
   }
 
-  async function handleImagePicked(result: ImageSearchResult) {
-    setImageSearching(false);
+  // Returns whether the pick actually worked — ImageSearchModal keeps
+  // itself open and drops the thumbnail from its grid on a false, instead
+  // of this closing the modal up front and surfacing a dead-link error
+  // someone has to notice and dismiss before trying another result.
+  async function handleImagePicked(result: ImageSearchResult): Promise<boolean> {
     setError(null);
-    setUploading(true);
     const uploadResult = await importImageFromUrl(result.original, artistSlug, slotName);
-    setUploading(false);
     if (uploadResult.ok) {
       onChange(uploadResult.data);
-    } else {
-      setError(uploadResult.error);
+      setImageSearching(false);
+      return true;
     }
+    return false;
   }
 
   function beginUrlOrSearchDraft(id: string) {
@@ -665,7 +667,7 @@ export function BackgroundMediaField({
         </p>
       )}
       {imageSearching && (
-        <ImageSearchModal onSelect={(r) => void handleImagePicked(r)} onClose={() => setImageSearching(false)} />
+        <ImageSearchModal onSelect={handleImagePicked} onClose={() => setImageSearching(false)} />
       )}
       {youtubeSearching && (
         <YoutubeSearchModal onSelect={handleVideoPicked} onClose={() => setYoutubeSearching(false)} />

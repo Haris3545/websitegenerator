@@ -176,6 +176,28 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
   const formRef = useRef(form);
   const savingRef = useRef(false);
   const pendingSaveRef = useRef(false);
+  // Every upsertArtist call — whether from the silent autosave or the final
+  // "Create artist" submit — funnels through this chain instead of firing
+  // straight off, so a submit click that lands while an autosave is still
+  // in flight (or vice versa) can never both read idRef.current as undefined
+  // and both hit the insert branch of upsertArtist, which previously threw
+  // "duplicate key value violates unique constraint artists_slug_key" —
+  // whichever call was queued second now runs only after the first has
+  // resolved and set idRef.current, so it becomes an update instead of a
+  // second insert.
+  const upsertMutexRef = useRef<Promise<unknown>>(Promise.resolve());
+  function queueUpsert(current: ArtistFormInput) {
+    const run = upsertMutexRef.current.then(async () => {
+      const result = await upsertArtist({ ...current, id: idRef.current });
+      if (result.ok) idRef.current = result.id;
+      return result;
+    });
+    upsertMutexRef.current = run.then(
+      () => undefined,
+      () => undefined
+    );
+    return run;
+  }
   const [saveStatus, setSaveStatus] = useState<"idle" | "dirty" | "saving" | "saved" | "error">(
     "idle"
   );
@@ -204,7 +226,8 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
 
       savingRef.current = true;
       setSaveStatus("saving");
-      const result = await upsertArtist({ ...current, id: idRef.current });
+      const wasNew = !idRef.current;
+      const result = await queueUpsert(current);
       savingRef.current = false;
 
       if (!result.ok) {
@@ -214,12 +237,20 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
       }
       setFormError(null);
       setSaveStatus("saved");
-      const wasNew = !idRef.current;
-      idRef.current = result.id;
       setSavedArtistId(result.id);
-      if (wasNew) router.replace(`/builder/artists/${result.id}`);
+      // Updates the address bar to the real edit URL so a manual refresh
+      // (or sharing the link) lands on the right page, without going
+      // through router.replace — that triggers a real Next.js navigation,
+      // which swaps in a brand-new ArtistForm instance fetched fresh from
+      // the server (this route and the new-artist route are different
+      // pages) and wipes every bit of local state that hadn't made it into
+      // this particular save yet: whatever was mid-typing in the YouTube
+      // channel search box, open dropdowns, and so on. history.replaceState
+      // only changes the URL, so the already-mounted form (and everything
+      // still being typed into it) is left completely alone.
+      if (wasNew) window.history.replaceState(null, "", `/builder/artists/${result.id}`);
     } while (pendingSaveRef.current);
-  }, [router]);
+  }, []);
 
   // Debounced autosave: after a pause in typing (with no setState in the
   // effect body itself — the "dirty" status is set synchronously inside
@@ -486,13 +517,12 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
     }
 
     startTransition(async () => {
-      const result = await upsertArtist({ ...form, id: idRef.current });
+      const result = await queueUpsert(form);
       if (!result.ok) {
         setFormError(result.error);
         newSiteTab?.close();
         return;
       }
-      idRef.current = result.id;
       setSavedArtistId(result.id);
 
       // A brand-new artist doesn't have a row to attach an audience upload
@@ -645,9 +675,19 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
             className={`${inputClass} font-mono`}
           />
           {form.slug && (
-            <p className="text-xs text-neutral-500 dark:text-white/40">
-              Password page password: <span className="font-mono text-neutral-700 dark:text-white/70">{computeArtistPassword(form.slug)}</span>
-            </p>
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-300/60 bg-amber-50 px-3.5 py-2.5 dark:border-amber-400/20 dark:bg-amber-400/[0.07]">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400/90">
+                  Site password — write this down
+                </p>
+                <p className="text-xs text-amber-700/70 dark:text-amber-200/50">
+                  Whoever you share the site with will need this to get past the gate page.
+                </p>
+              </div>
+              <span className="shrink-0 rounded-lg bg-white px-3 py-1.5 font-mono text-sm font-semibold text-neutral-900 shadow-sm dark:bg-black/30 dark:text-white">
+                {computeArtistPassword(form.slug)}
+              </span>
+            </div>
           )}
         </label>
 

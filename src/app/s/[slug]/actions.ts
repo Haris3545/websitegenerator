@@ -230,7 +230,17 @@ export async function updateArtistAesthetics(
  * grants read access to the site (see middleware.ts). Data on the generated
  * site is fetched with the service-role client rather than gated by
  * Supabase Auth/RLS, since this cookie — not a real user session — is what
- * authorizes the visitor from here on. */
+ * authorizes the visitor from here on.
+ *
+ * Deliberately does NOT redirect() itself — that would keep this action's
+ * promise (and so GateForm's "Checking…" button) pending for however long
+ * the Dashboard's own first render takes, which can be several seconds of
+ * its own real data-fetching. The password check itself is one cheap
+ * lookup; returning as soon as that's confirmed and the cookie is set lets
+ * GateForm hand off to a real page navigation immediately, with the
+ * browser's own loading affordance for whatever the destination page's
+ * load actually takes — instead of our button pretending to still be
+ * "checking" a password that was already confirmed correct. */
 export async function verifyArtistAccess(
   slug: string,
   password: string
@@ -258,7 +268,7 @@ export async function verifyArtistAccess(
     maxAge: 60 * 60 * 24 * 180,
   });
 
-  redirect(`/s/${slug}`);
+  return { ok: true };
 }
 
 /** Clears the artist-name password cookie and sends the visitor back to

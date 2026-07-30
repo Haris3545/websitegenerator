@@ -39,6 +39,35 @@ function normalizeForMatch(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+// Names typed/pasted from elsewhere (e.g. a curly ' pulled off a web page)
+// don't always match Last.fm's own straight-apostrophe spelling even with
+// autocorrect=1 — "Barry Can’t Swim" (curly ’) fails to resolve even though
+// "Barry Can't Swim" (straight ') is exactly how Last.fm has the artist.
+function normalizeApostrophes(s: string): string {
+  return s.replace(/[‘’‚‛`´]/g, "'");
+}
+
+// artist.search is far more forgiving of near-miss spelling/punctuation
+// than artist.getinfo's own autocorrect — resolving to Last.fm's canonical
+// name here first means getinfo/gettoptracks below are far less likely to
+// come back empty for an artist that genuinely has a Last.fm page.
+async function resolveLastfmArtistName(rawName: string, apiKey: string): Promise<string> {
+  const name = normalizeApostrophes(rawName);
+  try {
+    const res = await fetch(
+      `https://ws.audioscrobbler.com/2.0/?method=artist.search&artist=${encodeURIComponent(name)}&api_key=${apiKey}&format=json&limit=1`
+    );
+    if (!res.ok) return name;
+    const data: { results?: { artistmatches?: { artist?: { name?: string }[] | { name?: string } } } } =
+      await res.json();
+    const raw = data.results?.artistmatches?.artist;
+    const first = Array.isArray(raw) ? raw[0] : raw;
+    return first?.name ?? name;
+  } catch {
+    return name;
+  }
+}
+
 /** Last.fm's own album artwork has been broken placeholder images for years,
  * and its "top albums" ranking is popularity-based, so brand-new releases
  * lag behind. Deezer's public API (genuinely keyless, no registration)
@@ -89,11 +118,14 @@ export async function refreshMusicStats(artistId: string, artistName: string) {
     throw new Error("LASTFM_API_KEY isn't set — ask whoever manages this app's Vercel project to add it.");
   }
 
-  // autocorrect=1 asks Last.fm to resolve slightly-off spellings/stylization
-  // (e.g. stored artist names that don't exactly match Last.fm's own
-  // canonical casing) to the right artist instead of reporting no match.
+  // Resolved to Last.fm's own canonical spelling first (see
+  // resolveLastfmArtistName) — autocorrect=1 below still helps with
+  // straightforward typos, but doesn't reliably fix punctuation mismatches
+  // like a curly apostrophe on its own.
+  const resolvedName = await resolveLastfmArtistName(artistName, apiKey);
+
   const infoRes = await fetch(
-    `https://ws.audioscrobbler.com/2.0/?method=artist.getinfo&artist=${encodeURIComponent(artistName)}&autocorrect=1&api_key=${apiKey}&format=json`
+    `https://ws.audioscrobbler.com/2.0/?method=artist.getinfo&artist=${encodeURIComponent(resolvedName)}&autocorrect=1&api_key=${apiKey}&format=json`
   );
   if (!infoRes.ok) throw new Error(`Last.fm artist.getinfo returned ${infoRes.status}`);
   const infoData: LastfmArtistInfoResponse = await infoRes.json();
@@ -104,7 +136,7 @@ export async function refreshMusicStats(artistId: string, artistName: string) {
   const topTags = tags.map((t) => t.name).filter((n): n is string => !!n).slice(0, 8);
 
   const tracksRes = await fetch(
-    `https://ws.audioscrobbler.com/2.0/?method=artist.gettoptracks&artist=${encodeURIComponent(artistName)}&autocorrect=1&api_key=${apiKey}&format=json&limit=10`
+    `https://ws.audioscrobbler.com/2.0/?method=artist.gettoptracks&artist=${encodeURIComponent(resolvedName)}&autocorrect=1&api_key=${apiKey}&format=json&limit=10`
   );
   if (!tracksRes.ok) throw new Error(`Last.fm artist.gettoptracks returned ${tracksRes.status}`);
   const tracksData: LastfmTopTracksResponse = await tracksRes.json();
