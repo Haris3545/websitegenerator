@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   createFolder,
   renameFolder,
@@ -29,6 +30,10 @@ type View = { level: "root" } | { level: "folder"; folderId: string };
 // menu), same threshold pattern used for the theme editor's background
 // drag and the gate preview's reposition drag elsewhere in the builder.
 const DRAG_MOVE_THRESHOLD = 5;
+// Two non-moved releases on the same icon within this window count as a
+// double-click (opens the artist for editing) rather than two separate
+// single-clicks (each of which would just toggle the quick menu).
+const DOUBLE_CLICK_MS = 350;
 // The sway is a rotation driven by the pointer's own recent horizontal
 // speed, eased toward its target via a CSS transition rather than
 // integrated frame-by-frame — an approximation of a swinging thumbnail,
@@ -116,6 +121,7 @@ export function ArtistsBoard({
   initialArtists: ArtistLite[];
   initialFolders: FolderLite[];
 }) {
+  const router = useRouter();
   const [artists, setArtists] = useState(initialArtists);
   const [folders, setFolders] = useState(
     [...initialFolders].sort((a, b) => a.position - b.position)
@@ -150,12 +156,17 @@ export function ArtistsBoard({
   } | null>(null);
   const dropTargetRef = useRef<string | null>(null);
   const menuForRef = useRef<string | null>(null);
+  const lastClickRef = useRef<{ id: string; time: number } | null>(null);
   const persistMoveRef = useRef<(artistId: string, destFolderId: string | null, beforeArtistId: string | null) => void>(
     () => {}
   );
+  const routerRef = useRef(router);
   useEffect(() => {
     menuForRef.current = menuFor;
   }, [menuFor]);
+  useEffect(() => {
+    routerRef.current = router;
+  }, [router]);
 
   // The menu for every artist stays mounted at all times (see
   // data-artist-menu below) and animates purely via CSS classes, so it can
@@ -297,6 +308,16 @@ export function ArtistsBoard({
       if (!ds) return;
 
       if (!ds.moved) {
+        const now = performance.now();
+        const last = lastClickRef.current;
+        if (last && last.id === ds.artist.id && now - last.time < DOUBLE_CLICK_MS) {
+          lastClickRef.current = null;
+          setMenuFor(null);
+          routerRef.current.push(`/builder/artists/${ds.artist.id}`);
+          return;
+        }
+        lastClickRef.current = { id: ds.artist.id, time: now };
+
         if (menuForRef.current === ds.artist.id) {
           setMenuFor(null);
         } else {
