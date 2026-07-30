@@ -76,7 +76,10 @@ function mixColor(from: string, toward: string, amount: number): string {
   return `rgb(${r}, ${g}, ${b})`;
 }
 
-const FLOW_AMOUNT = 0.82;
+// Full-strength blend — every non-selected arc lands on exactly the
+// selected arc's own color, so the ring reads as one flat, solid sweep
+// rather than each arc keeping a sliver of its own original hue.
+const FLOW_AMOUNT = 1;
 // The whole ring finishes flowing (or retreating) in this long, sweeping
 // clockwise around from wherever the flow originated rather than each arc's
 // color just crossfading in place all at once.
@@ -265,7 +268,10 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
                   className="cursor-pointer"
                   style={{
                     filter: selected === i ? "brightness(1.18)" : undefined,
-                    transition: `stroke ${FLOW_TRANSITION_MS}ms cubic-bezier(0.16, 1, 0.3, 1), filter 300ms ease`,
+                    // Ease-in both ways: the same transition applies whether
+                    // a segment is being selected (flowing out) or deselected
+                    // (retreating back), so a single easing curve covers both.
+                    transition: `stroke ${FLOW_TRANSITION_MS}ms cubic-bezier(0.55, 0.055, 0.675, 0.19), filter 300ms ease`,
                     transitionDelay: `${delayMs}ms`,
                   }}
                   onClick={() => toggle(i)}
