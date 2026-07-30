@@ -8,6 +8,7 @@ import { resolveContent } from "@/lib/contentOverrides";
 import { ArticleCard } from "@/components/site/ArticleCard";
 import { WikipediaTrendsSection } from "@/components/site/WikipediaTrends";
 import { CampaignTimeline } from "@/components/site/CampaignTimeline";
+import { DiscussionBoard, type DiscussionPostWithReactions } from "@/components/site/DiscussionBoard";
 import { DashboardKpiGrid, type KpiEntry } from "@/components/site/DashboardKpiGrid";
 import { DashboardSections, type DashboardSectionEntry } from "@/components/site/DashboardSections";
 import { TabHeading } from "@/components/site/TabHeading";
@@ -52,6 +53,7 @@ export default async function DashboardPage({
     { count: ideasCount },
     { count: researchCount },
     { data: campaignMilestones },
+    { data: discussionPosts },
     trends,
   ] = await Promise.all([
     supabase.from("media_articles").select("id", { count: "exact", head: true }).eq("artist_id", artist.id),
@@ -95,6 +97,11 @@ export default async function DashboardPage({
       .select("*")
       .eq("artist_id", artist.id)
       .order("milestone_date", { ascending: true }),
+    supabase
+      .from("discussion_posts")
+      .select("*, discussion_reactions(*)")
+      .eq("artist_id", artist.id)
+      .order("created_at", { ascending: false }),
     getRecentTrends(artist.id),
   ]);
 
@@ -290,6 +297,14 @@ export default async function DashboardPage({
           />
         </div>
       )}
+
+      <div className="mt-8">
+        <DiscussionBoard
+          artistId={artist.id}
+          slug={slug}
+          posts={(discussionPosts ?? []) as unknown as DiscussionPostWithReactions[]}
+        />
+      </div>
 
       <SiteFooter
         slug={slug}

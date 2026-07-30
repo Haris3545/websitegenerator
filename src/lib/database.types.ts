@@ -417,6 +417,46 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["campaign_milestones"]["Insert"]>;
         Relationships: [];
       };
+      discussion_posts: {
+        Row: {
+          id: string;
+          artist_id: string;
+          author_name: string;
+          body: string;
+          image_url: string | null;
+          gif_url: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          artist_id: string;
+          author_name: string;
+          body?: string;
+          image_url?: string | null;
+          gif_url?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["discussion_posts"]["Insert"]>;
+        Relationships: [];
+      };
+      discussion_reactions: {
+        Row: {
+          id: string;
+          post_id: string;
+          author_name: string;
+          kind: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          post_id: string;
+          author_name: string;
+          kind: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["discussion_reactions"]["Insert"]>;
+        Relationships: [];
+      };
       location_pin_tags: {
         Row: {
           id: string;
@@ -621,6 +661,8 @@ export type ArtistEvent = Database["public"]["Tables"]["artist_events"]["Row"];
 export type LocationPin = Database["public"]["Tables"]["location_pins"]["Row"];
 export type LocationPinTag = Database["public"]["Tables"]["location_pin_tags"]["Row"];
 export type CampaignMilestone = Database["public"]["Tables"]["campaign_milestones"]["Row"];
+export type DiscussionPost = Database["public"]["Tables"]["discussion_posts"]["Row"];
+export type DiscussionReaction = Database["public"]["Tables"]["discussion_reactions"]["Row"];
 export type YoutubeStats = Database["public"]["Tables"]["youtube_stats"]["Row"];
 export type SocialMention = Database["public"]["Tables"]["social_mentions"]["Row"];
 export type MusicStats = Database["public"]["Tables"]["music_stats"]["Row"];
