@@ -297,7 +297,7 @@ function DiscussionBoardInner({
           +
         </button>
         {emojiPickerPostId === post.id && (
-          <div className="absolute left-0 top-full z-20 mt-1 grid w-56 grid-cols-8 gap-1 rounded-xl border border-white/10 bg-neutral-950 p-2.5 shadow-2xl">
+          <div className="absolute left-0 top-full z-[60] mt-1 grid w-56 grid-cols-8 gap-1 rounded-xl border border-white/10 bg-neutral-950 p-2.5 shadow-2xl">
             {EXTRA_EMOJIS.map((emoji) => (
               <button
                 key={emoji}

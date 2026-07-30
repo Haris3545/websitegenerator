@@ -358,6 +358,7 @@ export function CampaignTimeline({
                   onPointerDown={makeDotPointerDown(m, i)}
                   onPointerMove={handleDotPointerMove}
                   onPointerUp={handleDotPointerUp}
+                  onLostPointerCapture={handleDotPointerUp}
                   onClick={() => {
                     if (wasDraggingRef.current) {
                       wasDraggingRef.current = false;

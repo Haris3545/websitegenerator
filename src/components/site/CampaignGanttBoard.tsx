@@ -519,6 +519,7 @@ export function CampaignGanttBoard({
                           onPointerDown={makeBlockPointerDown(b)}
                           onPointerMove={handleBlockPointerMove}
                           onPointerUp={handleBlockPointerUp(b)}
+                          onLostPointerCapture={handleBlockPointerUp(b)}
                           onClick={() => {
                             if (wasMovingRef.current) {
                               wasMovingRef.current = false;
@@ -534,6 +535,7 @@ export function CampaignGanttBoard({
                           onPointerDown={makeResizePointerDown(b, "start")}
                           onPointerMove={handleResizePointerMove}
                           onPointerUp={handleResizePointerUp}
+                          onLostPointerCapture={handleResizePointerUp}
                           className="absolute inset-y-0 left-0 w-2 cursor-ew-resize opacity-0 group-hover:opacity-100"
                           style={{ borderLeft: "2px solid rgba(0,0,0,0.4)" }}
                         />
@@ -541,6 +543,7 @@ export function CampaignGanttBoard({
                           onPointerDown={makeResizePointerDown(b, "end")}
                           onPointerMove={handleResizePointerMove}
                           onPointerUp={handleResizePointerUp}
+                          onLostPointerCapture={handleResizePointerUp}
                           className="absolute inset-y-0 right-0 w-2 cursor-ew-resize opacity-0 group-hover:opacity-100"
                           style={{ borderRight: "2px solid rgba(0,0,0,0.4)" }}
                         />
