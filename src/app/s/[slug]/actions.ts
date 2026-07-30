@@ -312,21 +312,123 @@ export async function deleteBoardItem(itemId: string) {
 /** Adds a dot to the Dashboard's Campaign timeline widget — a lightweight,
  * dated milestone list independent of the Calendar tab's Tease/Release/
  * Sustain campaign blocks (see CampaignTimeline.tsx). */
+// A dated milestone's sort position is just its date's epoch seconds — so
+// plain chronological order falls out for free without a separate
+// bookkeeping step — while a TBC one (no real date yet) needs some other
+// number to sit at *a* position on the line. One full day earlier than
+// whatever's currently first puts a brand-new TBC milestone at the very
+// start of the timeline, matching "date TBC starts at the beginning" —
+// after that, dragging it or setting "between X and Y" (see
+// repositionCampaignMilestone below) is what actually moves it anywhere
+// else.
+async function nextTbcSortOrder(artistId: string): Promise<number> {
+  const supabase = createServiceRoleClient();
+  const { data } = await supabase
+    .from("campaign_milestones")
+    .select("sort_order")
+    .eq("artist_id", artistId)
+    .order("sort_order", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return (data?.sort_order ?? Date.now() / 1000) - 86400;
+}
+
 export async function addCampaignMilestone(
   artistId: string,
   label: string,
-  milestoneDate: string
+  description: string,
+  milestoneDate: string | null,
+  isTbc: boolean
 ): Promise<{ ok: true; milestone: CampaignMilestone } | { ok: false; error: string }> {
   if (!label.trim()) return { ok: false, error: "Label can't be empty." };
-  if (!milestoneDate.trim()) return { ok: false, error: "Date can't be empty." };
+  if (!isTbc && !milestoneDate?.trim()) return { ok: false, error: "Date can't be empty." };
+
+  const sortOrder = isTbc || !milestoneDate ? await nextTbcSortOrder(artistId) : new Date(milestoneDate).getTime() / 1000;
 
   const supabase = createServiceRoleClient();
   const { data, error } = await supabase
     .from("campaign_milestones")
-    .insert({ artist_id: artistId, label: label.trim(), milestone_date: milestoneDate })
+    .insert({
+      artist_id: artistId,
+      label: label.trim(),
+      description: description.trim() || null,
+      milestone_date: isTbc ? null : milestoneDate,
+      is_tbc: isTbc,
+      sort_order: sortOrder,
+    })
     .select()
     .single();
 
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/s/[slug]`, "layout");
+  return { ok: true, milestone: data };
+}
+
+/** Full edit — name, description, and either a real date or flipping back
+ * to TBC (which keeps whatever sort_order it already had, i.e. wherever it
+ * was last dragged to, rather than resetting its position). */
+export async function updateCampaignMilestone(
+  id: string,
+  label: string,
+  description: string,
+  milestoneDate: string | null,
+  isTbc: boolean
+): Promise<{ ok: true; milestone: CampaignMilestone } | { ok: false; error: string }> {
+  if (!label.trim()) return { ok: false, error: "Label can't be empty." };
+  if (!isTbc && !milestoneDate?.trim()) return { ok: false, error: "Date can't be empty." };
+
+  const supabase = createServiceRoleClient();
+  const patch: { label: string; description: string | null; milestone_date: string | null; is_tbc: boolean; sort_order?: number } = {
+    label: label.trim(),
+    description: description.trim() || null,
+    milestone_date: isTbc ? null : milestoneDate,
+    is_tbc: isTbc,
+  };
+  // Switching a dated milestone to a real date recomputes its position from
+  // that date, same as a brand-new one would get — but flipping *to* TBC
+  // deliberately leaves sort_order alone (see the doc comment above).
+  if (!isTbc && milestoneDate) patch.sort_order = new Date(milestoneDate).getTime() / 1000;
+
+  const { data, error } = await supabase.from("campaign_milestones").update(patch).eq("id", id).select().single();
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/s/[slug]`, "layout");
+  return { ok: true, milestone: data };
+}
+
+/** Drags/drops a milestone (almost always a TBC one, though nothing stops
+ * a dated one from being dragged too) to sit between two others on the
+ * line — sort_order becomes the midpoint of its new neighbours', or a full
+ * day beyond whichever single neighbour exists if dropped at either end.
+ * Passing null for beforeId/afterId means "no neighbour on that side" (the
+ * very start/end of the line). */
+export async function repositionCampaignMilestone(
+  id: string,
+  beforeId: string | null,
+  afterId: string | null
+): Promise<{ ok: true; milestone: CampaignMilestone } | { ok: false; error: string }> {
+  const supabase = createServiceRoleClient();
+
+  const [{ data: before }, { data: after }] = await Promise.all([
+    beforeId
+      ? supabase.from("campaign_milestones").select("sort_order").eq("id", beforeId).maybeSingle()
+      : Promise.resolve({ data: null }),
+    afterId
+      ? supabase.from("campaign_milestones").select("sort_order").eq("id", afterId).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+
+  let sortOrder: number;
+  if (before && after) sortOrder = (before.sort_order + after.sort_order) / 2;
+  else if (before) sortOrder = before.sort_order - 86400;
+  else if (after) sortOrder = after.sort_order + 86400;
+  else sortOrder = Date.now() / 1000;
+
+  const { data, error } = await supabase
+    .from("campaign_milestones")
+    .update({ sort_order: sortOrder })
+    .eq("id", id)
+    .select()
+    .single();
   if (error) return { ok: false, error: error.message };
   revalidatePath(`/s/[slug]`, "layout");
   return { ok: true, milestone: data };

@@ -404,14 +404,20 @@ export interface Database {
           id: string;
           artist_id: string;
           label: string;
-          milestone_date: string;
+          description: string | null;
+          milestone_date: string | null;
+          is_tbc: boolean;
+          sort_order: number;
           created_at: string;
         };
         Insert: {
           id?: string;
           artist_id: string;
           label: string;
-          milestone_date: string;
+          description?: string | null;
+          milestone_date?: string | null;
+          is_tbc?: boolean;
+          sort_order: number;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["campaign_milestones"]["Insert"]>;
