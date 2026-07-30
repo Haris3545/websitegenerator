@@ -33,6 +33,46 @@ async function resolveArticleTitle(query: string): Promise<string | null> {
   }
 }
 
+type ExtractResponse = { query?: { pages?: Record<string, { extract?: string }> } };
+
+/** Wikipedia's own full-text search is loose enough that a query like an
+ * album title, or an artist name with punctuation search doesn't handle
+ * cleanly, can resolve to a completely unrelated page (a "List of 2022
+ * albums" list article, a "Deaths in January 2023" page — anything sharing
+ * a stray token with the query) rather than failing outright. Fetching the
+ * article's own intro paragraph and requiring the artist's full name to
+ * literally appear in it is a cheap, reliable relevance check — a real
+ * artist bio/discography page always mentions the artist by name up front;
+ * an unrelated list page essentially never does. */
+async function fetchArticleIntro(title: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=1&explaintext=1&titles=${encodeURIComponent(title)}&format=json&origin=*`,
+      { headers: { "User-Agent": "websitegenerator:cultural-intelligence:v1.0" } }
+    );
+    if (!res.ok) return null;
+    const data: ExtractResponse = await res.json();
+    const pages = data.query?.pages ?? {};
+    return Object.values(pages)[0]?.extract ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeForMatch(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[‘’‚‛`´']/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function isArticleAboutArtist(title: string, artistName: string): Promise<boolean> {
+  const intro = await fetchArticleIntro(title);
+  if (!intro) return false;
+  return normalizeForMatch(intro).includes(normalizeForMatch(artistName));
+}
+
 type PageviewsResponse = { items?: { timestamp?: string; views?: number }[] };
 
 /** Fetches the last DAYS of daily pageviews for one article. "all-access" +
@@ -58,9 +98,11 @@ async function fetchDailyViews(title: string): Promise<number[] | null> {
   }
 }
 
-async function fetchArticleTrend(query: string): Promise<WikipediaArticleTrend | null> {
+async function fetchArticleTrend(query: string, artistName: string): Promise<WikipediaArticleTrend | null> {
   const title = await resolveArticleTitle(query);
   if (!title) return null;
+
+  if (!(await isArticleAboutArtist(title, artistName))) return null;
 
   const dailyViews = await fetchDailyViews(title);
   if (!dailyViews || dailyViews.length < 7) return null;
@@ -80,7 +122,7 @@ async function computeWikipediaTrends(artistName: string, albumNames: string[]):
     ...albumNames.slice(0, MAX_CANDIDATES - 1).map((album) => `${album} ${artistName} album`),
   ];
 
-  const results = await Promise.all(candidates.map((q) => fetchArticleTrend(q)));
+  const results = await Promise.all(candidates.map((q) => fetchArticleTrend(q, artistName)));
   const seen = new Set<string>();
   const articles = results.filter((a): a is WikipediaArticleTrend => {
     if (!a || seen.has(a.title)) return false;

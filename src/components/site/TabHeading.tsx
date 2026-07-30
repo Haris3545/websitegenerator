@@ -26,7 +26,7 @@ export function TabHeading({
         contentKey={`${tabKey}.title`}
         value={resolveContent(contentOverrides, `${tabKey}.title`, title)}
         as="h2"
-        className="text-lg font-bold uppercase"
+        className="whitespace-nowrap text-lg font-bold uppercase"
       />
       <Editable
         artistId={artistId}

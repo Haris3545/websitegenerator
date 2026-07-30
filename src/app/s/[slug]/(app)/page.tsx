@@ -4,9 +4,11 @@ import { getSiteArtist } from "@/lib/getSiteArtist";
 import { refreshSentimentNow, refreshSentimentIfStale } from "@/lib/sentiment";
 import { getRecentTrends, formatTrend } from "@/lib/trends";
 import { refreshWikipediaTrendsNow, refreshWikipediaTrendsIfStale } from "@/lib/wikipedia";
+import { refreshSearchTrendsNow, refreshSearchTrendsIfStale } from "@/lib/googleTrends";
 import { resolveContent } from "@/lib/contentOverrides";
 import { ArticleCard } from "@/components/site/ArticleCard";
 import { WikipediaTrendsSection } from "@/components/site/WikipediaTrends";
+import { SearchTrendsSection } from "@/components/site/SearchTrends";
 import { CampaignTimeline } from "@/components/site/CampaignTimeline";
 import { DiscussionBoard, type DiscussionPostWithReactions } from "@/components/site/DiscussionBoard";
 import { DashboardKpiGrid, type KpiEntry } from "@/components/site/DashboardKpiGrid";
@@ -15,7 +17,7 @@ import { TabHeading } from "@/components/site/TabHeading";
 import { Editable } from "@/components/site/Editable";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { TABS_BY_KEY, LIVE_TABS, orderedEnabledTabs } from "@/lib/tabs";
-import type { TabKey } from "@/lib/database.types";
+import type { TabKey, SearchTrendPoint } from "@/lib/database.types";
 
 export default async function DashboardPage({
   params,
@@ -125,6 +127,33 @@ export default async function DashboardPage({
 
   const wikipediaTrends = { articles: wikipediaRow?.articles ?? [], topMover: wikipediaRow?.top_mover ?? null };
 
+  // Only fetched/used as a fallback for the section below, when Wikipedia
+  // has nothing relevant to show (every candidate article failed the
+  // "artist's name actually appears in its intro" relevance check in
+  // wikipedia.ts) — Search Trends' own primary home is the Social
+  // Listening tab, this is just a second, independent read of the same
+  // data so the Dashboard slot isn't left with nothing in it.
+  let searchTrendPoints: SearchTrendPoint[] = [];
+  if (wikipediaTrends.articles.length === 0) {
+    let { data: searchTrendsRow } = await supabase
+      .from("search_trends")
+      .select("points, computed_at")
+      .eq("artist_id", artist.id)
+      .maybeSingle();
+
+    if (!searchTrendsRow?.computed_at) {
+      try {
+        const points = await refreshSearchTrendsNow(artist.id, artist.name);
+        searchTrendsRow = { points, computed_at: new Date().toISOString() };
+      } catch (err) {
+        console.error(`Initial search trends fetch failed for ${slug}:`, err);
+      }
+    } else {
+      after(() => refreshSearchTrendsIfStale(artist.id, artist.name));
+    }
+    searchTrendPoints = searchTrendsRow?.points ?? [];
+  }
+
   // Preserves whatever order a visitor last drag-reordered the tabs/cards
   // into (see NavPills / DashboardKpiGrid), rather than always falling
   // back to this file's fixed declaration order.
@@ -217,6 +246,21 @@ export default async function DashboardPage({
       content: (
         <div className="mt-8">
           <WikipediaTrendsSection trends={wikipediaTrends} artistName={artist.name} />
+        </div>
+      ),
+    };
+  } else if (searchTrendPoints.length >= 2) {
+    // No Wikipedia article actually turned out to be about this artist
+    // (see the relevance check in wikipedia.ts) — rather than leaving this
+    // slot empty, fall back to a plain Google search-interest chart, which
+    // needs no article-matching at all.
+    availableSections.wikipedia = {
+      key: "wikipedia",
+      label: "Google search interest",
+      summary: `${searchTrendPoints.length} data points tracked`,
+      content: (
+        <div className="mt-8">
+          <SearchTrendsSection points={searchTrendPoints} artistName={artist.name} />
         </div>
       ),
     };

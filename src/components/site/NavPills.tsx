@@ -87,7 +87,7 @@ export function NavPills({
               onClick={(e) => {
                 if (draggableTab && consumeWasDragging()) e.preventDefault();
               }}
-              className={`block rounded-lg px-4 py-1.5 text-sm font-medium transition-all duration-150 ease-out hover:-translate-y-0.5 ${
+              className={`block whitespace-nowrap rounded-lg px-4 py-1.5 text-sm font-medium transition-all duration-150 ease-out hover:-translate-y-0.5 ${
                 draggableTab ? "cursor-grab active:cursor-grabbing" : ""
               } ${draggingKey === key ? "opacity-40" : ""} ${
                 active
