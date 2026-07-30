@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { SocialComment, SocialCommentCategory } from "@/lib/database.types";
 
 // A fixed palette keyed to commentCategorizer.ts's taxonomy names, so a
@@ -50,6 +50,34 @@ function tint(hex: string, amount: number): string {
   const nb = Math.round(b + (255 - b) * amount);
   return `rgb(${nr}, ${ng}, ${nb})`;
 }
+
+// Accepts either "#rrggbb" or "rgb(r, g, b)" (subcategory arcs are already
+// tinted into the latter form) so the flow-color blend below works
+// regardless of which kind of color string a given arc has.
+function parseColor(c: string): [number, number, number] {
+  if (c.startsWith("#")) {
+    const num = parseInt(c.slice(1), 16);
+    return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+  }
+  const nums = c.match(/\d+(?:\.\d+)?/g);
+  if (nums && nums.length >= 3) return [Number(nums[0]), Number(nums[1]), Number(nums[2])];
+  return [255, 255, 255];
+}
+
+// Blends a color toward another by `amount` — used to make the rest of the
+// ring read as "flooded" by whichever segment was just clicked, rather than
+// just dimming everything else.
+function mixColor(from: string, toward: string, amount: number): string {
+  const [r1, g1, b1] = parseColor(from);
+  const [r2, g2, b2] = parseColor(toward);
+  const r = Math.round(r1 + (r2 - r1) * amount);
+  const g = Math.round(g1 + (g2 - g1) * amount);
+  const b = Math.round(b1 + (b2 - b1) * amount);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+const FLOW_AMOUNT = 0.82;
+const FLOW_STAGGER_MS = 40;
 
 const CENTER = 300;
 const RING_R = 220;
@@ -106,6 +134,12 @@ function buildArcs(entries: { name: string; color: string; comments: SocialComme
 export function CommentMap({ categories }: { categories: SocialCommentCategory[] }) {
   const [drilledInto, setDrilledInto] = useState<SocialCommentCategory | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
+  // Stays put (doesn't reset to null) even after deselecting — the flow's
+  // stagger distance is computed from whichever segment was most recently
+  // toggled, so retreating radiates back toward the same origin point the
+  // flow-out came from instead of snapping in from nowhere.
+  const [flowFrom, setFlowFrom] = useState<number | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const topArcs = useMemo(
     () =>
@@ -134,6 +168,19 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
 
   const grandTotal = topArcs.reduce((s, a) => s + a.count, 0);
 
+  // Clicking off the ring/legend (anywhere else in the card, or outside it
+  // entirely) retreats the flow the same way toggling the same segment
+  // again would. Runs before the early return below so hook order stays
+  // consistent regardless of whether there's any data to show.
+  useEffect(() => {
+    if (selected === null) return;
+    function onPointerDown(e: PointerEvent) {
+      if (!containerRef.current?.contains(e.target as Node)) setSelected(null);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [selected]);
+
   if (topArcs.length === 0) return null;
 
   const arcs = drilledInto ? subArcs : topArcs;
@@ -141,21 +188,25 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
   const selectedArc = selected !== null ? arcs[selected] : null;
 
   function toggle(i: number) {
+    setFlowFrom(i);
     setSelected((s) => (s === i ? null : i));
   }
 
   function drillInto(cat: SocialCommentCategory) {
     setDrilledInto(cat);
     setSelected(null);
+    setFlowFrom(null);
   }
 
   function backToTop() {
     setDrilledInto(null);
     setSelected(null);
+    setFlowFrom(null);
   }
 
   return (
     <div
+      ref={containerRef}
       className="flex flex-col gap-5 p-5"
       style={{
         backgroundColor: "rgba(0,0,0,var(--card-bg-opacity, 0.4))",
@@ -180,28 +231,42 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-[auto_1fr] sm:items-center">
         <div className="relative mx-auto flex h-56 w-56 shrink-0 items-center justify-center sm:h-64 sm:w-64">
           <svg viewBox="0 0 600 600" className="h-full w-full">
-            {arcs.map((a, i) => (
-              <path
-                key={a.name}
-                d={a.path}
-                stroke={a.color}
-                strokeWidth={RING_STROKE}
-                fill="none"
-                strokeLinecap="round"
-                className="cursor-pointer transition-[filter,opacity] duration-200"
-                style={{
-                  filter: selected === i ? "brightness(1.18)" : undefined,
-                  opacity: selected === null || selected === i ? 1 : 0.38,
-                }}
-                onClick={() => {
-                  if (drilledInto) toggle(i);
-                  else {
-                    const cat = categories.find((c) => c.name === a.name);
-                    if (cat) drillInto(cat);
-                  }
-                }}
-              />
-            ))}
+            {arcs.map((a, i) => {
+              // The rest of the ring blends toward whichever segment is
+              // selected, staggered by each arc's distance (in either
+              // direction around the ring) from wherever the flow
+              // originated — so it visibly radiates outward on select and
+              // converges back on deselect, rather than an instant
+              // all-at-once crossfade.
+              const flowTarget = selected !== null && selected !== i ? arcs[selected]?.color : null;
+              const displayColor = flowTarget ? mixColor(a.color, flowTarget, FLOW_AMOUNT) : a.color;
+              const origin = flowFrom ?? i;
+              const dist = Math.min(Math.abs(i - origin), arcs.length - Math.abs(i - origin));
+              return (
+                <path
+                  key={a.name}
+                  d={a.path}
+                  stroke={displayColor}
+                  strokeWidth={RING_STROKE}
+                  fill="none"
+                  strokeLinecap="round"
+                  className="cursor-pointer"
+                  style={{
+                    filter: selected === i ? "brightness(1.18)" : undefined,
+                    opacity: selected === null || selected === i ? 1 : 0.55,
+                    transition: "stroke 480ms cubic-bezier(0.16, 1, 0.3, 1), filter 300ms ease, opacity 300ms ease",
+                    transitionDelay: `${dist * FLOW_STAGGER_MS}ms`,
+                  }}
+                  onClick={() => {
+                    if (drilledInto) toggle(i);
+                    else {
+                      const cat = categories.find((c) => c.name === a.name);
+                      if (cat) drillInto(cat);
+                    }
+                  }}
+                />
+              );
+            })}
           </svg>
           <div className="pointer-events-none absolute flex flex-col items-center gap-0.5">
             <span
