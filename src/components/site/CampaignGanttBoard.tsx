@@ -487,11 +487,18 @@ export function CampaignGanttBoard({
                 onPointerLeave={handleRowPointerUp}
               >
                 {blocksByPillar[p.value]
-                  .filter((b) => b.id !== moveVisual?.id)
                   .map((b) => {
                     const resized = resizeVisual?.id === b.id ? resizeVisual : null;
                     const startIdx = resized?.startIdx ?? b.startIdx;
                     const endIdx = resized?.endIdx ?? b.endIdx;
+                    // Being moved right now: hidden (the floating clone below
+                    // stands in for it) but never removed from the DOM — this
+                    // element is what's holding pointer capture for the drag,
+                    // so unmounting it (the old `.filter()` approach) silently
+                    // killed capture and dropped every event after the first
+                    // pointermove, leaving the drag stuck forever with no
+                    // pointerup ever arriving to settle it back into place.
+                    const isBeingMoved = moveVisual?.id === b.id;
                     return (
                       <div
                         key={b.id}
@@ -503,6 +510,7 @@ export function CampaignGanttBoard({
                           top: ROW_PADDING + b.lane * (LANE_HEIGHT + LANE_GAP),
                           height: LANE_HEIGHT,
                           backgroundColor: "var(--accent)",
+                          opacity: isBeingMoved ? 0 : 1,
                           transition: resized ? "none" : "left 200ms ease, width 200ms ease, top 200ms ease",
                         }}
                       >

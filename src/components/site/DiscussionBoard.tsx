@@ -126,11 +126,13 @@ function DiscussionBoardInner({
   const [gifPickerOpen, setGifPickerOpen] = useState(false);
   const [imageSearchOpen, setImageSearchOpen] = useState(false);
   const [posting, setPosting] = useState(false);
+  const [postError, setPostError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [replyingToId, setReplyingToId] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState("");
   const [replying, setReplying] = useState(false);
+  const [replyError, setReplyError] = useState<string | null>(null);
 
   const [emojiPickerPostId, setEmojiPickerPostId] = useState<string | null>(null);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
@@ -158,30 +160,52 @@ function DiscussionBoardInner({
   async function handlePost(name: string) {
     if (!body.trim() && !pendingImage && !pendingGif) return;
     setPosting(true);
-    let imageUrl: string | null = pendingImage?.uploadedUrl ?? null;
-    if (pendingImage && !imageUrl && pendingImage.file) {
-      const formData = new FormData();
-      formData.append("image", pendingImage.file);
-      const result = await uploadDiscussionImage(slug, formData);
-      if (result.ok) imageUrl = result.url;
+    setPostError(null);
+    try {
+      let imageUrl: string | null = pendingImage?.uploadedUrl ?? null;
+      if (pendingImage && !imageUrl && pendingImage.file) {
+        const formData = new FormData();
+        formData.append("image", pendingImage.file);
+        const uploadResult = await uploadDiscussionImage(slug, formData);
+        if (!uploadResult.ok) {
+          setPostError(uploadResult.error);
+          return;
+        }
+        imageUrl = uploadResult.url;
+      }
+      const result = await addDiscussionPost(artistId, name, body, imageUrl, pendingGif?.url ?? null);
+      if (!result.ok) {
+        setPostError(result.error);
+        return;
+      }
+      setItems((prev) => [{ ...result.post, discussion_reactions: [] }, ...prev]);
+      setBody("");
+      setPendingImage(null);
+      setPendingGif(null);
+    } catch (err) {
+      setPostError(err instanceof Error ? err.message : "Couldn't post — try again.");
+    } finally {
+      setPosting(false);
     }
-    const result = await addDiscussionPost(artistId, name, body, imageUrl, pendingGif?.url ?? null);
-    if (result.ok) setItems((prev) => [{ ...result.post, discussion_reactions: [] }, ...prev]);
-    setBody("");
-    setPendingImage(null);
-    setPendingGif(null);
-    setPosting(false);
   }
 
   async function handleReply(parentId: string, name: string) {
     if (!replyBody.trim() || replying) return;
     setReplying(true);
-    const result = await addDiscussionPost(artistId, name, replyBody, null, null, parentId);
-    setReplying(false);
-    if (result.ok) {
+    setReplyError(null);
+    try {
+      const result = await addDiscussionPost(artistId, name, replyBody, null, null, parentId);
+      if (!result.ok) {
+        setReplyError(result.error);
+        return;
+      }
       setItems((prev) => [...prev, { ...result.post, discussion_reactions: [] }]);
       setReplyBody("");
       setReplyingToId(null);
+    } catch (err) {
+      setReplyError(err instanceof Error ? err.message : "Couldn't reply — try again.");
+    } finally {
+      setReplying(false);
     }
   }
 
@@ -340,6 +364,8 @@ function DiscussionBoardInner({
           </div>
         )}
 
+        {postError && <p className="text-xs text-red-400">{postError}</p>}
+
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5">
             <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
@@ -472,25 +498,28 @@ function DiscussionBoardInner({
               )}
 
               {replyingToId === post.id && (
-                <div className="mt-3 flex items-center gap-2 border-l border-white/10 pl-3.5">
-                  <input
-                    autoFocus
-                    value={replyBody}
-                    onChange={(e) => setReplyBody(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") withName((name) => void handleReply(post.id, name));
-                    }}
-                    placeholder="Write a reply…"
-                    className="flex-1 rounded-lg border border-white/10 bg-transparent px-2.5 py-1.5 text-xs text-white placeholder-white/30 focus:border-[var(--accent)] focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    disabled={!replyBody.trim() || replying}
-                    onClick={() => withName((name) => void handleReply(post.id, name))}
-                    className="shrink-0 rounded-full bg-[var(--accent)] px-3 py-1 text-xs font-semibold text-black transition-transform hover:-translate-y-0.5 disabled:opacity-40"
-                  >
-                    {replying ? "…" : "Send"}
-                  </button>
+                <div className="mt-3 flex flex-col gap-1.5 border-l border-white/10 pl-3.5">
+                  <div className="flex items-center gap-2">
+                    <input
+                      autoFocus
+                      value={replyBody}
+                      onChange={(e) => setReplyBody(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") withName((name) => void handleReply(post.id, name));
+                      }}
+                      placeholder="Write a reply…"
+                      className="flex-1 rounded-lg border border-white/10 bg-transparent px-2.5 py-1.5 text-xs text-white placeholder-white/30 focus:border-[var(--accent)] focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      disabled={!replyBody.trim() || replying}
+                      onClick={() => withName((name) => void handleReply(post.id, name))}
+                      className="shrink-0 rounded-full bg-[var(--accent)] px-3 py-1 text-xs font-semibold text-black transition-transform hover:-translate-y-0.5 disabled:opacity-40"
+                    >
+                      {replying ? "…" : "Send"}
+                    </button>
+                  </div>
+                  {replyError && <p className="text-[11px] text-red-400">{replyError}</p>}
                 </div>
               )}
             </div>
@@ -509,7 +538,12 @@ function DiscussionBoardInner({
       )}
 
       {imageSearchOpen && (
-        <ImageSearchModal onSelect={handleImagePicked} onClose={() => setImageSearchOpen(false)} />
+        <ImageSearchModal
+          dark
+          helperText="Search for an image to attach to the post."
+          onSelect={handleImagePicked}
+          onClose={() => setImageSearchOpen(false)}
+        />
       )}
 
       {namePromptOpen && (

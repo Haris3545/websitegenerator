@@ -21,9 +21,19 @@ import type { ImageSearchResult } from "@/lib/googleImageSearch";
 export function ImageSearchModal({
   onSelect,
   onClose,
+  dark = false,
+  helperText = "Search for anything — the image you pick becomes the background.",
 }: {
   onSelect: (result: ImageSearchResult) => Promise<boolean>;
   onClose: () => void;
+  /** Forces the dark palette unconditionally instead of following the
+   * builder's light/dark toggle (which only works via a `.dark` class on
+   * `<html>`) — the artist-facing site never sets that class, it's just
+   * always dark, so this modal rendered its `dark:`-prefixed Tailwind
+   * classes' light-mode fallback there: a white box with inherited white
+   * text from the site root, i.e. invisible text in the search field. */
+  dark?: boolean;
+  helperText?: string;
 }) {
   const { closing, requestClose } = useClosableOverlay(onClose);
   const [query, setQuery] = useState("");
@@ -71,24 +81,38 @@ export function ImageSearchModal({
       onClick={requestClose}
     >
       <div
-        className={`flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-2xl dark:border-white/10 dark:bg-neutral-900 ${
-          closing ? "animate-modal-out" : "animate-modal-in"
-        }`}
+        className={`flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border shadow-2xl ${
+          dark ? "border-white/10 bg-neutral-900" : "border-neutral-200 bg-white dark:border-white/10 dark:bg-neutral-900"
+        } ${closing ? "animate-modal-out" : "animate-modal-in"}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-neutral-200 px-5 py-4 dark:border-white/10">
-          <p className="text-sm font-semibold text-neutral-900 dark:text-white">Search images</p>
+        <div
+          className={`flex shrink-0 items-center justify-between gap-3 border-b px-5 py-4 ${
+            dark ? "border-white/10" : "border-neutral-200 dark:border-white/10"
+          }`}
+        >
+          <p className={`text-sm font-semibold ${dark ? "text-white" : "text-neutral-900 dark:text-white"}`}>
+            Search images
+          </p>
           <button
             type="button"
             onClick={requestClose}
             aria-label="Close"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700 dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white"
+            className={`flex h-8 w-8 items-center justify-center rounded-full text-lg transition-colors ${
+              dark
+                ? "text-white/40 hover:bg-white/10 hover:text-white"
+                : "text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white"
+            }`}
           >
             ×
           </button>
         </div>
 
-        <div className="flex shrink-0 gap-2 border-b border-neutral-200 px-5 py-3 dark:border-white/10">
+        <div
+          className={`flex shrink-0 gap-2 border-b px-5 py-3 ${
+            dark ? "border-white/10" : "border-neutral-200 dark:border-white/10"
+          }`}
+        >
           <input
             autoFocus
             value={query}
@@ -100,7 +124,11 @@ export function ImageSearchModal({
               }
             }}
             placeholder="e.g. neon city skyline at night"
-            className="flex-1 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm placeholder-neutral-400 focus:border-builder-accent focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-white dark:placeholder-white/30"
+            className={`flex-1 rounded-lg border px-3 py-2 text-sm focus:border-builder-accent focus:outline-none ${
+              dark
+                ? "border-white/15 bg-white/5 text-white placeholder-white/30"
+                : "border-neutral-300 bg-white text-neutral-900 placeholder-neutral-400 dark:border-white/15 dark:bg-white/5 dark:text-white dark:placeholder-white/30"
+            }`}
           />
           <button
             type="button"
@@ -115,8 +143,8 @@ export function ImageSearchModal({
         <div className="custom-scrollbar flex-1 overflow-y-auto p-5">
           {error && <p className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
           {!searched && !loading && (
-            <p className="text-sm text-neutral-400 dark:text-white/40">
-              Search for anything — the image you pick becomes the background.
+            <p className={`text-sm ${dark ? "text-white/40" : "text-neutral-400 dark:text-white/40"}`}>
+              {helperText}
             </p>
           )}
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
@@ -130,7 +158,9 @@ export function ImageSearchModal({
                   onClick={() => void pick(r, key)}
                   disabled={!!importingKey}
                   title={r.title}
-                  className="group relative aspect-square overflow-hidden rounded-lg border border-neutral-200 bg-neutral-100 transition-transform hover:-translate-y-0.5 hover:shadow-lg disabled:hover:translate-y-0 disabled:hover:shadow-none dark:border-white/10 dark:bg-white/5"
+                  className={`group relative aspect-square overflow-hidden rounded-lg border transition-transform hover:-translate-y-0.5 hover:shadow-lg disabled:hover:translate-y-0 disabled:hover:shadow-none ${
+                    dark ? "border-white/10 bg-white/5" : "border-neutral-200 bg-neutral-100 dark:border-white/10 dark:bg-white/5"
+                  }`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
