@@ -401,15 +401,20 @@ export function CommentMap({ categories }: { categories: SocialCommentCategory[]
                       type="button"
                       onClick={() => toggleExpand(a.name)}
                       aria-label={isExpanded ? "Collapse subcategories" : "Expand subcategories"}
-                      className="shrink-0 rounded-full p-1.5 text-white/40 transition-colors hover:bg-white/[0.06] hover:text-white/80"
+                      className={`flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+                        isExpanded
+                          ? "border-white/25 bg-white/[0.1] text-white/85"
+                          : "border-white/15 text-white/55 hover:border-white/30 hover:bg-white/[0.08] hover:text-white/85"
+                      }`}
                     >
+                      {nonEmptySubcats.length} subcategories
                       <svg
                         viewBox="0 0 20 20"
                         fill="none"
-                        className={`h-3.5 w-3.5 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`}
+                        className={`h-3 w-3 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
                         aria-hidden
                       >
-                        <path d="m7.5 5 5 5-5 5" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="m5 7.5 5 5 5-5" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     </button>
                   )}
