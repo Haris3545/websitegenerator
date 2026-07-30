@@ -48,3 +48,34 @@ export async function deleteCampaignBlock(id: string) {
   if (error) throw new Error(error.message);
   revalidatePath(`/s/[slug]`, "layout");
 }
+
+/** Used for every kind of change to an existing block: the Edit modal
+ * (name + dates), dragging an edge to resize (dates only), and dragging
+ * the block itself to a new pillar and/or time slot (pillar + dates) — all
+ * funnel through here rather than three separate actions, since they're
+ * all just "update this row's campaign fields." `name` left undefined
+ * means "don't touch the title" (the two drag interactions never change
+ * it). */
+export async function updateCampaignBlock(
+  id: string,
+  name: string | undefined,
+  pillar: TacticPillar,
+  startDate: string,
+  endDate: string
+): Promise<{ ok: true; item: BoardItem } | { ok: false; error: string }> {
+  if (!startDate || !endDate) return { ok: false, error: "Start and end dates are required." };
+  if (name !== undefined && !name.trim()) return { ok: false, error: "Name can't be empty." };
+
+  const supabase = createServiceRoleClient();
+  const patch: { title?: string; pillar: TacticPillar; campaign_start_date: string; campaign_end_date: string } = {
+    pillar,
+    campaign_start_date: startDate,
+    campaign_end_date: endDate,
+  };
+  if (name !== undefined) patch.title = name.trim();
+
+  const { data, error } = await supabase.from("board_items").update(patch).eq("id", id).select().single();
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/s/[slug]`, "layout");
+  return { ok: true, item: data };
+}
