@@ -3,9 +3,11 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getSiteArtist } from "@/lib/getSiteArtist";
 import { refreshMediaForArtist } from "@/lib/media";
 import { refreshSentimentNow, refreshSentimentIfStale } from "@/lib/sentiment";
+import { refreshInsightsNow, refreshInsightsIfStale } from "@/lib/insights";
 import { resolveContent } from "@/lib/contentOverrides";
 import { MediaList } from "@/components/site/MediaList";
 import { DashboardOverview } from "@/components/site/DashboardOverview";
+import { InsightCard } from "@/components/site/InsightCard";
 import { TabHeading } from "@/components/site/TabHeading";
 import { Editable } from "@/components/site/Editable";
 import { SiteFooter } from "@/components/site/SiteFooter";
@@ -46,6 +48,29 @@ export default async function MediaPage({ params }: { params: Promise<{ slug: st
     }
   }
 
+  let { data: insightsRow } = await supabase
+    .from("artist_insights")
+    .select("insights, computed_at")
+    .eq("artist_id", artist.id)
+    .maybeSingle();
+
+  if (!insightsRow?.computed_at) {
+    try {
+      await refreshInsightsNow(artist.id, artist.name);
+      ({ data: insightsRow } = await supabase
+        .from("artist_insights")
+        .select("insights, computed_at")
+        .eq("artist_id", artist.id)
+        .maybeSingle());
+    } catch (err) {
+      console.error(`Initial insights generation failed for ${slug}:`, err);
+    }
+  } else {
+    after(() => refreshInsightsIfStale(artist.id, artist.name));
+  }
+
+  const insights = insightsRow?.insights ?? [];
+
   return (
     <div>
       <TabHeading
@@ -64,7 +89,21 @@ export default async function MediaPage({ params }: { params: Promise<{ slug: st
         />
       </div>
 
-      <p className="text-sm text-white/50">
+      {insights.length > 0 && (
+        <div className="mt-8">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase text-white/70">
+            <span className="h-3 w-1 bg-[var(--accent)]" />
+            What we&apos;ve noticed
+          </h3>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {insights.map((insight, i) => (
+              <InsightCard key={i} insight={insight} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      <p className="mt-8 text-sm text-white/50">
         {articles?.length ?? 0} results · sourced from Google News
       </p>
 

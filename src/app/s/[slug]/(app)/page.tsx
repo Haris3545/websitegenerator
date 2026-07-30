@@ -2,15 +2,11 @@ import { after } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getSiteArtist } from "@/lib/getSiteArtist";
 import { refreshSentimentNow, refreshSentimentIfStale } from "@/lib/sentiment";
-import { refreshInsightsNow, refreshInsightsIfStale } from "@/lib/insights";
 import { getRecentTrends, formatTrend } from "@/lib/trends";
 import { refreshWikipediaTrendsNow, refreshWikipediaTrendsIfStale } from "@/lib/wikipedia";
-import { refreshSearchTrendsNow, refreshSearchTrendsIfStale } from "@/lib/googleTrends";
 import { resolveContent } from "@/lib/contentOverrides";
 import { ArticleCard } from "@/components/site/ArticleCard";
-import { InsightCard } from "@/components/site/InsightCard";
 import { WikipediaTrendsSection } from "@/components/site/WikipediaTrends";
-import { SearchTrendsSection } from "@/components/site/SearchTrends";
 import { DashboardKpiGrid, type KpiEntry } from "@/components/site/DashboardKpiGrid";
 import { DashboardSections, type DashboardSectionEntry } from "@/components/site/DashboardSections";
 import { TabHeading } from "@/components/site/TabHeading";
@@ -40,27 +36,6 @@ export default async function DashboardPage({
     }
   } else {
     after(() => refreshSentimentIfStale(artist.id, artist.name));
-  }
-
-  let { data: insightsRow } = await supabase
-    .from("artist_insights")
-    .select("insights, computed_at")
-    .eq("artist_id", artist.id)
-    .maybeSingle();
-
-  if (!insightsRow?.computed_at) {
-    try {
-      await refreshInsightsNow(artist.id, artist.name);
-      ({ data: insightsRow } = await supabase
-        .from("artist_insights")
-        .select("insights, computed_at")
-        .eq("artist_id", artist.id)
-        .maybeSingle());
-    } catch (err) {
-      console.error(`Initial insights generation failed for ${slug}:`, err);
-    }
-  } else {
-    after(() => refreshInsightsIfStale(artist.id, artist.name));
   }
 
   const [
@@ -135,25 +110,6 @@ export default async function DashboardPage({
   }
 
   const wikipediaTrends = { articles: wikipediaRow?.articles ?? [], topMover: wikipediaRow?.top_mover ?? null };
-
-  let { data: searchTrendsRow } = await supabase
-    .from("search_trends")
-    .select("points, computed_at")
-    .eq("artist_id", artist.id)
-    .maybeSingle();
-
-  if (!searchTrendsRow?.computed_at) {
-    try {
-      const points = await refreshSearchTrendsNow(artist.id, artist.name);
-      searchTrendsRow = { points, computed_at: new Date().toISOString() };
-    } catch (err) {
-      console.error(`Initial search trends fetch failed for ${slug}:`, err);
-    }
-  } else {
-    after(() => refreshSearchTrendsIfStale(artist.id, artist.name));
-  }
-
-  const searchTrendPoints = searchTrendsRow?.points ?? [];
 
   // Preserves whatever order a visitor last drag-reordered the tabs/cards
   // into (see NavPills / DashboardKpiGrid), rather than always falling
@@ -237,27 +193,6 @@ export default async function DashboardPage({
 
   const availableSections: Record<string, DashboardSectionEntry> = {};
 
-  if (insightsRow?.insights?.length) {
-    availableSections.insights = {
-      key: "insights",
-      label: "What we've noticed",
-      summary: `${insightsRow.insights.length} insight${insightsRow.insights.length === 1 ? "" : "s"} on recent activity`,
-      content: (
-        <div className="mt-8">
-          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase text-white/70">
-            <span className="h-3 w-1 bg-[var(--accent)]" />
-            What we&apos;ve noticed
-          </h3>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {insightsRow.insights.map((insight, i) => (
-              <InsightCard key={i} insight={insight} />
-            ))}
-          </div>
-        </div>
-      ),
-    };
-  }
-
   if (wikipediaTrends.articles.length) {
     availableSections.wikipedia = {
       key: "wikipedia",
@@ -273,23 +208,10 @@ export default async function DashboardPage({
     };
   }
 
-  if (searchTrendPoints.length >= 2) {
-    availableSections.searchTrends = {
-      key: "searchTrends",
-      label: "Google search interest",
-      summary: `${searchTrendPoints.length} data points tracked`,
-      content: (
-        <div className="mt-8">
-          <SearchTrendsSection points={searchTrendPoints} artistName={artist.name} />
-        </div>
-      ),
-    };
-  }
-
   if (latestArticles?.length) {
     availableSections.coverage = {
       key: "coverage",
-      label: "Most relevant coverage",
+      label: "While you were gone",
       summary: `${latestArticles.length} article${latestArticles.length === 1 ? "" : "s"}`,
       content: (
         <div className="mt-8">
@@ -301,7 +223,7 @@ export default async function DashboardPage({
               value={resolveContent(
                 artist.content_overrides,
                 "dashboard.coverage_heading",
-                "Most relevant coverage"
+                "While you were gone"
               )}
               as="span"
             />
@@ -321,7 +243,7 @@ export default async function DashboardPage({
   // dropping any section whose underlying data isn't available right now.
   const storedOrder = artist.dashboard_section_order?.length
     ? artist.dashboard_section_order
-    : ["insights", "wikipedia", "searchTrends", "coverage"];
+    : ["wikipedia", "coverage"];
   const orderedSectionKeys = [
     ...storedOrder,
     ...Object.keys(availableSections).filter((k) => !storedOrder.includes(k)),
