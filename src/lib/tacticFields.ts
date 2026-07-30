@@ -3,7 +3,7 @@ export type TacticChannel = (typeof TACTIC_CHANNELS)[number];
 
 export const TACTIC_PILLARS = [
   { value: "tease", label: "Tease" },
-  { value: "launch", label: "Launch" },
+  { value: "launch", label: "Release" },
   { value: "sustain", label: "Sustain" },
 ] as const;
 export type TacticPillar = (typeof TACTIC_PILLARS)[number]["value"];

@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getSiteArtist } from "@/lib/getSiteArtist";
 import { refreshEventsForArtist, refreshEventsIfStale } from "@/lib/events";
 import { CalendarBoard } from "@/components/site/CalendarBoard";
+import { CampaignGanttBoard } from "@/components/site/CampaignGanttBoard";
 import { TabHeading } from "@/components/site/TabHeading";
 import { SiteFooter } from "@/components/site/SiteFooter";
 
@@ -42,6 +43,15 @@ export default async function CalendarPage({ params }: { params: Promise<{ slug:
     .eq("calendar_status", "tbc")
     .order("created_at", { ascending: false });
 
+  const { data: campaignBlocks } = await supabase
+    .from("board_items")
+    .select("*")
+    .eq("artist_id", artist.id)
+    .eq("board_key", "tactics")
+    .not("pillar", "is", null)
+    .not("campaign_start_date", "is", null)
+    .not("campaign_end_date", "is", null);
+
   return (
     <div>
       <TabHeading
@@ -65,6 +75,14 @@ export default async function CalendarPage({ params }: { params: Promise<{ slug:
         initialEvents={events ?? []}
         initialTbcIdeas={tbcIdeas ?? []}
       />
+
+      <div className="mt-8">
+        <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase text-white/70">
+          <span className="h-3 w-1 bg-[var(--accent)]" />
+          Campaign timeline
+        </h3>
+        <CampaignGanttBoard artistId={artist.id} initialBlocks={campaignBlocks ?? []} />
+      </div>
 
       <SiteFooter
         slug={slug}
