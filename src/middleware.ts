@@ -65,7 +65,18 @@ export async function middleware(request: NextRequest) {
           },
         },
       });
-      const result = await supabase.auth.getUser();
+      let result = await supabase.auth.getUser();
+      // Supabase's own Auth server occasionally rejects a just-minted
+      // session with "JWT issued at future" — clock skew between whichever
+      // node minted the token and whichever node is validating it a moment
+      // later, not a real auth problem. It's normally gone within a second,
+      // which is exactly why the previous behavior (treating this the same
+      // as "no user" and redirecting to login) needed a manual reload to
+      // clear: the retry below succeeds before the request ever finishes.
+      if (result.error?.message.includes("issued at future")) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        result = await supabase.auth.getUser();
+      }
       user = result.data.user;
     } catch (err) {
       console.error("middleware: Supabase auth check failed:", err);
