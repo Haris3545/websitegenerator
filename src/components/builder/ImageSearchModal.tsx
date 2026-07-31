@@ -23,6 +23,7 @@ export function ImageSearchModal({
   onClose,
   dark = false,
   helperText = "Search for anything — the image you pick becomes the background.",
+  initialQuery = "",
 }: {
   onSelect: (result: ImageSearchResult) => Promise<boolean>;
   onClose: () => void;
@@ -34,9 +35,14 @@ export function ImageSearchModal({
    * text from the site root, i.e. invisible text in the search field. */
   dark?: boolean;
   helperText?: string;
+  /** Pre-fills the search box (e.g. the artist's name) — never auto-runs
+   * the search itself, since that still only ever fires on Enter/submit
+   * (see runSearch below), so a prefilled name still costs a deliberate
+   * keypress before it spends against the paid SerpApi quota. */
+  initialQuery?: string;
 }) {
   const { closing, requestClose } = useClosableOverlay(onClose);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<ImageSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

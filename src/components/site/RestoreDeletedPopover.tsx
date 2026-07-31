@@ -11,9 +11,17 @@ type DeletableItem = { id: string; title: string };
 export function RestoreDeletedPopover<T extends DeletableItem>({
   items,
   onRestore,
+  label,
+  actionLabel = "Restore",
 }: {
   items: T[];
   onRestore: (id: string) => void;
+  /** Overrides the trigger button's text (default "Restore (n)") — e.g.
+   * DashboardKpiGrid's "+ Widget" gallery reuses this same popover shape
+   * for re-adding a removed KPI card, where "Restore" reads oddly. */
+  label?: (count: number) => string;
+  /** Overrides each row's action word (default "Restore"). */
+  actionLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -35,7 +43,7 @@ export function RestoreDeletedPopover<T extends DeletableItem>({
             strokeLinejoin="round"
           />
         </svg>
-        Restore ({items.length})
+        {label ? label(items.length) : `Restore (${items.length})`}
       </button>
 
       {open && (
@@ -53,7 +61,7 @@ export function RestoreDeletedPopover<T extends DeletableItem>({
                 className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-white/70 transition-colors hover:bg-white/5 hover:text-white"
               >
                 <span className="truncate">{item.title || "Untitled"}</span>
-                <span className="shrink-0 font-semibold text-[var(--accent)]">Restore</span>
+                <span className="shrink-0 font-semibold text-[var(--accent)]">{actionLabel}</span>
               </button>
             ))}
           </div>

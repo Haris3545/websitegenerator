@@ -56,6 +56,7 @@ export function BackgroundMediaField({
   artistSlug,
   value,
   onChange,
+  artistName = "",
 }: {
   label: string;
   /** Storage filename stem for this slot, e.g. "background" or
@@ -65,6 +66,10 @@ export function BackgroundMediaField({
   artistSlug: string;
   value: string | null;
   onChange: (url: string | null) => void;
+  /** Pre-fills the image/YouTube search modals' query boxes so the artist's
+   * name is already sitting there — still just a starting point, not an
+   * auto-search, so it still costs a deliberate Enter/click either way. */
+  artistName?: string;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [panel, setPanel] = useState<Panel>(null);
@@ -667,10 +672,18 @@ export function BackgroundMediaField({
         </p>
       )}
       {imageSearching && (
-        <ImageSearchModal onSelect={handleImagePicked} onClose={() => setImageSearching(false)} />
+        <ImageSearchModal
+          onSelect={handleImagePicked}
+          onClose={() => setImageSearching(false)}
+          initialQuery={artistName}
+        />
       )}
       {youtubeSearching && (
-        <YoutubeSearchModal onSelect={handleVideoPicked} onClose={() => setYoutubeSearching(false)} />
+        <YoutubeSearchModal
+          onSelect={handleVideoPicked}
+          onClose={() => setYoutubeSearching(false)}
+          initialQuery={artistName}
+        />
       )}
       {capturing && draft && (
         <YoutubeCaptureCard

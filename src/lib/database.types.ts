@@ -132,6 +132,7 @@ export interface Database {
           gate_grain_intensity: number;
           gate_grain_monochrome: boolean;
           enabled_tabs: TabKey[];
+          dashboard_hidden_cards: TabKey[];
           dashboard_section_order: string[];
           youtube_section_order: string[];
           folder_id: string | null;
@@ -172,6 +173,7 @@ export interface Database {
           gate_grain_intensity?: number;
           gate_grain_monochrome?: boolean;
           enabled_tabs?: TabKey[];
+          dashboard_hidden_cards?: TabKey[];
           dashboard_section_order?: string[];
           youtube_section_order?: string[];
           folder_id?: string | null;

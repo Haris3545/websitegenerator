@@ -27,6 +27,11 @@ type StepStatus = "pending" | "running" | "done" | "error";
 interface Step {
   key: string;
   label: string;
+  /** A short present-continuous phrase shown as the overlay's live
+   * commentary line while this step is running — distinct from `label`
+   * (a noun phrase for the checklist row) since "News & press coverage"
+   * reads fine as a list item but oddly as "what's happening right now". */
+  commentary: string;
   checkKey?: keyof Awaited<ReturnType<typeof checkProvisionedData>>;
   run: () => Promise<ProvisionResult>;
 }
@@ -112,21 +117,82 @@ export function ProvisioningOverlay({
 
   const allSteps = useMemo<Step[]>(
     () => [
-      { key: "media", label: "News & press coverage", checkKey: "media", run: () => provisionMedia(artistId, artistName) },
-      { key: "events", label: "Tour dates", checkKey: "events", run: () => provisionEvents(artistId, artistName) },
-      { key: "youtube", label: "YouTube channel stats", checkKey: "youtube", run: () => provisionYoutube(artistId, youtubeChannelId) },
+      {
+        key: "media",
+        label: "News & press coverage",
+        commentary: "Collecting articles…",
+        checkKey: "media",
+        run: () => provisionMedia(artistId, artistName),
+      },
+      {
+        key: "events",
+        label: "Tour dates",
+        commentary: "Finding tour dates…",
+        checkKey: "events",
+        run: () => provisionEvents(artistId, artistName),
+      },
+      {
+        key: "youtube",
+        label: "YouTube channel stats",
+        commentary: "Linking the YouTube channel…",
+        checkKey: "youtube",
+        run: () => provisionYoutube(artistId, youtubeChannelId),
+      },
       // The Reddit/web sweep (via Gemini) only ever fires when mode is
       // "create" — see provisionSocialListening's own comment on why that's
       // safe to pass unconditionally here rather than needing its own
       // separate create-only step.
-      { key: "social", label: "Social listening", checkKey: "social", run: () => provisionSocialListening(artistId, artistName, mode === "create") },
-      { key: "music", label: "Music & listener stats", checkKey: "music", run: () => provisionMusic(artistId, artistName) },
-      { key: "genius", label: "Lyric annotations", run: () => provisionGenius(artistId, artistName) },
-      { key: "sentiment", label: "Sentiment overview", run: () => provisionSentiment(artistId, artistName) },
-      { key: "insights", label: "Dashboard insights", run: () => provisionInsights(artistId, artistName) },
-      { key: "wikipedia", label: "Wikipedia trends", run: () => provisionWikipediaTrends(artistId, artistName) },
-      { key: "themes", label: "Conversation themes", run: () => provisionConversationThemes(artistId, artistName) },
-      { key: "audience", label: "Audience research", checkKey: "audience", run: () => provisionAudience(artistId, artistName) },
+      {
+        key: "social",
+        label: "Social listening",
+        commentary: "Reading social chatter…",
+        checkKey: "social",
+        run: () => provisionSocialListening(artistId, artistName, mode === "create"),
+      },
+      {
+        key: "music",
+        label: "Music & listener stats",
+        commentary: "Pulling streaming stats…",
+        checkKey: "music",
+        run: () => provisionMusic(artistId, artistName),
+      },
+      {
+        key: "genius",
+        label: "Lyric annotations",
+        commentary: "Fetching lyric annotations…",
+        run: () => provisionGenius(artistId, artistName),
+      },
+      {
+        key: "sentiment",
+        label: "Sentiment overview",
+        commentary: "Gauging sentiment…",
+        run: () => provisionSentiment(artistId, artistName),
+      },
+      {
+        key: "insights",
+        label: "Dashboard insights",
+        commentary: "Creating dashboard insights…",
+        run: () => provisionInsights(artistId, artistName),
+      },
+      {
+        key: "wikipedia",
+        label: "Wikipedia trends",
+        commentary: "Tracking Wikipedia interest…",
+        run: () => provisionWikipediaTrends(artistId, artistName),
+      },
+      {
+        key: "themes",
+        label: "Conversation themes",
+        commentary: "Mapping conversation themes…",
+        run: () => provisionConversationThemes(artistId, artistName),
+      },
+      {
+        key: "audience",
+        label: "Audience research",
+        commentary: "Digesting audience research…",
+        checkKey: "audience",
+        run: () => provisionAudience(artistId, artistName),
+      },
     ],
     [artistId, artistName, youtubeChannelId, mode]
   );
@@ -220,6 +286,11 @@ export function ProvisioningOverlay({
 
   const finishedCount = Object.values(statuses).filter((s) => s === "done" || s === "error").length;
   const progress = phase === "done" ? 1 : finishedCount / steps.length;
+  // Several steps run in parallel (see the run() effect above), so more
+  // than one can be "running" at once — showing whichever comes first in
+  // declaration order keeps the commentary line to a single steady phrase
+  // instead of flickering between several.
+  const runningCommentary = steps.find((s) => statuses[s.key] === "running")?.commentary;
 
   return (
     <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-6 bg-neutral-950 px-4 py-10 text-white">
@@ -246,9 +317,7 @@ export function ProvisioningOverlay({
             ? "Confirming everything landed…"
             : phase === "done"
               ? "Dashboard ready"
-              : mode === "refresh"
-                ? "Refreshing the dashboard…"
-                : "Setting up the dashboard…"}
+              : (runningCommentary ?? (mode === "refresh" ? "Refreshing the dashboard…" : "Setting up the dashboard…"))}
         </p>
       </div>
 

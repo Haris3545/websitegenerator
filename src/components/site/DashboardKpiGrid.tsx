@@ -3,8 +3,9 @@
 import { useState, useTransition } from "react";
 import { KpiCard } from "@/components/site/KpiCard";
 import { useEditMode } from "@/components/site/EditModeContext";
-import { updateTabOrder } from "@/app/s/[slug]/actions";
+import { updateTabOrder, updateDashboardHiddenCards } from "@/app/s/[slug]/actions";
 import { useDragReorder } from "@/hooks/useDragReorder";
+import { RestoreDeletedPopover } from "@/components/site/RestoreDeletedPopover";
 import type { TabKey } from "@/lib/database.types";
 
 const END = "__end__";
@@ -18,48 +19,86 @@ export type KpiEntry = {
   color: string;
 };
 
-/** The Dashboard's KPI cards are just one rendering of the same
+/** The Dashboard's KPI cards' order is just one rendering of the same
  * enabled_tabs order the nav pills use (see NavPills) — dragging a card
- * here or removing it (the "×") reorders/hides that tab everywhere,
- * permanently, the same way dragging a tab pill does. iOS-homescreen-style
- * drag only activates in edit mode; a plain click/tap never triggers it. */
+ * reorders that tab everywhere, permanently, the same way dragging a tab
+ * pill does. Removing a card ("×") is deliberately NOT the same thing: it
+ * only hides that card from the Dashboard (dashboard_hidden_cards), never
+ * touching enabled_tabs, so the tab itself stays in the nav bar. A hidden
+ * card can be brought back via "+ Widget". iOS-homescreen-style drag only
+ * activates in edit mode; a plain click/tap never triggers it. */
 export function DashboardKpiGrid({
   artistId,
-  entries: initialEntries,
+  entries: allEntries,
+  hiddenTabs: initialHiddenTabs,
 }: {
   artistId: string;
   entries: KpiEntry[];
+  hiddenTabs: TabKey[];
 }) {
   const { editMode } = useEditMode();
   const [, startTransition] = useTransition();
-  const [entries, setEntries] = useState(initialEntries);
+  const [order, setOrder] = useState(allEntries.map((e) => e.tabKey));
+  const [hiddenTabs, setHiddenTabs] = useState(initialHiddenTabs);
 
-  function persist(next: KpiEntry[]) {
-    setEntries(next);
+  const entryByTab = new Map(allEntries.map((e) => [e.tabKey, e]));
+  const entries = order
+    .filter((k) => !hiddenTabs.includes(k))
+    .map((k) => entryByTab.get(k))
+    .filter((e): e is KpiEntry => !!e);
+  const hiddenEntries = hiddenTabs
+    .map((k) => entryByTab.get(k))
+    .filter((e): e is KpiEntry => !!e);
+
+  function persistOrder(next: TabKey[]) {
+    setOrder(next);
     startTransition(() => {
-      updateTabOrder(artistId, next.map((e) => e.tabKey));
+      updateTabOrder(artistId, next);
     });
   }
 
   const { draggingKey, handlePointerDown, handlePointerMove, handlePointerUp, handlePointerCancel } = useDragReorder(
     (dragKey, overKey) => {
       if (!overKey || overKey === dragKey) return;
-      const rest = entries.filter((e) => e.tabKey !== dragKey);
-      const dragged = entries.find((e) => e.tabKey === dragKey);
-      if (!dragged) return;
-      const insertAt = overKey === END ? rest.length : rest.findIndex((e) => e.tabKey === overKey);
-      rest.splice(insertAt < 0 ? rest.length : insertAt, 0, dragged);
-      persist(rest);
+      const key = dragKey as TabKey;
+      const rest = order.filter((k) => k !== key);
+      if (!order.includes(key)) return;
+      const insertAt = overKey === END ? rest.length : rest.findIndex((k) => k === overKey);
+      rest.splice(insertAt < 0 ? rest.length : insertAt, 0, key);
+      persistOrder(rest);
     }
   );
 
   function remove(tabKey: TabKey) {
-    persist(entries.filter((e) => e.tabKey !== tabKey));
+    const next = [...hiddenTabs, tabKey];
+    setHiddenTabs(next);
+    startTransition(() => {
+      updateDashboardHiddenCards(artistId, next);
+    });
+  }
+
+  function restore(tabKey: string) {
+    const next = hiddenTabs.filter((k) => k !== tabKey);
+    setHiddenTabs(next);
+    startTransition(() => {
+      updateDashboardHiddenCards(artistId, next);
+    });
   }
 
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-      {entries.map((entry) => (
+    <div className="flex flex-col gap-3">
+      {editMode && (
+        <div className="flex justify-end">
+          <RestoreDeletedPopover
+            items={hiddenEntries.map((e) => ({ id: e.tabKey, title: e.label }))}
+            onRestore={restore}
+            label={(count) => `+ Widget (${count})`}
+            actionLabel="Add"
+          />
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        {entries.map((entry) => (
         <div
           key={entry.tabKey}
           data-reorder-key={entry.tabKey}
@@ -96,14 +135,15 @@ export function DashboardKpiGrid({
           />
         </div>
       ))}
-      {editMode && (
-        <div
-          data-reorder-key={END}
-          className="flex min-h-24 items-center justify-center rounded-lg border border-dashed border-white/20 text-center text-xs text-white/30"
-        >
-          Drag cards to reorder · × to remove
-        </div>
-      )}
+        {editMode && (
+          <div
+            data-reorder-key={END}
+            className="flex min-h-24 items-center justify-center rounded-lg border border-dashed border-white/20 text-center text-xs text-white/30"
+          >
+            Drag cards to reorder · × to remove
+          </div>
+        )}
+      </div>
     </div>
   );
 }

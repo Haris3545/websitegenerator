@@ -8,7 +8,7 @@ import { ColorField } from "@/components/builder/ColorField";
 import { HelpTooltip } from "@/components/builder/HelpTooltip";
 import type { AestheticParams } from "@/lib/database.types";
 
-type Selection = "background" | "header" | "cards" | "readability" | "effects" | null;
+type Selection = "header" | "cards" | "readability" | null;
 
 function clamp(v: number, min: number, max: number) {
   return Math.min(max, Math.max(min, v));
@@ -25,7 +25,6 @@ export function ThemeEditor({
   tagline,
   artistName,
   aestheticParams,
-  onAestheticParamsChange,
 }: {
   value: ThemeOverrides;
   onChange: (next: ThemeOverrides) => void;
@@ -36,17 +35,14 @@ export function ThemeEditor({
   projectTitle: string;
   tagline: string;
   artistName: string;
-  /** Grain/tint/blur/vignette/chromatic-aberration — the same controls the
-   * live site's Edit Mode panel (AestheticPanel.tsx) exposes, mirrored here
-   * so they don't require leaving the builder to reach. */
+  /** Grain/tint/blur/vignette/chromatic-aberration — read-only here, just
+   * to keep this preview showing the same effects live; the actual
+   * controls for these live in the Media section (see BackgroundMediaField
+   * usage in ArtistForm), directly under the background upload. */
   aestheticParams: AestheticParams;
-  onAestheticParamsChange: (next: AestheticParams) => void;
 }) {
   const [selected, setSelected] = useState<Selection>(null);
   const a = { ...DEFAULT_AESTHETIC_PARAMS, tint_color: primaryColor, ...aestheticParams };
-  function setAesthetic<K extends keyof AestheticParams>(key: K, v: AestheticParams[K]) {
-    onAestheticParamsChange({ ...aestheticParams, [key]: v });
-  }
   const [dragging, setDragging] = useState(false);
   const t = { ...DEFAULT_THEME_OVERRIDES, ...value };
 
@@ -113,14 +109,11 @@ export function ThemeEditor({
     const overflowY = Math.max((imgRect?.height ?? containerRect.height) - containerRect.height, containerRect.height * 0.4);
     set("bg_position_x", Math.round(clamp(ds.startPosX - (dx / overflowX) * 100, 0, 100)));
     set("bg_position_y", Math.round(clamp(ds.startPosY - (dy / overflowY) * 100, 0, 100)));
-    setSelected("background");
   }
 
   function handleBgPointerUp() {
-    const ds = dragState.current;
     dragState.current = null;
     setDragging(false);
-    if (ds && !ds.moved) setSelected("background");
   }
 
   return (
@@ -169,9 +162,9 @@ export function ThemeEditor({
         onPointerDown={handleBgPointerDown}
         onPointerMove={handleBgPointerMove}
         onPointerUp={handleBgPointerUp}
-        className={`relative h-72 w-full touch-none select-none overflow-hidden rounded-lg text-white lg:h-96 2xl:h-[28rem] ${ring("background")} ${
-          backgroundImageUrl ? (dragging ? "cursor-grabbing" : "cursor-grab") : ""
-        }`}
+        className={`relative h-40 w-full touch-none select-none overflow-hidden rounded-lg text-white lg:h-48 2xl:h-56 ${
+          dragging ? "outline outline-2 outline-offset-2 outline-[var(--accent-ring)]" : ""
+        } ${backgroundImageUrl ? (dragging ? "cursor-grabbing" : "cursor-grab") : ""}`}
         style={{ backgroundColor: "#111", fontFamily: `"${fontFamily}", sans-serif` }}
       >
         {backgroundImageUrl && (
@@ -253,20 +246,20 @@ export function ThemeEditor({
         </div>
       </div>
 
-      {/* One uniform way to reach every category — background/header/cards
-          used to only be reachable by clicking that exact part of the
-          preview, while readability/effects were two separate buttons not
-          tied to the preview at all. Clicking the preview still works too
-          (it just flips the same `selected` state these buttons do), but
-          this row is the one interaction that reaches all five. */}
+      {/* Background pan/zoom/contrast/saturation and all the grain/tint/
+          blur/vignette/aberration effects live in the Media section now,
+          directly under the background upload — this preview still shows
+          them live (still reading the same theme_overrides/aesthetic_params
+          state) and still lets you drag directly on it to reposition, just
+          without a dedicated tab of its own here anymore. Header/cards
+          are still reachable by clicking that part of the preview or the
+          matching button below. */}
       <div className="flex flex-wrap gap-2">
         {(
           [
-            { id: "background", label: "Background" },
             { id: "header", label: "Header" },
             { id: "cards", label: "Cards" },
             { id: "readability", label: "Readability" },
-            { id: "effects", label: "Effects" },
           ] as const
         ).map((tab) => (
           <button
@@ -289,40 +282,6 @@ export function ThemeEditor({
           <p className="text-neutral-500 dark:text-white/50">
             Pick a tab above (or click the matching part of the preview) to start adjusting.
           </p>
-        )}
-
-        {selected === "background" && (
-          <div className="flex flex-col gap-3">
-            <p className="font-medium">Background photo/video</p>
-            <p className="text-xs text-neutral-500 dark:text-white/40">
-              Drag directly on the preview to reposition it. The zoom slider below resizes it.
-            </p>
-            <Slider
-              label="Zoom / resize"
-              min={1}
-              max={2.5}
-              step={0.05}
-              value={t.bg_zoom}
-              onChange={(v) => set("bg_zoom", v)}
-              displayUnit="x"
-            />
-            <Slider
-              label="Contrast"
-              min={0.5}
-              max={2}
-              step={0.05}
-              value={t.bg_contrast}
-              onChange={(v) => set("bg_contrast", v)}
-            />
-            <Slider
-              label="Saturation"
-              min={0.5}
-              max={2}
-              step={0.05}
-              value={t.bg_saturate}
-              onChange={(v) => set("bg_saturate", v)}
-            />
-          </div>
         )}
 
         {selected === "header" && (
@@ -374,14 +333,6 @@ export function ThemeEditor({
               </HelpTooltip>
             </p>
             <Slider
-              label="Background darkness overlay"
-              min={0}
-              max={0.8}
-              step={0.05}
-              value={t.bg_scrim_opacity}
-              onChange={(v) => set("bg_scrim_opacity", v)}
-            />
-            <Slider
               label="Card background darkness"
               min={0}
               max={0.8}
@@ -405,64 +356,12 @@ export function ThemeEditor({
           </div>
         )}
 
-        {selected === "effects" && (
-          <div className="flex flex-col gap-3">
-            <p className="font-medium">Background effects</p>
-            <p className="text-xs text-neutral-500 dark:text-white/40">
-              The same grain/tint/blur/aberration controls as the live site&apos;s Edit Mode panel —
-              set here instead, no need to publish first to reach them.
-            </p>
-            <Slider
-              label="Animated film grain"
-              min={0}
-              max={1}
-              step={0.05}
-              value={a.grain_intensity}
-              onChange={(v) => setAesthetic("grain_intensity", v)}
-            />
-            <label className="-mt-2 flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={a.grain_monochrome}
-                onChange={(e) => setAesthetic("grain_monochrome", e.target.checked)}
-                className="accent-builder-accent"
-              />
-              Monochrome grain
-            </label>
-            <Slider
-              label="Chromatic aberration"
-              min={0}
-              max={1}
-              step={0.05}
-              value={a.chromatic_aberration}
-              onChange={(v) => setAesthetic("chromatic_aberration", v)}
-            />
-            <Slider
-              label="Vignette"
-              min={0}
-              max={1}
-              step={0.05}
-              value={a.vignette}
-              onChange={(v) => setAesthetic("vignette", v)}
-            />
-            <ColorField label="Tint colour" value={a.tint_color} onChange={(v) => setAesthetic("tint_color", v)} />
-            <Slider
-              label="Tint amount"
-              min={0}
-              max={1}
-              step={0.05}
-              value={a.tint_opacity}
-              onChange={(v) => setAesthetic("tint_opacity", v)}
-            />
-            <Slider label="Blur" min={0} max={1} step={0.05} value={a.blur} onChange={(v) => setAesthetic("blur", v)} />
-          </div>
-        )}
       </div>
     </div>
   );
 }
 
-function Slider({
+export function Slider({
   label,
   value,
   min,

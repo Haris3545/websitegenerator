@@ -7,7 +7,7 @@ import { FontPicker } from "@/components/builder/FontPicker";
 import { BackgroundMediaField } from "@/components/builder/BackgroundMediaField";
 import { AudienceUploadField } from "@/components/builder/AudienceUploadField";
 import { TabsChecklist } from "@/components/builder/TabsChecklist";
-import { ThemeEditor } from "@/components/builder/ThemeEditor";
+import { ThemeEditor, Slider } from "@/components/builder/ThemeEditor";
 import {
   upsertArtist,
   uploadAudienceResearch,
@@ -17,8 +17,9 @@ import {
   checkPublishStatus,
   type ArtistFormInput,
 } from "@/app/builder/actions";
-import type { Artist } from "@/lib/database.types";
+import type { Artist, AestheticParams } from "@/lib/database.types";
 import { DEFAULT_THEME_OVERRIDES, type ThemeOverrides } from "@/lib/theme";
+import { DEFAULT_AESTHETIC_PARAMS } from "@/lib/aesthetics";
 import { computeArtistPassword } from "@/lib/artistAccess";
 import { grainTexture } from "@/lib/grainTexture";
 import { BrandLogoAnimation } from "@/components/BrandLogoAnimation";
@@ -283,6 +284,25 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
     update("theme_overrides", { ...form.theme_overrides, ...patch });
   }
   const gateTheme = { ...DEFAULT_THEME_OVERRIDES, ...form.theme_overrides };
+
+  // The dashboard background's own zoom/contrast/saturation/darkness-overlay
+  // (theme_overrides) and grain/tint/blur/vignette/aberration (aesthetic_params)
+  // — sit directly under the main background upload below, mirroring the
+  // gate background's own upload+effects pairing (setGateTheme above), and
+  // are what the Aesthetic section's dashboard preview (ThemeEditor) renders
+  // live without being editable from there anymore.
+  function setMainTheme(patch: Partial<ThemeOverrides>) {
+    update("theme_overrides", { ...form.theme_overrides, ...patch });
+  }
+  function setMainAesthetic<K extends keyof AestheticParams>(key: K, v: AestheticParams[K]) {
+    update("aesthetic_params", { ...form.aesthetic_params, [key]: v });
+  }
+  const mainTheme = { ...DEFAULT_THEME_OVERRIDES, ...form.theme_overrides };
+  const mainAesthetic = {
+    ...DEFAULT_AESTHETIC_PARAMS,
+    tint_color: form.primary_color,
+    ...form.aesthetic_params,
+  };
   const [gateDragging, setGateDragging] = useState(false);
   const gateDragState = useRef<{
     startX: number;
@@ -332,6 +352,10 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
   function handleNameChange(name: string) {
     update("name", name);
     if (!slugTouched) update("slug", slugify(name));
+    // Seeds the YouTube channel search box with the artist's name the
+    // moment it's typed, so that field reads as already populated rather
+    // than blank — never overwrites something already typed/picked there.
+    if (!youtubeUrlInput.trim() && !youtubeLookup) setYoutubeUrlInput(name);
   }
 
   // Shared by both ways of resolving a channel (pasted link and search-modal
@@ -619,7 +643,26 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
           flush against, or hidden behind, the very top edge of the window
           once the page scrolls. */}
       <div className="sticky top-16 z-10 flex items-center justify-between gap-3 rounded-full border border-neutral-200/70 bg-white/90 px-4 py-2.5 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-neutral-950/80">
-        <p className={`ml-1.5 text-xs font-medium ${saveStatusColor[saveStatus]}`}>{saveStatusText[saveStatus]}</p>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              // Autosaves whatever's currently filled in before leaving —
+              // same debounced-save path as typing a pause would trigger,
+              // just forced immediately rather than waiting the usual
+              // 2500ms, so navigating away mid-edit never silently drops
+              // the last few changes.
+              void saveProgress().then(() => router.push("/builder/artists"));
+            }}
+            className="flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900 dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white"
+          >
+            <svg viewBox="0 0 20 20" fill="none" className="h-3.5 w-3.5" aria-hidden>
+              <path d="M12 4.5 6 10l6 5.5" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Back
+          </button>
+          <p className={`text-xs font-medium ${saveStatusColor[saveStatus]}`}>{saveStatusText[saveStatus]}</p>
+        </div>
         {/* A running "where am I" while scrolled through a long form — the
             numbered Section titles alone only orient someone once they've
             already scrolled to one. Hidden below sm since three pills plus
@@ -662,8 +705,32 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
 
         <label className="flex flex-col gap-1.5 text-sm">
           <span className={`${labelClass} flex items-center gap-1.5`}>
+            Project title
+            <HelpTooltip>
+              The big title shown top-left on the site (e.g. &quot;The Recording Studio&quot;). The
+              artist&apos;s name is shown separately, top-right.
+            </HelpTooltip>
+          </span>
+          <input
+            value={form.project_title}
+            onChange={(e) => update("project_title", e.target.value)}
+            className={inputClass}
+          />
+        </label>
+
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className={labelClass}>Tagline</span>
+          <input
+            value={form.tagline}
+            onChange={(e) => update("tagline", e.target.value)}
+            className={inputClass}
+          />
+        </label>
+
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className={`${labelClass} flex items-center gap-1.5`}>
             Slug (site URL: /s/&lt;slug&gt;)
-            <HelpTooltip>Also determines the gate password, shown below as you type it.</HelpTooltip>
+            <HelpTooltip>Also determines the gate password, shown further down as you fill in the rest of the form.</HelpTooltip>
           </span>
           <input
             required
@@ -674,21 +741,6 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
             }}
             className={`${inputClass} font-mono`}
           />
-          {form.slug && (
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-300/60 bg-amber-50 px-3.5 py-2.5 dark:border-amber-400/20 dark:bg-amber-400/[0.07]">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400/90">
-                  Site password — write this down
-                </p>
-                <p className="text-xs text-amber-700/70 dark:text-amber-200/50">
-                  Whoever you share the site with will need this to get past the gate page.
-                </p>
-              </div>
-              <span className="shrink-0 rounded-lg bg-white px-3 py-1.5 font-mono text-sm font-semibold text-neutral-900 shadow-sm dark:bg-black/30 dark:text-white">
-                {computeArtistPassword(form.slug)}
-              </span>
-            </div>
-          )}
         </label>
 
         <div className="flex flex-col gap-1.5 text-sm">
@@ -701,6 +753,14 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
                 if (channelResults.length > 0) setChannelDropdownOpen(true);
               }}
               onBlur={() => window.setTimeout(() => setChannelDropdownOpen(false), 150)}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter" || isLookingUpYoutube || !youtubeUrlInput.trim()) return;
+                e.preventDefault();
+                setChannelDropdownOpen(false);
+                startYoutubeLookup(async () => {
+                  applyYoutubeLookupResult(await lookupYoutubeChannel(youtubeUrlInput));
+                });
+              }}
               placeholder="Type their name, or paste a channel/video link"
               className={`flex-1 ${inputClass}`}
             />
@@ -813,10 +873,102 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
               artistSlug={form.slug}
               value={form.background_image_url}
               onChange={(v) => update("background_image_url", v)}
+              artistName={form.name}
             />
             <p className="-mt-2 text-xs text-neutral-500 dark:text-white/40">
               Shown behind every page of the dashboard (not the password page, set separately below).
             </p>
+
+            <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-3 dark:border-white/10">
+              <p className={labelClass}>Background look &amp; effects</p>
+              <Slider
+                label="Zoom / resize"
+                min={1}
+                max={2.5}
+                step={0.05}
+                value={mainTheme.bg_zoom}
+                onChange={(v) => setMainTheme({ bg_zoom: v })}
+                displayUnit="x"
+              />
+              <Slider
+                label="Contrast"
+                min={0.5}
+                max={2}
+                step={0.05}
+                value={mainTheme.bg_contrast}
+                onChange={(v) => setMainTheme({ bg_contrast: v })}
+              />
+              <Slider
+                label="Saturation"
+                min={0.5}
+                max={2}
+                step={0.05}
+                value={mainTheme.bg_saturate}
+                onChange={(v) => setMainTheme({ bg_saturate: v })}
+              />
+              <Slider
+                label="Darkness overlay"
+                min={0}
+                max={0.8}
+                step={0.05}
+                value={mainTheme.bg_scrim_opacity}
+                onChange={(v) => setMainTheme({ bg_scrim_opacity: v })}
+              />
+              <Slider
+                label="Animated film grain"
+                min={0}
+                max={1}
+                step={0.05}
+                value={mainAesthetic.grain_intensity}
+                onChange={(v) => setMainAesthetic("grain_intensity", v)}
+              />
+              <label className="-mt-2 flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={mainAesthetic.grain_monochrome}
+                  onChange={(e) => setMainAesthetic("grain_monochrome", e.target.checked)}
+                  className="h-4 w-4 rounded border-neutral-300 accent-builder-accent dark:border-white/20"
+                />
+                Monochrome grain
+              </label>
+              <Slider
+                label="Chromatic aberration"
+                min={0}
+                max={1}
+                step={0.05}
+                value={mainAesthetic.chromatic_aberration}
+                onChange={(v) => setMainAesthetic("chromatic_aberration", v)}
+              />
+              <Slider
+                label="Vignette"
+                min={0}
+                max={1}
+                step={0.05}
+                value={mainAesthetic.vignette}
+                onChange={(v) => setMainAesthetic("vignette", v)}
+              />
+              <ColorField
+                label="Tint colour"
+                value={mainAesthetic.tint_color}
+                onChange={(v) => setMainAesthetic("tint_color", v)}
+              />
+              <Slider
+                label="Tint amount"
+                min={0}
+                max={1}
+                step={0.05}
+                value={mainAesthetic.tint_opacity}
+                onChange={(v) => setMainAesthetic("tint_opacity", v)}
+              />
+              <Slider
+                label="Blur"
+                min={0}
+                max={1}
+                step={0.05}
+                value={mainAesthetic.blur}
+                onChange={(v) => setMainAesthetic("blur", v)}
+              />
+            </div>
 
             <BackgroundMediaField
               label="Password page background"
@@ -824,6 +976,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
               artistSlug={form.slug}
               value={form.gate_background_url}
               onChange={(v) => update("gate_background_url", v)}
+              artistName={form.name}
             />
 
             <div className="flex flex-col gap-1.5">
@@ -970,40 +1123,87 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
       <Section
         id="section-aesthetic"
         title="3. Aesthetic"
-        description="Look and feel — colours, font, title text, and fine-tuning on top of it all (background pan/zoom/contrast, title weight, card shape, plus readability and effects)."
+        description="Look and feel — colours, font, and fine-tuning (title weight, card shape). Background pan/zoom/contrast and effects live under the uploads in Media, above."
       >
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className={`${labelClass} flex items-center gap-1.5`}>
-            Project title
-            <HelpTooltip>
-              The big title shown top-left on the site (e.g. &quot;The Recording Studio&quot;). The
-              artist&apos;s name is shown separately, top-right.
-            </HelpTooltip>
-          </span>
-          <input
-            value={form.project_title}
-            onChange={(e) => update("project_title", e.target.value)}
-            className={inputClass}
-          />
-        </label>
-
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className={labelClass}>Tagline</span>
-          <input
-            value={form.tagline}
-            onChange={(e) => update("tagline", e.target.value)}
-            className={inputClass}
-          />
-        </label>
-
         <div className="flex gap-6">
           <ColorField label="Primary" value={form.primary_color} onChange={(v) => update("primary_color", v)} />
           <ColorField label="Accent" value={form.accent_color} onChange={(v) => update("accent_color", v)} />
         </div>
         <FontPicker value={form.font_family} onChange={(v) => update("font_family", v)} />
 
+        <div className="flex flex-col gap-1.5">
+          <span className={`${labelClass} flex items-center gap-1.5`}>
+            Password page preview
+            <HelpTooltip>
+              Live — updates as you change colours/font above. Takes the exact background, zoom,
+              darkness, and grain set under the password page upload in Media.
+            </HelpTooltip>
+          </span>
+          <div
+            className="relative flex h-28 w-full touch-none select-none flex-col items-center justify-center gap-1.5 overflow-hidden rounded-lg px-4 text-center text-white lg:h-32"
+            style={{ backgroundColor: "#0a0a0a", fontFamily: `"${form.font_family}", sans-serif` }}
+          >
+            {form.gate_background_url &&
+              (isGateVideoUrl(form.gate_background_url) ? (
+                <video
+                  src={form.gate_background_url}
+                  className="absolute inset-0 h-full w-full object-cover"
+                  style={{
+                    objectPosition: `${gateTheme.gate_bg_position_x}% ${gateTheme.gate_bg_position_y}%`,
+                    transform: `scale(${gateTheme.gate_bg_zoom})`,
+                  }}
+                  muted
+                  loop
+                  autoPlay
+                  playsInline
+                />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={form.gate_background_url}
+                  alt=""
+                  draggable={false}
+                  className="absolute inset-0 h-full w-full select-none object-cover"
+                  style={{
+                    objectPosition: `${gateTheme.gate_bg_position_x}% ${gateTheme.gate_bg_position_y}%`,
+                    transform: `scale(${gateTheme.gate_bg_zoom})`,
+                  }}
+                />
+              ))}
+            {form.gate_background_url && (
+              <div
+                className="absolute inset-0"
+                style={{ backgroundColor: `rgba(0,0,0,${form.gate_scrim_opacity})` }}
+              />
+            )}
+            {form.gate_grain_intensity > 0 && (
+              <div
+                className="animate-grain absolute inset-0 mix-blend-overlay"
+                style={{
+                  opacity: form.gate_grain_intensity,
+                  backgroundImage: grainTexture(form.gate_grain_monochrome),
+                  backgroundSize: "90px 90px",
+                }}
+              />
+            )}
+            <p className="relative z-10 text-[9px] font-semibold uppercase tracking-[0.3em] text-white/70">
+              {form.tagline || "Tagline"}
+            </p>
+            <p className="relative z-10 text-base font-bold uppercase leading-none tracking-tight">
+              {form.project_title || "Project title"}
+            </p>
+            <div className="relative z-10 mt-1 h-px w-10" style={{ backgroundColor: form.accent_color }} />
+          </div>
+        </div>
+
         <div className="border-t border-neutral-200 pt-4 dark:border-white/10">
-          <p className={labelClass}>Fine-tuning</p>
+          <p className={`${labelClass} flex items-center gap-1.5`}>
+            Dashboard preview
+            <HelpTooltip>
+              Live — the box below reflects colours/font instantly, and takes the exact background,
+              zoom, darkness, and grain just set under the background upload in Media.
+            </HelpTooltip>
+          </p>
         </div>
         <ThemeEditor
           value={form.theme_overrides}
@@ -1016,7 +1216,6 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
           tagline={form.tagline}
           artistName={form.name}
           aestheticParams={form.aesthetic_params}
-          onAestheticParamsChange={(aesthetic_params) => update("aesthetic_params", aesthetic_params)}
         />
         <div className="border-t border-neutral-200 pt-4 dark:border-white/10">
           {/* Collapsed by default (unless there's already something written
@@ -1061,6 +1260,22 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
       <Section title="Audience research">
         <AudienceUploadField artistId={savedArtistId ?? null} onFileSelected={setAudienceFile} />
       </Section>
+
+      {form.slug && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-300/60 bg-amber-50 px-3.5 py-2.5 dark:border-amber-400/20 dark:bg-amber-400/[0.07]">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400/90">
+              Site password — write this down
+            </p>
+            <p className="text-xs text-amber-700/70 dark:text-amber-200/50">
+              Whoever you share the site with will need this to get past the gate page.
+            </p>
+          </div>
+          <span className="shrink-0 rounded-lg bg-white px-3 py-1.5 font-mono text-sm font-semibold text-neutral-900 shadow-sm dark:bg-black/30 dark:text-white">
+            {computeArtistPassword(form.slug)}
+          </span>
+        </div>
+      )}
 
       {formError && (
         <p className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">

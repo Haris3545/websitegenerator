@@ -151,13 +151,15 @@ export async function updateContentOverride(artistId: string, key: string, value
   revalidatePath(`/s/[slug]`, "layout");
 }
 
-/** Saves a drag-reorder or a tab/card removal made directly on the live
- * site in edit mode (see NavPills and DashboardKpiGrid) — the nav pills
- * and the Dashboard's KPI cards are both just different renderings of this
- * one enabled_tabs array, so reordering or removing either one updates the
- * same underlying, permanently-persisted list. "dashboard" is filtered out
- * defensively even though the UI never lets it be dragged/removed — it's
- * always force-included as tab order's fixed first entry. */
+/** Saves a drag-reorder made directly on the live site in edit mode (see
+ * NavPills and DashboardKpiGrid) — the nav pills and the Dashboard's KPI
+ * cards' ordering are both just different renderings of this one
+ * enabled_tabs array. "dashboard" is filtered out defensively even though
+ * the UI never lets it be dragged — it's always force-included as tab
+ * order's fixed first entry. Removing a KPI card does NOT go through this
+ * action (see updateDashboardHiddenCards below) — a card's existence is
+ * intentionally decoupled from its tab's existence, so deleting the card
+ * never touches enabled_tabs/the nav bar. */
 export async function updateTabOrder(artistId: string, orderedTabs: TabKey[]) {
   const validTabs = orderedTabs.filter((t) => ALL_TAB_KEYS.includes(t) && t !== "dashboard");
   const enabled_tabs: TabKey[] = ["dashboard", ...validTabs];
@@ -166,6 +168,22 @@ export async function updateTabOrder(artistId: string, orderedTabs: TabKey[]) {
   const { data: artist } = await supabase.from("artists").select("slug").eq("id", artistId).maybeSingle();
 
   await supabase.from("artists").update({ enabled_tabs }).eq("id", artistId);
+  if (artist?.slug) updateTag(artistCacheTag(artist.slug));
+  revalidatePath(`/s/[slug]`, "layout");
+}
+
+/** Persists which Dashboard KPI cards are hidden — separate from
+ * enabled_tabs on purpose, so removing a card ("×" in DashboardKpiGrid)
+ * never hides the corresponding tab from the nav bar. A hidden card can
+ * be brought back via the "+ Add widget" gallery, which just removes its
+ * tabKey from this list. */
+export async function updateDashboardHiddenCards(artistId: string, hiddenTabs: TabKey[]) {
+  const validHidden = hiddenTabs.filter((t) => ALL_TAB_KEYS.includes(t) && t !== "dashboard");
+
+  const supabase = createServiceRoleClient();
+  const { data: artist } = await supabase.from("artists").select("slug").eq("id", artistId).maybeSingle();
+
+  await supabase.from("artists").update({ dashboard_hidden_cards: validHidden }).eq("id", artistId);
   if (artist?.slug) updateTag(artistCacheTag(artist.slug));
   revalidatePath(`/s/[slug]`, "layout");
 }

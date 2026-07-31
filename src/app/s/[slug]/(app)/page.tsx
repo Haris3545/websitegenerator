@@ -340,6 +340,7 @@ export default async function DashboardPage({
           key={otherTabs.map((t) => t.key).join(",")}
           artistId={artist.id}
           entries={kpiEntries}
+          hiddenTabs={artist.dashboard_hidden_cards ?? []}
         />
       </div>
 

@@ -13,12 +13,17 @@ import type { YoutubeVideoSearchResult } from "@/lib/youtube";
 export function YoutubeSearchModal({
   onSelect,
   onClose,
+  initialQuery = "",
 }: {
   onSelect: (result: YoutubeVideoSearchResult) => void;
   onClose: () => void;
+  /** Pre-fills the search box (e.g. the artist's name) — search still only
+   * ever fires on Enter/submit (see runSearch below), so this never spends
+   * against YOUTUBE_API_KEY's quota on its own. */
+  initialQuery?: string;
 }) {
   const { closing, requestClose } = useClosableOverlay(onClose);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<YoutubeVideoSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
