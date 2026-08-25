@@ -12,22 +12,40 @@ import type { TabKey } from "@/lib/database.types";
 
 const END = "__end__";
 
+// However fast the real navigation resolves, the sweep always gets at
+// least this long to visibly fill before it's allowed to complete — a
+// route that arrives in 40ms would otherwise cut the animation off
+// mid-flight instead of letting it read as one deliberate motion. The
+// finish itself is a fixed, eased tween rather than a fast catch-up chase,
+// so completing always looks the same regardless of how far the fill had
+// gotten when the real page landed.
+const MIN_VISIBLE_MS = 260;
+const COMPLETE_MS = 150;
+
+function easeOutCubic(t: number) {
+  return 1 - Math.pow(1 - t, 3);
+}
+
 /** Fills the pill in left-to-right while its Link is actually navigating —
  * useLinkStatus() only ever reports true once real navigation latency is
  * happening (an already-prefetched route resolves before pending ever
  * flips), so this is silent on the fast path and only appears exactly when
  * there'd otherwise be a moment of "did that click register?" doubt. Eases
  * toward ~85% while pending (never claiming false certainty about how much
- * longer it'll take), then completes the moment the real page has arrived —
- * at which point the pill's own active styling (see the parent's `active`
- * check) already matches this overlay's colors, so nothing visibly jumps. */
+ * longer it'll take); once the real page has arrived, the fill still gets to
+ * complete its own sweep (see MIN_VISIBLE_MS/COMPLETE_MS above) rather than
+ * being cut off — at which point the pill's own active styling (see the
+ * parent's `active` check) already matches this overlay's colors, so
+ * nothing visibly jumps. */
 function PillWipeFill({ label }: { label: string }) {
   const { pending } = useLinkStatus();
   const prefersReducedMotion = usePrefersReducedMotion();
   const overlayRef = useRef<HTMLSpanElement>(null);
   const rafRef = useRef<number | null>(null);
+  const arriveTimerRef = useRef<number | null>(null);
   const valueRef = useRef(0);
   const wasPendingRef = useRef(false);
+  const pendingStartRef = useRef(0);
 
   useEffect(() => {
     const el = overlayRef.current;
@@ -41,12 +59,39 @@ function PillWipeFill({ label }: { label: string }) {
     }
     el.style.transition = "";
 
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    function stopRaf() {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+
+    function runComplete() {
+      stopRaf();
+      const startValue = valueRef.current;
+      const startTime = performance.now();
+      const tick = (now: number) => {
+        const t = Math.min(1, (now - startTime) / COMPLETE_MS);
+        valueRef.current = startValue + (1 - startValue) * easeOutCubic(t);
+        el!.style.clipPath = `inset(0 ${100 - valueRef.current * 100}% 0 0)`;
+        if (t < 1) {
+          rafRef.current = requestAnimationFrame(tick);
+        } else {
+          el!.style.opacity = "0";
+        }
+      };
+      rafRef.current = requestAnimationFrame(tick);
+    }
+
+    if (arriveTimerRef.current) {
+      window.clearTimeout(arriveTimerRef.current);
+      arriveTimerRef.current = null;
+    }
 
     if (pending) {
       wasPendingRef.current = true;
       valueRef.current = 0;
+      pendingStartRef.current = performance.now();
       el.style.opacity = "1";
+      stopRaf();
       const tick = () => {
         valueRef.current += (0.85 - valueRef.current) * 0.06;
         el.style.clipPath = `inset(0 ${100 - valueRef.current * 100}% 0 0)`;
@@ -55,21 +100,17 @@ function PillWipeFill({ label }: { label: string }) {
       rafRef.current = requestAnimationFrame(tick);
     } else if (wasPendingRef.current) {
       wasPendingRef.current = false;
-      const tick = () => {
-        valueRef.current += (1 - valueRef.current) * 0.25;
-        if (1 - valueRef.current < 0.01) {
-          el.style.clipPath = "inset(0 0 0 0)";
-          el.style.opacity = "0";
-          return;
-        }
-        el.style.clipPath = `inset(0 ${100 - valueRef.current * 100}% 0 0)`;
-        rafRef.current = requestAnimationFrame(tick);
-      };
-      rafRef.current = requestAnimationFrame(tick);
+      const remaining = MIN_VISIBLE_MS - (performance.now() - pendingStartRef.current);
+      if (remaining > 0) {
+        arriveTimerRef.current = window.setTimeout(runComplete, remaining);
+      } else {
+        runComplete();
+      }
     }
 
     return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      stopRaf();
+      if (arriveTimerRef.current) window.clearTimeout(arriveTimerRef.current);
     };
   }, [pending, prefersReducedMotion]);
 
