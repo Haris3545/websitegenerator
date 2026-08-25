@@ -19,8 +19,8 @@ const END = "__end__";
 // finish itself is a fixed, eased tween rather than a fast catch-up chase,
 // so completing always looks the same regardless of how far the fill had
 // gotten when the real page landed.
-const MIN_VISIBLE_MS = 260;
-const COMPLETE_MS = 150;
+const MIN_VISIBLE_MS = 200;
+const COMPLETE_MS = 90;
 
 function easeOutCubic(t: number) {
   return 1 - Math.pow(1 - t, 3);
@@ -211,7 +211,14 @@ export function NavPills({
               }`}
             >
               {tab.label}
-              {!active && <PillWipeFill label={tab.label} />}
+              {/* Always mounted, even on the now-active pill — unmounting it
+                  the instant `active` flips (which happens as soon as the
+                  route lands) was cutting its own fade-out short and
+                  flashing straight to the pill's real active background
+                  instead of finishing smoothly. It owns its own visibility
+                  entirely via useLinkStatus internally, so it's a no-op
+                  render on every pill that was never clicked. */}
+              <PillWipeFill label={tab.label} />
             </Link>
           </div>
         );
