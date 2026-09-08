@@ -323,9 +323,11 @@ export async function moveArtist(
 }
 
 /** Parses and stores an uploaded GWI-style audience research export (CSV or
- * XLSX). Column matching is fuzzy — see src/lib/audience.ts — since export
- * formats vary; returns a clear error naming the headers it actually found
- * when it can't locate a statement/segment column. */
+ * XLSX) — either GWI's own raw crosstab download or a flat, hand-simplified
+ * spreadsheet; see src/lib/audience.ts for both formats. Column matching on
+ * the flat shape is fuzzy since export formats vary; returns a clear error
+ * naming the headers it actually found when it can't locate a
+ * statement/segment column. */
 export async function uploadAudienceResearch(
   artistId: string,
   formData: FormData

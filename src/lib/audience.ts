@@ -41,8 +41,13 @@ export type ParseResult =
   | { ok: false; error: string; headersFound: string[] };
 
 /** Parses an uploaded audience research export (CSV or XLSX) into rows
- * matching the audience_statements table. Column matching is fuzzy (see
- * HEADER_SYNONYMS) since GWI-style exports vary in exact header wording. */
+ * matching the audience_statements table. Two shapes are understood: GWI's
+ * actual raw "Crosstab Export" download (see findCrosstabHeader/
+ * parseCrosstabExport below — detected first, since it has a distinctive
+ * Name/Metric header pair rather than a flat header row) and a simpler flat
+ * spreadsheet with one row per statement, whose column matching is fuzzy
+ * (see HEADER_SYNONYMS) since hand-simplified exports vary in exact header
+ * wording. */
 export async function parseAudienceFile(
   buffer: ArrayBuffer,
   filename: string
@@ -76,7 +81,159 @@ function parseDelimitedText(text: string): ParseResult {
   return rowsToStatements(rows);
 }
 
+type NumericParsedField = "universe" | "responses" | "column_pct" | "row_pct" | "index_value";
+
+const CROSSTAB_METRIC_FIELD: Record<string, NumericParsedField> = {
+  universe: "universe",
+  responses: "responses",
+  "column %": "column_pct",
+  "row %": "row_pct",
+  index: "index_value",
+};
+
+/** GWI's raw "Crosstab Export" download (as opposed to a hand-simplified
+ * CSV) isn't a flat table at all — it opens with a metadata preamble
+ * (Source/Base/Countries/Waves/Export date), then a two-row header where
+ * one column is literally "Name" immediately followed by "Metric", and
+ * every (category, statement) pair spans five data rows — Universe,
+ * Responses, Column %, Row %, Index — one column per audience plus a
+ * leading "Totals" (baseline population) column. Detecting that exact
+ * "Name" → "Metric" adjacency, wherever it falls in the first ~40 rows,
+ * is what tells a real crosstab export apart from the flat single-header-row
+ * shape the rest of this file expects. */
+function findCrosstabHeader(rows: unknown[][]): { headerRowIndex: number; nameCol: number; metricCol: number } | null {
+  const scanLimit = Math.min(rows.length, 40);
+  for (let r = 0; r < scanLimit; r++) {
+    const row = rows[r];
+    if (!row) continue;
+    for (let c = 0; c < row.length - 1; c++) {
+      if (String(row[c] ?? "").trim() === "Name" && String(row[c + 1] ?? "").trim() === "Metric") {
+        return { headerRowIndex: r, nameCol: c, metricCol: c + 1 };
+      }
+    }
+  }
+  return null;
+}
+
+/** GWI's crosstab cells store Column %/Row % as raw fractions (0.516, not
+ * "51.6" or "51.6%") since they're plain numeric cells formatted as a
+ * percentage by Excel — a display-only formatting layer this parser never
+ * sees. A cell that already arrives as a "51.6%" string (e.g. from a CSV
+ * export of the same crosstab) is left alone; only bare numbers get scaled,
+ * since Column %/Row % are mathematically bounded to [0,1] as fractions. */
+function toPercentValue(raw: unknown): number | null {
+  if (raw === null || raw === undefined || raw === "") return null;
+  if (typeof raw === "string" && raw.includes("%")) {
+    const n = Number(raw.replace(/[%,]/g, ""));
+    return Number.isFinite(n) ? n : null;
+  }
+  const n = toNumber(raw);
+  return n === null ? null : n * 100;
+}
+
+function parseCrosstabExport(
+  rows: unknown[][],
+  header: { headerRowIndex: number; nameCol: number; metricCol: number }
+): ParseResult {
+  const { headerRowIndex, nameCol, metricCol } = header;
+  const categoryCol = nameCol - 1;
+  const headerRow = rows[headerRowIndex];
+
+  // Column immediately after "Metric" is always the "Totals" baseline
+  // population — every real audience column GWI defines comes after it.
+  const segmentCols: { col: number; name: string }[] = [];
+  for (let c = metricCol + 2; c < headerRow.length; c++) {
+    const name = String(headerRow[c] ?? "").trim();
+    if (name) segmentCols.push({ col: c, name });
+  }
+
+  if (!segmentCols.length) {
+    return {
+      ok: false,
+      error:
+        "This looks like a GWI crosstab export, but it only has the \"Totals\" baseline column — " +
+        "add at least one audience to the crosstab in GWI before exporting.",
+      headersFound: ["Name", "Metric", "Totals"],
+    };
+  }
+
+  const parsed: ParsedRow[] = [];
+  let currentCategory: string | null = null;
+  let currentStatement: string | null = null;
+  let accum: Record<string, Partial<ParsedRow>> = {};
+
+  function flush() {
+    if (currentStatement && currentStatement !== "Totals") {
+      for (const seg of segmentCols) {
+        const acc = accum[seg.name];
+        if (!acc) continue;
+        parsed.push({
+          category: currentCategory,
+          statement: currentStatement,
+          segment: seg.name,
+          universe: acc.universe ?? null,
+          responses: acc.responses ?? null,
+          column_pct: acc.column_pct ?? null,
+          row_pct: acc.row_pct ?? null,
+          index_value: acc.index_value ?? null,
+        });
+      }
+    }
+    accum = {};
+  }
+
+  for (let r = headerRowIndex + 1; r < rows.length; r++) {
+    const row = rows[r];
+    if (!row) continue;
+
+    const rawCategory = String(row[categoryCol] ?? "").trim();
+    const rawName = String(row[nameCol] ?? "").trim();
+    const rawMetric = String(row[metricCol] ?? "")
+      .trim()
+      .toLowerCase();
+
+    if (rawName) {
+      flush();
+      currentStatement = rawName;
+    }
+    if (rawCategory) currentCategory = rawCategory;
+
+    const field = CROSSTAB_METRIC_FIELD[rawMetric];
+    if (!field) continue;
+
+    for (const seg of segmentCols) {
+      const value = field === "column_pct" || field === "row_pct" ? toPercentValue(row[seg.col]) : toNumber(row[seg.col]);
+      if (value === null) continue;
+      if (!accum[seg.name]) accum[seg.name] = {};
+      accum[seg.name][field] = value;
+    }
+  }
+  flush();
+
+  // Trim the redundant "(Category)" suffix GWI appends to every statement
+  // name, now that both live in the file separately.
+  for (const row of parsed) {
+    const suffix = row.category ? `(${row.category})` : null;
+    if (suffix && row.statement.endsWith(suffix)) {
+      row.statement = row.statement.slice(0, row.statement.length - suffix.length).trimEnd();
+    }
+  }
+
+  if (!parsed.length) {
+    return {
+      ok: false,
+      error: "Found a GWI crosstab shape, but no usable statement rows under it.",
+      headersFound: ["Name", "Metric", ...segmentCols.map((s) => s.name)],
+    };
+  }
+
+  return { ok: true, rows: parsed, headersFound: ["Name", "Metric", "Totals", ...segmentCols.map((s) => s.name)] };
+}
+
 function rowsToStatements(rows: unknown[][]): ParseResult {
+  const crosstabHeader = findCrosstabHeader(rows);
+  if (crosstabHeader) return parseCrosstabExport(rows, crosstabHeader);
+
   if (rows.length < 2) {
     return {
       ok: false,
