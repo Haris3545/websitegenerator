@@ -1,6 +1,6 @@
 import { getSiteArtist } from "@/lib/getSiteArtist";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { AudienceTable } from "@/components/site/AudienceTable";
+import { AudienceHeatmap } from "@/components/site/AudienceHeatmap";
 import { TabHeading } from "@/components/site/TabHeading";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { BrandedEmptyState } from "@/components/BrandedEmptyState";
@@ -31,7 +31,7 @@ export default async function AudiencePage({ params }: { params: Promise<{ slug:
         </div>
       ) : (
         <div className="mt-4">
-          <AudienceTable statements={statements} />
+          <AudienceHeatmap statements={statements} />
         </div>
       )}
 
