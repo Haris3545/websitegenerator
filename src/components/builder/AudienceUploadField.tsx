@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { uploadAudienceResearch } from "@/app/builder/actions";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { uploadAudienceResearch, getAudienceUploads, removeAudienceUpload } from "@/app/builder/actions";
 
 const ACCEPTED_EXTENSIONS = [".csv", ".xlsx", ".xls"];
 
@@ -9,6 +9,8 @@ function hasAcceptedExtension(filename: string): boolean {
   const lower = filename.toLowerCase();
   return ACCEPTED_EXTENSIONS.some((ext) => lower.endsWith(ext));
 }
+
+type UploadRow = { id: string; filename: string; uploadedAt: string; count: number };
 
 export function AudienceUploadField({
   artistId,
@@ -32,6 +34,20 @@ export function AudienceUploadField({
   // pointer crosses a child boundary.
   const dragDepthRef = useRef(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [uploads, setUploads] = useState<UploadRow[]>([]);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const refreshUploads = useCallback(() => {
+    if (!artistId) return;
+    getAudienceUploads(artistId).then(setUploads);
+  }, [artistId]);
+
+  // Nothing to list until the artist row (and therefore any of its uploads)
+  // exists — refreshes again whenever a new artist gets its first id
+  // assigned by the parent's autosave, and after every upload/delete below.
+  useEffect(() => {
+    refreshUploads();
+  }, [refreshUploads]);
 
   async function handleFile(file: File) {
     setError(null);
@@ -51,6 +67,22 @@ export function AudienceUploadField({
     setUploading(false);
     if (result.ok) {
       setMessage(`Imported ${result.count} statement${result.count === 1 ? "" : "s"}.`);
+      refreshUploads();
+    } else {
+      setError(result.error);
+    }
+  }
+
+  async function handleDelete(upload: UploadRow) {
+    if (!artistId) return;
+    if (!window.confirm(`Remove "${upload.filename}" and its ${upload.count} statement${upload.count === 1 ? "" : "s"}?`)) {
+      return;
+    }
+    setDeletingId(upload.id);
+    const result = await removeAudienceUpload(upload.id, artistId);
+    setDeletingId(null);
+    if (result.ok) {
+      setUploads((prev) => prev.filter((u) => u.id !== upload.id));
     } else {
       setError(result.error);
     }
@@ -147,6 +179,35 @@ export function AudienceUploadField({
           {error}
         </p>
       )}
+
+      {uploads.length > 0 && (
+        <ul className="flex flex-col gap-1 rounded-lg border border-neutral-200 dark:border-white/10">
+          {uploads.map((u, i) => (
+            <li
+              key={u.id}
+              className={`flex items-center justify-between gap-3 px-3 py-2 text-xs ${
+                i > 0 ? "border-t border-neutral-200 dark:border-white/10" : ""
+              }`}
+            >
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium text-neutral-700 dark:text-white/80">{u.filename}</p>
+                <p className="text-neutral-400 dark:text-white/40">
+                  {new Date(u.uploadedAt).toLocaleDateString()} · {u.count} statement{u.count === 1 ? "" : "s"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleDelete(u)}
+                disabled={deletingId === u.id}
+                className="shrink-0 rounded-md px-2 py-1 font-medium text-red-600 transition-colors duration-150 hover:bg-red-50 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-500/10"
+              >
+                {deletingId === u.id ? "Removing…" : "Remove"}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
       <p className="text-xs text-neutral-400 dark:text-white/40">
         A raw GWI crosstab export (Question/Name/Metric rows, one column per audience) is converted
         automatically. A simpler flat spreadsheet works too — just needs columns recognizable as

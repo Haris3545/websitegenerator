@@ -3,7 +3,7 @@
 import { Fragment, useMemo, useState } from "react";
 import type { Database } from "@/lib/database.types";
 import { AudienceTable } from "@/components/site/AudienceTable";
-import { classifyStatement, CATEGORY_DISPLAY_ORDER, OTHER_CATEGORY } from "@/lib/audienceCategories";
+import { classifyStatement, sortCategoryNames, OTHER_CATEGORY } from "@/lib/audienceCategories";
 
 type Statement = Database["public"]["Tables"]["audience_statements"]["Row"];
 type Metric = "index_value" | "column_pct" | "row_pct" | "responses";
@@ -75,7 +75,7 @@ export function AudienceHeatmap({ statements }: { statements: Statement[] }) {
       list.sort((a, b) => a.statement.localeCompare(b.statement));
     }
 
-    return CATEGORY_DISPLAY_ORDER.filter((name) => byCategory.has(name)).map((name) => ({
+    return sortCategoryNames([...byCategory.keys()]).map((name) => ({
       name,
       rows: byCategory.get(name)!,
     }));

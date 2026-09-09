@@ -291,6 +291,53 @@ function rowsToStatements(rows: unknown[][]): ParseResult {
   return { ok: true, rows: parsed, headersFound };
 }
 
+/** Every upload adds to the existing set of statements rather than replacing
+ * it (see storeAudienceUpload) — useful for combining a few small exports,
+ * but with no way to see what's already been imported, re-uploading a
+ * corrected file (or the wrong file) just keeps piling on top of what's
+ * already there instead of replacing it. This lists each upload's filename,
+ * date, and how many statements it contributed, so the builder can show
+ * that and offer a way to remove one. */
+export async function listAudienceUploads(
+  artistId: string
+): Promise<{ id: string; filename: string; uploadedAt: string; count: number }[]> {
+  const supabase = createServiceRoleClient();
+  const { data: uploads } = await supabase
+    .from("audience_uploads")
+    .select("id, filename, uploaded_at")
+    .eq("artist_id", artistId)
+    .order("uploaded_at", { ascending: false });
+  if (!uploads?.length) return [];
+
+  return Promise.all(
+    uploads.map(async (u) => {
+      const { count } = await supabase
+        .from("audience_statements")
+        .select("id", { count: "exact", head: true })
+        .eq("upload_id", u.id);
+      return { id: u.id, filename: u.filename, uploadedAt: u.uploaded_at, count: count ?? 0 };
+    })
+  );
+}
+
+/** Deleting the audience_uploads row cascades to every audience_statements
+ * row it contributed (see migrations/001_init.sql) — nothing else to clean
+ * up here. Scoped by artist_id as well as id so one artist's upload id
+ * can't be used to delete another's. */
+export async function deleteAudienceUpload(
+  uploadId: string,
+  artistId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = createServiceRoleClient();
+  const { error } = await supabase
+    .from("audience_uploads")
+    .delete()
+    .eq("id", uploadId)
+    .eq("artist_id", artistId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 export async function storeAudienceUpload(
   artistId: string,
   filename: string,

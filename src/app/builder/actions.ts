@@ -13,7 +13,7 @@ import {
   type UnpublishResult,
   type PublishStatus,
 } from "@/lib/publish";
-import { parseAudienceFile, storeAudienceUpload } from "@/lib/audience";
+import { parseAudienceFile, storeAudienceUpload, listAudienceUploads, deleteAudienceUpload } from "@/lib/audience";
 import { resolveYoutubeChannel, type YoutubeChannelLookup } from "@/lib/youtube";
 import { ALL_TAB_KEYS } from "@/lib/tabs";
 import { artistCacheTag } from "@/lib/getSiteArtist";
@@ -344,4 +344,24 @@ export async function uploadAudienceResearch(
 
   revalidatePath(`/builder/artists/${artistId}`);
   return { ok: true, count: stored.count };
+}
+
+/** Lists every audience research file uploaded for this artist so far, with
+ * how many statements each one contributed — surfaced in the builder so
+ * uploading the same file twice, or an outdated one, is something you can
+ * actually see and undo rather than silently piling on top of what's
+ * already there. */
+export async function getAudienceUploads(artistId: string) {
+  return listAudienceUploads(artistId);
+}
+
+/** Removes one uploaded file and every statement it contributed (cascades
+ * via the DB foreign key — see migrations/001_init.sql). */
+export async function removeAudienceUpload(
+  uploadId: string,
+  artistId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await deleteAudienceUpload(uploadId, artistId);
+  if (result.ok) revalidatePath(`/builder/artists/${artistId}`);
+  return result;
 }

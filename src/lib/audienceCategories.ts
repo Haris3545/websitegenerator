@@ -1,15 +1,15 @@
-/** Buckets an uploaded audience statement into one of a small, fixed set of
- * generic categories — regardless of whatever `category` text that
- * particular GWI crosstab export happened to use. Every crosstab groups its
- * statements under its own topic labels (wording varies export to export,
- * sometimes missing entirely), so the audience heatmap can't group rows by
- * the raw `category` column and expect consistent headers across uploads.
- * Matching keywords against both the raw category and the statement text
- * itself means a statement still lands in the right bucket even when its
- * own crosstab's category label is absent or idiosyncratically worded. */
+/** Groups an uploaded audience statement under a display category for the
+ * heatmap. A real GWI crosstab export's own `category` column (e.g. "Music
+ * Attitudes*", "Music Services: Account Type*") is already a well-formed,
+ * per-statement-block topic label — far more reliable than guessing one
+ * from the statement's wording — so it's used directly (after stripping the
+ * trailing "*" GWI appends to denote a derived variable, and tidying
+ * whitespace) whenever a row has one. Keyword matching against the
+ * statement text only kicks in as a fallback for the flat/simplified
+ * spreadsheet shape, whose rows often have no category column at all. */
 export const OTHER_CATEGORY = "Other";
 
-const CANONICAL_CATEGORIES: { name: string; keywords: RegExp[] }[] = [
+const FALLBACK_CATEGORIES: { name: string; keywords: RegExp[] }[] = [
   {
     name: "Music Discovery",
     keywords: [
@@ -89,15 +89,32 @@ const CANONICAL_CATEGORIES: { name: string; keywords: RegExp[] }[] = [
   },
 ];
 
+function cleanCategoryLabel(category: string | null): string | null {
+  if (!category) return null;
+  const cleaned = category.replace(/\*+\s*$/, "").replace(/\s+/g, " ").trim();
+  return cleaned || null;
+}
+
 export function classifyStatement(category: string | null, statement: string): string {
-  const haystack = `${category ?? ""} ${statement}`.toLowerCase();
-  for (const c of CANONICAL_CATEGORIES) {
+  const raw = cleanCategoryLabel(category);
+  if (raw) return raw;
+
+  const haystack = statement.toLowerCase();
+  for (const c of FALLBACK_CATEGORIES) {
     if (c.keywords.some((re) => re.test(haystack))) return c.name;
   }
   return OTHER_CATEGORY;
 }
 
-/** Canonical display order — matched categories keep this order, with any
- * statements that hit no keyword grouped last under "Other" rather than
- * scattered by whatever order rows happened to arrive in. */
-export const CATEGORY_DISPLAY_ORDER = [...CANONICAL_CATEGORIES.map((c) => c.name), OTHER_CATEGORY];
+/** Alphabetical is the only ordering that makes sense once category names
+ * mostly come straight from whatever a real crosstab called them (rather
+ * than a fixed list this file controls) — "Other" (the fallback keyword
+ * miss, or a statement with no category at all) still always sorts last
+ * rather than wherever it happens to fall alphabetically. */
+export function sortCategoryNames(names: string[]): string[] {
+  return [...names].sort((a, b) => {
+    if (a === OTHER_CATEGORY) return b === OTHER_CATEGORY ? 0 : 1;
+    if (b === OTHER_CATEGORY) return -1;
+    return a.localeCompare(b);
+  });
+}
