@@ -168,8 +168,14 @@ export function YoutubeCaptureCard({
   // override it, so this is asked of the person directly rather than only
   // relied on programmatically. Gates the confirm button rather than just
   // being advisory text, since it's easy to skim past a paragraph.
-  const [checklist, setChecklist] = useState({ captionsOff: false, fullscreened: false, staysOnTab: false });
-  const allChecked = checklist.captionsOff && checklist.fullscreened && checklist.staysOnTab;
+  const [checklist, setChecklist] = useState({
+    captionsOff: false,
+    fullscreened: false,
+    staysOnTab: false,
+    mouseAway: false,
+  });
+  const allChecked =
+    checklist.captionsOff && checklist.fullscreened && checklist.staysOnTab && checklist.mouseAway;
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [reviewUrl, setReviewUrl] = useState<string | null>(null);
   const [trimStart, setTrimStart] = useState(0);
@@ -450,6 +456,18 @@ export function YoutubeCaptureCard({
               />
               <span>I&apos;ll stay on this tab — not switch away or close it — until it finishes.</span>
             </label>
+            <label className="flex items-start gap-2 text-xs text-neutral-600 dark:text-white/60">
+              <input
+                type="checkbox"
+                checked={checklist.mouseAway}
+                onChange={(e) => setChecklist((c) => ({ ...c, mouseAway: e.target.checked }))}
+                className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-builder-accent"
+              />
+              <span>
+                I&apos;ll keep my mouse off the video while it records — the cursor gets captured too, and
+                shows up hovering over the clip.
+              </span>
+            </label>
           </div>
 
           {error && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
@@ -556,7 +574,7 @@ export function YoutubeCaptureCard({
             <span className={`h-2 w-2 rounded-full ${priming ? "bg-white/40" : "animate-pulse bg-red-500"}`} />
             {priming
               ? `Starting in ${secondsLeft}s…`
-              : `Recording… ${secondsLeft}s left — don't switch tabs or close this window`}
+              : `Recording… ${secondsLeft}s left — don't switch tabs, close this window, or hover your mouse over the video`}
           </span>
           <button
             type="button"

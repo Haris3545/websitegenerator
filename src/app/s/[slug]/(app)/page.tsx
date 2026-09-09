@@ -16,6 +16,7 @@ import { DashboardSections, type DashboardSectionEntry } from "@/components/site
 import { TabHeading } from "@/components/site/TabHeading";
 import { Editable } from "@/components/site/Editable";
 import { SiteFooter } from "@/components/site/SiteFooter";
+import { SiteWarmupOverlay } from "@/components/site/SiteWarmupOverlay";
 import { TABS_BY_KEY, LIVE_TABS, orderedEnabledTabs } from "@/lib/tabs";
 import type { TabKey, SearchTrendPoint } from "@/lib/database.types";
 
@@ -315,6 +316,8 @@ export default async function DashboardPage({
 
   return (
     <div>
+      <SiteWarmupOverlay slug={slug} enabledTabs={artist.enabled_tabs} />
+
       <TabHeading
         artistId={artist.id}
         contentOverrides={artist.content_overrides}

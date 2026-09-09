@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ColorField } from "@/components/builder/ColorField";
 import { FontPicker } from "@/components/builder/FontPicker";
 import { BackgroundMediaField } from "@/components/builder/BackgroundMediaField";
+import { BackgroundEffectsPreview } from "@/components/builder/BackgroundEffectsPreview";
 import { AudienceUploadField } from "@/components/builder/AudienceUploadField";
 import { TabsChecklist } from "@/components/builder/TabsChecklist";
 import { ThemeEditor, Slider } from "@/components/builder/ThemeEditor";
@@ -17,7 +18,7 @@ import {
   checkPublishStatus,
   type ArtistFormInput,
 } from "@/app/builder/actions";
-import type { Artist, AestheticParams, TabKey } from "@/lib/database.types";
+import type { Artist, AestheticParams } from "@/lib/database.types";
 import { DEFAULT_THEME_OVERRIDES, type ThemeOverrides } from "@/lib/theme";
 import { DEFAULT_AESTHETIC_PARAMS } from "@/lib/aesthetics";
 import { computeArtistPassword } from "@/lib/artistAccess";
@@ -115,6 +116,15 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
   const [slugTouched, setSlugTouched] = useState(!!artist);
   const [audienceFile, setAudienceFile] = useState<File | null>(null);
   const [youtubeUrlInput, setYoutubeUrlInput] = useState("");
+  // Seeding the YouTube box from the name field (see handleNameChange) used
+  // to key off "is the box currently empty" — which re-fired on every
+  // keystroke in the name field for as long as the box stayed blank,
+  // including while someone was actively typing into the box itself (an
+  // empty box mid-typing looks identical to a never-touched one to that
+  // check). A ref that flips permanently true the moment the box is
+  // touched at all — by typing, or by focusing it — means the seed only
+  // ever applies once, before anyone's interacted with it.
+  const youtubeFieldTouchedRef = useRef(!!artist?.youtube_channel_id);
   const [isLookingUpYoutube, startYoutubeLookup] = useTransition();
   const [youtubeLookup, setYoutubeLookup] = useState<
     { status: "success"; channelTitle: string } | { status: "error"; error: string } | null
@@ -208,7 +218,6 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
     slug: string;
     artistName: string;
     youtubeChannelId: string | null;
-    enabledTabs: TabKey[];
   } | null>(null);
   const provisioningCompleteRef = useRef<() => void>(() => {});
 
@@ -355,8 +364,10 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
     if (!slugTouched) update("slug", slugify(name));
     // Seeds the YouTube channel search box with the artist's name the
     // moment it's typed, so that field reads as already populated rather
-    // than blank — never overwrites something already typed/picked there.
-    if (!youtubeUrlInput.trim() && !youtubeLookup) setYoutubeUrlInput(name);
+    // than blank — but only until the box itself has been touched (see
+    // youtubeFieldTouchedRef), never overwriting something someone's
+    // actively typing or already picked there.
+    if (!youtubeFieldTouchedRef.current) setYoutubeUrlInput(name);
   }
 
   // Shared by both ways of resolving a channel (pasted link and search-modal
@@ -387,6 +398,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
   }
 
   function handleChannelQueryChange(next: string) {
+    youtubeFieldTouchedRef.current = true;
     setYoutubeUrlInput(next);
     setYoutubeLookup(null);
     if (channelSearchDebounceRef.current) window.clearTimeout(channelSearchDebounceRef.current);
@@ -580,8 +592,14 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
           // a manual "Refresh Everything" click to actually fill in), a
           // brand-new artist's data gets fetched eagerly right now, with
           // visible per-step progress — see ProvisioningOverlay.tsx.
+          //
+          // The `?warming=1` flag is what tells the site itself (see
+          // SiteWarmupOverlay) to show its own full-screen "loading every
+          // page" screen before revealing the dashboard — that used to be a
+          // phase of this same builder overlay, but moved to the site after
+          // it reportedly never showed up there for a real user.
           provisioningCompleteRef.current = () => {
-            if (newSiteTab) newSiteTab.location.href = `/s/${form.slug}`;
+            if (newSiteTab) newSiteTab.location.href = `/s/${form.slug}?warming=1`;
             router.push(`/builder/artists/${result.id}`);
             setProvisioning(null);
           };
@@ -590,7 +608,6 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
             slug: form.slug,
             artistName: form.name,
             youtubeChannelId: form.youtube_channel_id,
-            enabledTabs: form.enabled_tabs,
           });
           return;
         }
@@ -764,38 +781,32 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
         <div className="flex flex-col gap-1.5 text-sm">
           <span className={labelClass}>YouTube channel</span>
           <div className="relative flex gap-2">
-            <input
-              value={youtubeUrlInput}
-              onChange={(e) => handleChannelQueryChange(e.target.value)}
-              onFocus={() => {
-                if (channelResults.length > 0) setChannelDropdownOpen(true);
-              }}
-              onBlur={() => window.setTimeout(() => setChannelDropdownOpen(false), 150)}
-              onKeyDown={(e) => {
-                if (e.key !== "Enter" || isLookingUpYoutube || !youtubeUrlInput.trim()) return;
-                e.preventDefault();
-                setChannelDropdownOpen(false);
-                startYoutubeLookup(async () => {
-                  applyYoutubeLookupResult(await lookupYoutubeChannel(youtubeUrlInput));
-                });
-              }}
-              placeholder="Type their name, or paste a channel/video link"
-              className={`flex-1 ${inputClass}`}
-            />
-            <button
-              type="button"
-              disabled={isLookingUpYoutube || !youtubeUrlInput.trim()}
-              onClick={() => {
-                setChannelDropdownOpen(false);
-                startYoutubeLookup(async () => {
-                  applyYoutubeLookupResult(await lookupYoutubeChannel(youtubeUrlInput));
-                });
-              }}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-neutral-200 bg-white px-3.5 py-2.5 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-100 disabled:opacity-50 dark:border-white/10 dark:bg-white/5 dark:text-white/80 dark:hover:bg-white/10"
-            >
-              <YoutubeIcon className="h-4 w-4 shrink-0" />
-              {isLookingUpYoutube ? "Looking up…" : "Find channel"}
-            </button>
+            <div className="relative flex-1">
+              <YoutubeIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400 dark:text-white/40" />
+              <input
+                value={youtubeUrlInput}
+                onChange={(e) => handleChannelQueryChange(e.target.value)}
+                onFocus={() => {
+                  youtubeFieldTouchedRef.current = true;
+                  if (channelResults.length > 0) setChannelDropdownOpen(true);
+                }}
+                onBlur={() => window.setTimeout(() => setChannelDropdownOpen(false), 150)}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" || isLookingUpYoutube || !youtubeUrlInput.trim()) return;
+                  e.preventDefault();
+                  setChannelDropdownOpen(false);
+                  startYoutubeLookup(async () => {
+                    applyYoutubeLookupResult(await lookupYoutubeChannel(youtubeUrlInput));
+                  });
+                }}
+                placeholder="Type their name, or paste a channel/video link"
+                className={`w-full ${inputClass}`}
+                style={{ paddingLeft: "2.25rem", paddingRight: "2.25rem" }}
+              />
+              {isLookingUpYoutube && (
+                <span className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-600 dark:border-white/20 dark:border-t-white/70" />
+              )}
+            </div>
 
             {channelDropdownOpen && (searchingChannels || channelResults.length > 0) && (
               <div className="animate-dropdown-unfurl absolute left-0 right-0 top-full z-20 mt-1 max-h-64 origin-top overflow-y-auto rounded-xl border border-neutral-200 bg-white py-1 shadow-lg dark:border-white/10 dark:bg-neutral-900">
@@ -896,6 +907,23 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
             <p className="-mt-2 text-xs text-neutral-500 dark:text-white/40">
               Shown behind every page of the dashboard (not the password page, set separately below).
             </p>
+
+            <div className="flex flex-col gap-1.5">
+              <span className={`${labelClass} flex items-center gap-1.5`}>
+                Dashboard background preview
+                <HelpTooltip>
+                  Live — every control below (zoom, contrast, darkness, grain, and the rest) updates it
+                  instantly. Drag directly on it to reposition the background.
+                </HelpTooltip>
+              </span>
+              <BackgroundEffectsPreview
+                backgroundImageUrl={form.background_image_url}
+                fontFamily={form.font_family}
+                theme={mainTheme}
+                onPositionChange={(x, y) => setMainTheme({ bg_position_x: x, bg_position_y: y })}
+                aesthetic={mainAesthetic}
+              />
+            </div>
 
             <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 p-3 dark:border-white/10">
               <p className={labelClass}>Background look &amp; effects</p>
@@ -1416,7 +1444,6 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
         slug={provisioning.slug}
         artistName={provisioning.artistName}
         youtubeChannelId={provisioning.youtubeChannelId}
-        enabledTabs={provisioning.enabledTabs}
         onComplete={() => provisioningCompleteRef.current()}
       />
     )}

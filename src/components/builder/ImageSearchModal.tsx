@@ -164,6 +164,21 @@ export function ImageSearchModal({
               {helperText}
             </p>
           )}
+          {loading && (
+            <div className="flex flex-col items-center justify-center gap-3 py-16">
+              <span
+                className={`block h-6 w-6 animate-spin rounded-full border-2 ${
+                  dark
+                    ? "border-white/20 border-t-white/80"
+                    : "border-neutral-300 border-t-neutral-600 dark:border-white/20 dark:border-t-white/80"
+                }`}
+              />
+              <p className={`text-sm ${dark ? "text-white/40" : "text-neutral-400 dark:text-white/40"}`}>
+                Searching…
+              </p>
+            </div>
+          )}
+          {!loading && (
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
             {results.map((r, i) => {
               const key = `${r.original}-${i}`;
@@ -198,6 +213,7 @@ export function ImageSearchModal({
               );
             })}
           </div>
+          )}
         </div>
       </div>
     </div>
