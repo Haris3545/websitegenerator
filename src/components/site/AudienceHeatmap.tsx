@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { hierarchy, pack } from "d3-hierarchy";
 import type { Database } from "@/lib/database.types";
 import { AudienceTable } from "@/components/site/AudienceTable";
@@ -308,21 +308,11 @@ export function AudienceHeatmap({ statements }: { statements: Statement[] }) {
           </div>
         </div>
 
-        <select
+        <StatementPicker
+          categories={categories}
           value={activeBubbleRow?.statement ?? ""}
-          onChange={(e) => setBubbleStatement(e.target.value)}
-          className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white focus:border-[var(--accent)] focus:outline-none"
-        >
-          {categories.map((cat) => (
-            <optgroup key={cat.name} label={cat.name === OTHER_CATEGORY ? "Other" : cat.name}>
-              {cat.rows.map((row) => (
-                <option key={row.statement} value={row.statement}>
-                  {row.statement}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
+          onChange={setBubbleStatement}
+        />
 
         <div
           className="flex flex-col gap-4 p-5 shadow-lg shadow-black/30 backdrop-blur-md sm:flex-row"
@@ -357,20 +347,20 @@ export function AudienceHeatmap({ statements }: { statements: Statement[] }) {
                       <clipPath id={clipId}>
                         <circle r={leaf.r} />
                       </clipPath>
-                      <g clipPath={`url(#${clipId})`}>
+                      <g clipPath={`url(#${clipId})`} fontFamily="inherit">
                         {leaf.r > 28 && (
-                          <text textAnchor="middle" y={-4} fontSize={fitFontSize(segment, leaf.r, 15)} fontWeight={700} fill="#141311">
+                          <text textAnchor="middle" y={-4} fontSize={fitFontSize(segment, leaf.r, 12)} fontWeight={700} fill="#141311">
                             {segment}
                           </text>
                         )}
                         {leaf.r > 18 && (
                           <text
                             textAnchor="middle"
-                            y={leaf.r > 28 ? 14 : 4}
-                            fontSize={fitFontSize(valueLabel, leaf.r, 13)}
+                            y={leaf.r > 28 ? 13 : 3}
+                            fontSize={fitFontSize(valueLabel, leaf.r, 11)}
                             fontWeight={600}
                             fill="#141311"
-                            fontFamily="ui-monospace, monospace"
+                            style={{ fontVariantNumeric: "tabular-nums" }}
                           >
                             {valueLabel}
                           </text>
@@ -391,7 +381,7 @@ export function AudienceHeatmap({ statements }: { statements: Statement[] }) {
                         style={{ backgroundColor: segmentColor(segments.indexOf(leaf.data.segment!)) }}
                       />
                       <span className="min-w-0 flex-1 truncate">{leaf.data.segment}</span>
-                      <span className="shrink-0 font-mono tabular-nums text-white">{formatMetric(leaf.data.cell!, metric)}</span>
+                      <span className="shrink-0 tabular-nums text-white">{formatMetric(leaf.data.cell!, metric)}</span>
                     </div>
                   ))}
               </div>
@@ -512,6 +502,120 @@ export function AudienceHeatmap({ statements }: { statements: Statement[] }) {
       </div>
 
       <TooltipCard tooltip={tooltip} />
+    </div>
+  );
+}
+
+/** A searchable, grouped combobox for jumping straight to one of what can
+ * easily be a couple hundred statements — a plain flat &lt;select&gt; makes
+ * you scroll through every category to find one by eye, so this instead
+ * shows the current pick as a button and opens a filterable list on click. */
+function StatementPicker({
+  categories,
+  value,
+  onChange,
+}: {
+  categories: { name: string; rows: HeatmapRow[] }[];
+  value: string;
+  onChange: (statement: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function close() {
+    setOpen(false);
+    setSearch("");
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(e: PointerEvent) {
+      if (!containerRef.current?.contains(e.target as Node)) close();
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+  }, [open]);
+
+  const query = search.trim().toLowerCase();
+  const filtered = query
+    ? categories
+        .map((cat) => ({ ...cat, rows: cat.rows.filter((r) => r.statement.toLowerCase().includes(query)) }))
+        .filter((cat) => cat.rows.length > 0)
+    : categories;
+
+  const activeCategory = categories.find((c) => c.rows.some((r) => r.statement === value));
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => (open ? close() : setOpen(true))}
+        className="flex w-full items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5 text-left text-[13px] text-white transition-colors hover:border-white/20 focus:border-[var(--accent)] focus:outline-none"
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-medium">{value || "Select a statement"}</span>
+          {activeCategory && (
+            <span className="block truncate text-[11px] text-white/40">
+              {activeCategory.name === OTHER_CATEGORY ? "Other" : activeCategory.name}
+            </span>
+          )}
+        </span>
+        <svg
+          viewBox="0 0 20 20"
+          fill="none"
+          className={`h-4 w-4 shrink-0 text-white/40 transition-transform duration-150 ${open ? "rotate-180" : ""}`}
+          aria-hidden
+        >
+          <path d="m5 7.5 5 5 5-5" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute z-20 mt-1.5 flex max-h-80 w-full flex-col overflow-hidden rounded-lg border border-white/10 bg-neutral-900 shadow-xl shadow-black/40">
+          <input
+            ref={inputRef}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search statements…"
+            className="border-b border-white/10 bg-transparent px-3 py-2 text-[13px] text-white placeholder:text-white/30 focus:outline-none"
+          />
+          <div className="overflow-y-auto py-1">
+            {filtered.length === 0 && (
+              <p className="px-3 py-4 text-center text-[13px] text-white/30">No matches.</p>
+            )}
+            {filtered.map((cat) => (
+              <div key={cat.name}>
+                <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-white/30">
+                  {cat.name === OTHER_CATEGORY ? "Other" : cat.name}
+                </p>
+                {cat.rows.map((row) => (
+                  <button
+                    key={row.statement}
+                    type="button"
+                    onClick={() => {
+                      onChange(row.statement);
+                      close();
+                    }}
+                    className={`block w-full truncate px-3 py-1.5 text-left text-[13px] transition-colors ${
+                      row.statement === value
+                        ? "bg-[var(--accent)]/15 text-[var(--accent)]"
+                        : "text-white/70 hover:bg-white/[0.06]"
+                    }`}
+                  >
+                    {row.statement}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -78,10 +78,7 @@ export default async function MusicPage({ params }: { params: Promise<{ slug: st
                   Couldn&apos;t load Last.fm stats for {artist.name}: {fetchError}
                 </>
               ) : (
-                <>
-                  No stats cached yet — hit &quot;Refresh Everything&quot; below. If nothing shows up, ask
-                  whoever manages this app to set LASTFM_API_KEY.
-                </>
+                "No stats yet."
               )
             }
           />

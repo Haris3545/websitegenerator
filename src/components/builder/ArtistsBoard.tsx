@@ -387,7 +387,7 @@ export function ArtistsBoard({
         if (last && last.id === ds.artist.id && now - last.time < DOUBLE_CLICK_MS) {
           lastClickRef.current = null;
           setMenuFor(null);
-          routerRef.current.push(`/s/${ds.artist.slug}?warming=1`);
+          routerRef.current.push(`/s/${ds.artist.slug}`);
           return;
         }
         lastClickRef.current = { id: ds.artist.id, time: now };
@@ -633,7 +633,7 @@ export function ArtistsBoard({
               }`}
             >
               <Link
-                href={`/s/${artist.slug}?warming=1`}
+                href={`/s/${artist.slug}`}
                 className="block px-3 py-2 text-left text-sm font-medium hover:bg-neutral-50 dark:hover:bg-white/5"
                 style={{ color: "#75ba75" }}
               >

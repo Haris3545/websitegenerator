@@ -78,11 +78,7 @@ export default async function CalendarPage({ params }: { params: Promise<{ slug:
 
       <CollapsibleSection title="Month view">
         {!events?.length && (
-          <p className="mb-4 text-sm text-white/50">
-            No upcoming dates cached yet — hit &quot;Refresh Everything&quot; below, or add one
-            yourself with &quot;+ Add event&quot;. If nothing shows up after refreshing, ask
-            whoever manages this app to set TICKETMASTER_API_KEY for broader coverage.
-          </p>
+          <p className="mb-4 text-sm text-white/50">No upcoming dates.</p>
         )}
         <CalendarBoard
           artistId={artist.id}

@@ -106,7 +106,7 @@ export default async function SocialListeningPage({
         </div>
       ) : !themes.length ? (
         <div className="mt-6">
-          <BrandedEmptyState message={`No themes found yet — hit "Refresh Everything" below.`} />
+          <BrandedEmptyState message="No themes yet." />
         </div>
       ) : (
         <div className="mt-6 flex flex-col gap-6">

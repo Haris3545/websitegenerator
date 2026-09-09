@@ -96,7 +96,7 @@ export default async function YoutubePage({ params }: { params: Promise<{ slug: 
               <p className="mt-3 text-xs text-red-300/60">{mapError.message}</p>
             </div>
           ) : !commentCategories.length ? (
-            <BrandedEmptyState message={`No comments found yet — hit "Refresh Everything" below. Needs YOUTUBE_API_KEY set.`} />
+            <BrandedEmptyState message="No comments yet." />
           ) : (
             <CommentMap categories={commentCategories} />
           )}
@@ -112,9 +112,9 @@ export default async function YoutubePage({ params }: { params: Promise<{ slug: 
       content: (
         <div>
           {!artist.youtube_channel_id ? (
-            <BrandedEmptyState message="No YouTube channel ID set for this artist yet — add one, plus a YouTube Data API key, in the builder." />
+            <BrandedEmptyState message="No YouTube channel connected yet." />
           ) : !stats ? (
-            <BrandedEmptyState message={`No stats cached yet — hit "Refresh Everything" below.`} />
+            <BrandedEmptyState message="No stats yet." />
           ) : (
             <>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">

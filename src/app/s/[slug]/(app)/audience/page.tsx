@@ -27,7 +27,7 @@ export default async function AudiencePage({ params }: { params: Promise<{ slug:
 
       {!statements?.length ? (
         <div className="mt-4">
-          <BrandedEmptyState message="No audience research uploaded yet — upload a GWI (or similar) export in the builder." />
+          <BrandedEmptyState message="No audience research uploaded yet." />
         </div>
       ) : (
         <div className="mt-4">

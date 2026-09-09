@@ -270,10 +270,12 @@ function WarmupGate({
  * `?refresh=1` (only ever sent alongside `?warming=1` right after creation
  * — see ArtistForm.tsx) additionally re-runs the same data sources a manual
  * "Refresh Everything" click would, before any page gets warmed. Existing
- * artists opened via "View site" only ever get plain `?warming=1`: their
- * data isn't first-run-flaky the way a just-created artist's can be, and
- * re-fetching everything on every casual revisit would burn API quota for
- * no benefit. */
+ * artists opened via "View site" (ArtistsBoard.tsx) get neither flag at
+ * all — every route was already warmed once at creation, so pre-fetching
+ * all of them again on every casual revisit would just burn API quota
+ * (each tab's own page can still trigger its own background "if stale"
+ * refresh on that visit alone, same as any other navigation) for no
+ * benefit. */
 export function SiteWarmupOverlay({
   slug,
   enabledTabs,

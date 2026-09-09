@@ -105,7 +105,7 @@ export default async function MediaPage({ params }: { params: Promise<{ slug: st
             value={resolveContent(
               artist.content_overrides,
               "media.empty_state",
-              'No coverage cached yet — hit "Refresh Everything" below.'
+              "No coverage yet."
             )}
             as="p"
           />
