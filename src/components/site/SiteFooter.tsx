@@ -110,6 +110,7 @@ export function SiteFooter({
           slug={slug}
           artistName={artistName}
           youtubeChannelId={youtubeChannelId}
+          enabledTabs={[]}
           mode="refresh"
           onComplete={() => {
             setRefreshing(false);

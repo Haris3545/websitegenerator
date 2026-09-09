@@ -17,7 +17,7 @@ import {
   checkPublishStatus,
   type ArtistFormInput,
 } from "@/app/builder/actions";
-import type { Artist, AestheticParams } from "@/lib/database.types";
+import type { Artist, AestheticParams, TabKey } from "@/lib/database.types";
 import { DEFAULT_THEME_OVERRIDES, type ThemeOverrides } from "@/lib/theme";
 import { DEFAULT_AESTHETIC_PARAMS } from "@/lib/aesthetics";
 import { computeArtistPassword } from "@/lib/artistAccess";
@@ -208,6 +208,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
     slug: string;
     artistName: string;
     youtubeChannelId: string | null;
+    enabledTabs: TabKey[];
   } | null>(null);
   const provisioningCompleteRef = useRef<() => void>(() => {});
 
@@ -581,6 +582,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
           slug: form.slug,
           artistName: form.name,
           youtubeChannelId: form.youtube_channel_id,
+          enabledTabs: form.enabled_tabs,
         });
         return;
       }
@@ -1398,6 +1400,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
         slug={provisioning.slug}
         artistName={provisioning.artistName}
         youtubeChannelId={provisioning.youtubeChannelId}
+        enabledTabs={provisioning.enabledTabs}
         onComplete={() => provisioningCompleteRef.current()}
       />
     )}

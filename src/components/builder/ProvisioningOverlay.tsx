@@ -18,9 +18,16 @@ import {
   checkProvisionedData,
   type ProvisionResult,
 } from "@/app/builder/provisionActions";
+import { TABS_BY_KEY, orderedEnabledTabs } from "@/lib/tabs";
+import type { TabKey } from "@/lib/database.types";
 
 const MAX_STEP_RETRIES = 2;
 const STEP_RETRY_DELAY_MS = 1200;
+// Rough per-page cold-start budget used only for the initial "usually takes
+// about..." estimate shown before any real page has finished loading — once
+// the first one or two land, the live elapsed time replaces this with an
+// actual extrapolation (see projectedRemainingSec below).
+const WARM_SECONDS_PER_TAB = 1.4;
 
 type StepStatus = "pending" | "running" | "done" | "error";
 
@@ -71,12 +78,22 @@ function StatusIcon({ status }: { status: StepStatus }) {
  * as refreshEverything() in app/s/[slug]/actions.ts, which this overlay
  * replaces the UI for: a repeatedly-clickable button on every artist's site
  * must never be what burns through those quotas, whereas running them once
- * at creation is fine. */
+ * at creation is fine.
+ *
+ * On mode="create" only, once the data itself has landed this also runs a
+ * "warming" phase that actually requests every enabled tab's real page (not
+ * a cosmetic delay) so each one's serverless route is already compiled and
+ * running before the artist ever clicks into it — the dominant one-time
+ * slowness right after creation is per-route cold starts, not the data
+ * fetches themselves (those already read back what provisioning just
+ * stored). A refreshed artist's site has necessarily been visited before,
+ * so its routes are already warm and this phase is skipped entirely. */
 export function ProvisioningOverlay({
   artistId,
   slug,
   artistName,
   youtubeChannelId,
+  enabledTabs,
   mode = "create",
   onComplete,
 }: {
@@ -84,12 +101,20 @@ export function ProvisioningOverlay({
   slug: string;
   artistName: string;
   youtubeChannelId: string | null;
+  enabledTabs: TabKey[];
   mode?: "create" | "refresh";
   onComplete: () => void;
 }) {
   const [statuses, setStatuses] = useState<Record<string, StepStatus>>({});
-  const [phase, setPhase] = useState<"running" | "checking" | "done">("running");
+  const [warmStatuses, setWarmStatuses] = useState<Record<string, StepStatus>>({});
+  const [warmElapsedMs, setWarmElapsedMs] = useState(0);
+  const [phase, setPhase] = useState<"running" | "checking" | "warming" | "done">("running");
   const [checkResults, setCheckResults] = useState<Record<string, number> | null>(null);
+
+  const warmTabs = useMemo(
+    () => (mode === "create" ? orderedEnabledTabs(enabledTabs) : []),
+    [mode, enabledTabs]
+  );
 
   // Always-latest ref rather than calling onComplete straight from the
   // auto-advance effect below — onComplete is a fresh closure from the
@@ -113,6 +138,17 @@ export function ProvisioningOverlay({
     if (phase !== "done") return;
     const timer = setTimeout(() => onCompleteRef.current(), 1400);
     return () => clearTimeout(timer);
+  }, [phase]);
+
+  // Drives the live "About Ns left" estimate during warming — a plain
+  // interval rather than deriving it from render timing, since this needs
+  // to keep ticking even while every tab's fetch is in flight and nothing
+  // else is re-rendering.
+  useEffect(() => {
+    if (phase !== "warming") return;
+    const start = performance.now();
+    const interval = setInterval(() => setWarmElapsedMs(performance.now() - start), 200);
+    return () => clearInterval(interval);
   }, [phase]);
 
   const allSteps = useMemo<Step[]>(
@@ -274,6 +310,32 @@ export function ProvisioningOverlay({
       }
       if (cancelled) return;
       setCheckResults(counts);
+
+      if (warmTabs.length > 0) {
+        setPhase("warming");
+        // Deliberately fired all at once rather than throttled — the whole
+        // point is to get every route's lambda cold-starting concurrently
+        // instead of one after another, and the data these pages read was
+        // just written by the steps above, so each request is a real page
+        // load, not a synthetic ping.
+        await Promise.all(
+          warmTabs.map(async (key) => {
+            setWarmStatuses((prev) => ({ ...prev, [key]: "running" }));
+            const tab = TABS_BY_KEY[key];
+            const url = `${window.location.origin}/s/${slug}${tab.path ? `/${tab.path}` : ""}`;
+            try {
+              const res = await fetch(url, { cache: "no-store" });
+              if (cancelled) return;
+              setWarmStatuses((prev) => ({ ...prev, [key]: res.ok ? "done" : "error" }));
+            } catch {
+              if (cancelled) return;
+              setWarmStatuses((prev) => ({ ...prev, [key]: "error" }));
+            }
+          })
+        );
+        if (cancelled) return;
+      }
+
       setPhase("done");
     }
 
@@ -281,23 +343,49 @@ export function ProvisioningOverlay({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `steps` is recomputed from these same deps every render; including it here would just re-trigger this identically
-  }, [artistId, slug, mode, artistName, youtubeChannelId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `steps`/`warmTabs` are recomputed from these same deps every render; including them here would just re-trigger this identically
+  }, [artistId, slug, mode, artistName, youtubeChannelId, warmTabs]);
 
   const finishedCount = Object.values(statuses).filter((s) => s === "done" || s === "error").length;
-  const progress = phase === "done" ? 1 : finishedCount / steps.length;
+  const warmFinishedCount = Object.values(warmStatuses).filter((s) => s === "done" || s === "error").length;
+  const progress =
+    phase === "done"
+      ? 1
+      : phase === "warming"
+        ? warmFinishedCount / warmTabs.length
+        : finishedCount / steps.length;
   // Several steps run in parallel (see the run() effect above), so more
   // than one can be "running" at once — showing whichever comes first in
   // declaration order keeps the commentary line to a single steady phrase
   // instead of flickering between several.
   const runningCommentary = steps.find((s) => statuses[s.key] === "running")?.commentary;
+  const warmingTab = warmTabs.find((key) => warmStatuses[key] === "running");
+
+  // Before any page has finished loading there's nothing to extrapolate
+  // from, so the estimate starts as a flat per-tab budget; once at least
+  // one has landed, the live elapsed time gives a real (and steadily more
+  // accurate) projection of what's left instead.
+  const warmStaticEstimateSec = Math.max(4, Math.round(warmTabs.length * WARM_SECONDS_PER_TAB));
+  const warmEtaLabel =
+    warmFinishedCount === 0
+      ? `Usually takes about ${warmStaticEstimateSec}s…`
+      : (() => {
+          const elapsedSec = warmElapsedMs / 1000;
+          const projectedTotalSec = (elapsedSec / warmFinishedCount) * warmTabs.length;
+          const remainingSec = Math.max(0, Math.ceil(projectedTotalSec - elapsedSec));
+          return remainingSec <= 1 ? "Almost done…" : `About ${remainingSec}s left…`;
+        })();
 
   return (
     <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-6 bg-neutral-950 px-4 py-10 text-white">
       <BrandLogoAnimation className="h-16 w-16 invert" loop={phase !== "done"} />
 
       <p className="text-lg font-semibold">
-        {mode === "refresh" ? "Refreshing everything" : "Creating website"}
+        {phase === "warming"
+          ? "Loading every page"
+          : mode === "refresh"
+            ? "Refreshing everything"
+            : "Creating website"}
       </p>
 
       <div className="w-full max-w-sm">
@@ -315,26 +403,38 @@ export function ProvisioningOverlay({
         >
           {phase === "checking"
             ? "Confirming everything landed…"
-            : phase === "done"
-              ? "Dashboard ready"
-              : (runningCommentary ?? (mode === "refresh" ? "Refreshing the dashboard…" : "Setting up the dashboard…"))}
+            : phase === "warming"
+              ? (warmingTab ? `Loading ${TABS_BY_KEY[warmingTab].label}…` : "Loading every page…")
+              : phase === "done"
+                ? "Dashboard ready"
+                : (runningCommentary ?? (mode === "refresh" ? "Refreshing the dashboard…" : "Setting up the dashboard…"))}
         </p>
+        {phase === "warming" && (
+          <p className="mt-1 text-center text-[11px] text-white/30">{warmEtaLabel}</p>
+        )}
       </div>
 
       <div className="flex w-full max-w-sm flex-col gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm">
-        {steps.map((step) => (
-          <div key={step.key} className="flex items-center justify-between gap-3">
-            <span className="text-white/70">{step.label}</span>
-            <div className="flex items-center gap-2">
-              {phase === "done" && checkResults && step.checkKey && (
-                <span className="text-xs text-white/35">
-                  {checkResults[step.checkKey]} {checkResults[step.checkKey] === 1 ? "item" : "items"}
-                </span>
-              )}
-              <StatusIcon status={statuses[step.key] ?? "pending"} />
-            </div>
-          </div>
-        ))}
+        {phase === "warming"
+          ? warmTabs.map((key) => (
+              <div key={key} className="flex items-center justify-between gap-3">
+                <span className="text-white/70">{TABS_BY_KEY[key].label}</span>
+                <StatusIcon status={warmStatuses[key] ?? "pending"} />
+              </div>
+            ))
+          : steps.map((step) => (
+              <div key={step.key} className="flex items-center justify-between gap-3">
+                <span className="text-white/70">{step.label}</span>
+                <div className="flex items-center gap-2">
+                  {phase === "done" && checkResults && step.checkKey && (
+                    <span className="text-xs text-white/35">
+                      {checkResults[step.checkKey]} {checkResults[step.checkKey] === 1 ? "item" : "items"}
+                    </span>
+                  )}
+                  <StatusIcon status={statuses[step.key] ?? "pending"} />
+                </div>
+              </div>
+            ))}
       </div>
 
       {phase === "done" && (
