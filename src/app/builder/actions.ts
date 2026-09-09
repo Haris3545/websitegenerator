@@ -13,7 +13,16 @@ import {
   type UnpublishResult,
   type PublishStatus,
 } from "@/lib/publish";
-import { parseAudienceFile, storeAudienceUpload, listAudienceUploads, deleteAudienceUpload } from "@/lib/audience";
+import {
+  parseAudienceFile,
+  storeAudienceUpload,
+  listAudienceUploads,
+  deleteAudienceUpload,
+  previewAudienceSynthesis,
+  applyAudienceSynthesis,
+  type SynthesisPreview,
+  type ParsedRow,
+} from "@/lib/audience";
 import { resolveYoutubeChannel, type YoutubeChannelLookup } from "@/lib/youtube";
 import { ALL_TAB_KEYS } from "@/lib/tabs";
 import { artistCacheTag } from "@/lib/getSiteArtist";
@@ -405,6 +414,27 @@ export async function removeAudienceUpload(
   artistId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const result = await deleteAudienceUpload(uploadId, artistId);
+  if (result.ok) revalidatePath(`/builder/artists/${artistId}`);
+  return result;
+}
+
+/** Computes what merging every current upload into one deduplicated
+ * dataset would look like, without changing anything yet — see
+ * previewAudienceSynthesis. The builder shows this preview and only calls
+ * applyAudienceSynthesisAction below if the user actually confirms it. */
+export async function previewAudienceSynthesisAction(artistId: string): Promise<SynthesisPreview> {
+  return previewAudienceSynthesis(artistId);
+}
+
+/** Commits a previewed synthesis: every existing upload is replaced with
+ * the merged set as one new upload (see applyAudienceSynthesis). Takes the
+ * exact rows the preview showed, rather than recomputing them, so what
+ * gets stored is exactly what was confirmed. */
+export async function applyAudienceSynthesisAction(
+  artistId: string,
+  rows: ParsedRow[]
+): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  const result = await applyAudienceSynthesis(artistId, rows);
   if (result.ok) revalidatePath(`/builder/artists/${artistId}`);
   return result;
 }

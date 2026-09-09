@@ -1,7 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { uploadAudienceResearch, getAudienceUploads, removeAudienceUpload } from "@/app/builder/actions";
+import {
+  uploadAudienceResearch,
+  getAudienceUploads,
+  removeAudienceUpload,
+  previewAudienceSynthesisAction,
+  applyAudienceSynthesisAction,
+} from "@/app/builder/actions";
+import type { SynthesisPreview } from "@/lib/audience";
 
 const ACCEPTED_EXTENSIONS = [".csv", ".xlsx", ".xls"];
 
@@ -36,6 +43,9 @@ export function AudienceUploadField({
   const [isDragging, setIsDragging] = useState(false);
   const [uploads, setUploads] = useState<UploadRow[]>([]);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [synthesizing, setSynthesizing] = useState(false);
+  const [preview, setPreview] = useState<SynthesisPreview | null>(null);
+  const [applying, setApplying] = useState(false);
 
   const refreshUploads = useCallback(() => {
     if (!artistId) return;
@@ -83,6 +93,29 @@ export function AudienceUploadField({
     setDeletingId(null);
     if (result.ok) {
       setUploads((prev) => prev.filter((u) => u.id !== upload.id));
+    } else {
+      setError(result.error);
+    }
+  }
+
+  async function handlePreviewSynthesis() {
+    if (!artistId) return;
+    setError(null);
+    setSynthesizing(true);
+    const result = await previewAudienceSynthesisAction(artistId);
+    setSynthesizing(false);
+    setPreview(result);
+  }
+
+  async function handleApplySynthesis() {
+    if (!artistId || !preview) return;
+    setApplying(true);
+    const result = await applyAudienceSynthesisAction(artistId, preview.rows);
+    setApplying(false);
+    if (result.ok) {
+      setMessage(`Merged into one dataset of ${result.count} statement${result.count === 1 ? "" : "s"}.`);
+      setPreview(null);
+      refreshUploads();
     } else {
       setError(result.error);
     }
@@ -208,12 +241,55 @@ export function AudienceUploadField({
         </ul>
       )}
 
+      {uploads.length > 1 && !preview && (
+        <button
+          type="button"
+          onClick={handlePreviewSynthesis}
+          disabled={synthesizing}
+          className="self-start rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-600 transition-colors duration-150 hover:border-neutral-400 hover:text-neutral-800 disabled:opacity-50 dark:border-white/15 dark:text-white/60 dark:hover:border-white/30 dark:hover:text-white/90"
+        >
+          {synthesizing ? "Comparing uploads…" : `Merge ${uploads.length} uploads into one`}
+        </button>
+      )}
+
+      {preview && (
+        <div className="flex flex-col gap-2 rounded-lg border border-builder-accent/30 bg-builder-accent/5 p-3 text-xs">
+          <p className="text-neutral-700 dark:text-white/80">
+            Combining every upload gives <strong>{preview.mergedCount}</strong> statement
+            {preview.mergedCount === 1 ? "" : "s"}
+            {preview.duplicatesRemoved > 0
+              ? ` — ${preview.duplicatesRemoved} duplicate${preview.duplicatesRemoved === 1 ? "" : "s"} removed from ${preview.originalCount} total.`
+              : ", no duplicates found."}
+          </p>
+          <p className="text-neutral-500 dark:text-white/50">
+            This replaces the {uploads.length} separate uploads above with one merged dataset.
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleApplySynthesis}
+              disabled={applying}
+              className="rounded-md bg-builder-accent px-3 py-1.5 font-medium text-black transition-opacity duration-150 hover:opacity-90 disabled:opacity-50"
+            >
+              {applying ? "Merging…" : "Use merged dataset"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setPreview(null)}
+              disabled={applying}
+              className="rounded-md px-3 py-1.5 font-medium text-neutral-500 transition-colors duration-150 hover:text-neutral-700 disabled:opacity-50 dark:text-white/50 dark:hover:text-white/80"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       <p className="text-xs text-neutral-400 dark:text-white/40">
-        A raw GWI crosstab export (Question/Name/Metric rows, one column per audience) is converted
-        automatically. A simpler flat spreadsheet works too — just needs columns recognizable as
-        &quot;statement&quot; and &quot;segment&quot; (or &quot;audience&quot;); universe/responses/column
-        %/row %/index are picked up if present. Each upload adds to the existing set rather than
-        replacing it.
+        A raw GWI crosstab export is converted automatically, and so is a simpler flat spreadsheet or
+        pretty much any other layout — column names don&apos;t need to match anything exact. Each
+        upload adds to the existing set rather than replacing it; once there&apos;s more than one,
+        &quot;Merge uploads into one&quot; above combines them into a single deduplicated dataset.
       </p>
     </div>
   );
