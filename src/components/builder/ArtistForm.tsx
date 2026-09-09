@@ -116,15 +116,6 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
   const [slugTouched, setSlugTouched] = useState(!!artist);
   const [audienceFile, setAudienceFile] = useState<File | null>(null);
   const [youtubeUrlInput, setYoutubeUrlInput] = useState("");
-  // Seeding the YouTube box from the name field (see handleNameChange) used
-  // to key off "is the box currently empty" — which re-fired on every
-  // keystroke in the name field for as long as the box stayed blank,
-  // including while someone was actively typing into the box itself (an
-  // empty box mid-typing looks identical to a never-touched one to that
-  // check). A ref that flips permanently true the moment the box is
-  // touched at all — by typing, or by focusing it — means the seed only
-  // ever applies once, before anyone's interacted with it.
-  const youtubeFieldTouchedRef = useRef(!!artist?.youtube_channel_id);
   const [isLookingUpYoutube, startYoutubeLookup] = useTransition();
   const [youtubeLookup, setYoutubeLookup] = useState<
     { status: "success"; channelTitle: string } | { status: "error"; error: string } | null
@@ -362,12 +353,6 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
   function handleNameChange(name: string) {
     update("name", name);
     if (!slugTouched) update("slug", slugify(name));
-    // Seeds the YouTube channel search box with the artist's name the
-    // moment it's typed, so that field reads as already populated rather
-    // than blank — but only until the box itself has been touched (see
-    // youtubeFieldTouchedRef), never overwriting something someone's
-    // actively typing or already picked there.
-    if (!youtubeFieldTouchedRef.current) setYoutubeUrlInput(name);
   }
 
   // Shared by both ways of resolving a channel (pasted link and search-modal
@@ -398,7 +383,6 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
   }
 
   function handleChannelQueryChange(next: string) {
-    youtubeFieldTouchedRef.current = true;
     setYoutubeUrlInput(next);
     setYoutubeLookup(null);
     if (channelSearchDebounceRef.current) window.clearTimeout(channelSearchDebounceRef.current);
@@ -597,9 +581,14 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
           // SiteWarmupOverlay) to show its own full-screen "loading every
           // page" screen before revealing the dashboard — that used to be a
           // phase of this same builder overlay, but moved to the site after
-          // it reportedly never showed up there for a real user.
+          // it reportedly never showed up there for a real user. `refresh=1`
+          // additionally has it re-run the same data sources "Refresh
+          // Everything" would before warming any page — a first-run fetch
+          // right after creation can come back thinner than a later retry
+          // (a still-indexing search result, a momentary rate limit), and
+          // this is what actually gets rid of needing that manual click.
           provisioningCompleteRef.current = () => {
-            if (newSiteTab) newSiteTab.location.href = `/s/${form.slug}?warming=1`;
+            if (newSiteTab) newSiteTab.location.href = `/s/${form.slug}?warming=1&refresh=1`;
             router.push(`/builder/artists/${result.id}`);
             setProvisioning(null);
           };
@@ -786,8 +775,8 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
               <input
                 value={youtubeUrlInput}
                 onChange={(e) => handleChannelQueryChange(e.target.value)}
+                autoComplete="off"
                 onFocus={() => {
-                  youtubeFieldTouchedRef.current = true;
                   if (channelResults.length > 0) setChannelDropdownOpen(true);
                 }}
                 onBlur={() => window.setTimeout(() => setChannelDropdownOpen(false), 150)}

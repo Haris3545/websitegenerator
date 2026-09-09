@@ -316,7 +316,13 @@ export default async function DashboardPage({
 
   return (
     <div>
-      <SiteWarmupOverlay slug={slug} enabledTabs={artist.enabled_tabs} />
+      <SiteWarmupOverlay
+        slug={slug}
+        enabledTabs={artist.enabled_tabs}
+        artistId={artist.id}
+        artistName={artist.name}
+        youtubeChannelId={artist.youtube_channel_id}
+      />
 
       <TabHeading
         artistId={artist.id}

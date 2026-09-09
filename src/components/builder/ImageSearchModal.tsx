@@ -125,6 +125,12 @@ export function ImageSearchModal({
           </button>
         </div>
 
+        <div className={`relative h-[3px] shrink-0 overflow-hidden ${dark ? "bg-white/10" : "bg-neutral-100 dark:bg-white/10"}`}>
+          {loading && (
+            <span className="absolute inset-y-0 left-0 block w-1/3 animate-indeterminate-bar rounded-full bg-builder-accent" />
+          )}
+        </div>
+
         <div
           className={`flex shrink-0 gap-2 border-b px-5 py-3 ${
             dark ? "border-white/10" : "border-neutral-200 dark:border-white/10"
@@ -163,20 +169,6 @@ export function ImageSearchModal({
             <p className={`text-sm ${dark ? "text-white/40" : "text-neutral-400 dark:text-white/40"}`}>
               {helperText}
             </p>
-          )}
-          {loading && (
-            <div className="flex flex-col items-center justify-center gap-3 py-16">
-              <span
-                className={`block h-6 w-6 animate-spin rounded-full border-2 ${
-                  dark
-                    ? "border-white/20 border-t-white/80"
-                    : "border-neutral-300 border-t-neutral-600 dark:border-white/20 dark:border-t-white/80"
-                }`}
-              />
-              <p className={`text-sm ${dark ? "text-white/40" : "text-neutral-400 dark:text-white/40"}`}>
-                Searching…
-              </p>
-            </div>
           )}
           {!loading && (
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
