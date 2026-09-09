@@ -213,6 +213,49 @@ export async function deleteArtist(id: string): Promise<{ ok: true } | { ok: fal
   return { ok: true };
 }
 
+/** Fetches the artists list board's own data directly, bypassing whatever
+ * combination of the Next.js data cache, full-route cache, and (mainly)
+ * the client-side router cache was serving a stale list on a soft
+ * navigation back to /builder/artists — a newly created or deleted artist
+ * not showing up until a hard reload. ArtistsBoard calls this itself on
+ * mount rather than trusting its initialArtists/initialFolders props to
+ * already be fresh, since a mounted client component's useState also
+ * doesn't pick up a later prop change on its own even when the server
+ * *does* re-render with new data — belt and suspenders against both
+ * layers at once. Mirrors the exact query in app/builder/(app)/artists/page.tsx. */
+export async function getArtistsBoardData(): Promise<
+  | {
+      ok: true;
+      artists: {
+        id: string;
+        name: string;
+        slug: string;
+        updated_at: string;
+        folder_id: string | null;
+        sort_order: number;
+        primary_color: string | null;
+        background_image_url: string | null;
+        theme_overrides: ThemeOverrides | null;
+      }[];
+      folders: { id: string; name: string; position: number }[];
+    }
+  | { ok: false; error: string }
+> {
+  const supabase = await createClient();
+  const [{ data: artists, error: artistsError }, { data: folders, error: foldersError }] = await Promise.all([
+    supabase
+      .from("artists")
+      .select(
+        "id, name, slug, updated_at, folder_id, sort_order, primary_color, background_image_url, theme_overrides"
+      )
+      .order("sort_order", { ascending: true }),
+    supabase.from("artist_folders").select("id, name, position").order("position", { ascending: true }),
+  ]);
+  if (artistsError) return { ok: false, error: artistsError.message };
+  if (foldersError) return { ok: false, error: foldersError.message };
+  return { ok: true, artists: artists ?? [], folders: folders ?? [] };
+}
+
 export async function publishArtist(artistId: string): Promise<PublishResult> {
   const result = await publishArtistSite(artistId);
   if (result.ok) {

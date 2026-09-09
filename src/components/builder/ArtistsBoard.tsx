@@ -9,6 +9,7 @@ import {
   deleteFolder,
   moveArtist,
   deleteArtist,
+  getArtistsBoardData,
 } from "@/app/builder/actions";
 import { DEFAULT_THEME_OVERRIDES, type ThemeOverrides } from "@/lib/theme";
 
@@ -143,6 +144,15 @@ export function ArtistsBoard({
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingDeletes, setPendingDeletes] = useState<{ artist: ArtistLite; timer: number }[]>([]);
+  // initialArtists/initialFolders can already be stale the moment this
+  // mounts (a soft navigation back to this page can reuse a cached RSC
+  // payload from before an artist was created/deleted elsewhere), and even
+  // a fresh server re-render wouldn't help on its own — this component's
+  // own useState only reads that prop once, at first mount, and never
+  // re-syncs from it. Re-fetching directly once mounted sidesteps both
+  // problems at once instead of chasing which cache layer is stale this
+  // time.
+  const [boardLoading, setBoardLoading] = useState(true);
 
   // The floating dragged thumbnail — null whenever nothing's being
   // dragged. Position/rotation update on every pointermove; the id is
@@ -176,6 +186,23 @@ export function ArtistsBoard({
   useEffect(() => {
     routerRef.current = router;
   }, [router]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getArtistsBoardData().then((result) => {
+      if (cancelled) return;
+      if (result.ok) {
+        setArtists(result.artists);
+        setFolders([...result.folders].sort((a, b) => a.position - b.position));
+      } else {
+        setError(result.error);
+      }
+      setBoardLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // The menu for every artist stays mounted at all times (see
   // data-artist-menu below) and animates purely via CSS classes, so it can
@@ -322,7 +349,7 @@ export function ArtistsBoard({
         if (last && last.id === ds.artist.id && now - last.time < DOUBLE_CLICK_MS) {
           lastClickRef.current = null;
           setMenuFor(null);
-          routerRef.current.push(`/s/${ds.artist.slug}`);
+          routerRef.current.push(`/s/${ds.artist.slug}?warming=1`);
           return;
         }
         lastClickRef.current = { id: ds.artist.id, time: now };
@@ -415,6 +442,15 @@ export function ArtistsBoard({
       const result = await deleteFolder(folder.id);
       if (!result.ok) setError(result.error);
     });
+  }
+
+  if (boardLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-24 text-sm text-neutral-400 dark:text-white/40">
+        <span className="block h-5 w-5 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-600 dark:border-white/20 dark:border-t-white/70" />
+        Loading projects…
+      </div>
+    );
   }
 
   const currentFolder = view.level === "folder" ? folders.find((f) => f.id === view.folderId) : null;
@@ -560,7 +596,7 @@ export function ArtistsBoard({
               }`}
             >
               <Link
-                href={`/s/${artist.slug}`}
+                href={`/s/${artist.slug}?warming=1`}
                 className="block px-3 py-2 text-left text-sm font-medium hover:bg-neutral-50 dark:hover:bg-white/5"
                 style={{ color: "#75ba75" }}
               >

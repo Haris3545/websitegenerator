@@ -50,26 +50,24 @@ function WarmupRun({ slug, enabledTabs }: { slug: string; enabledTabs: TabKey[] 
     const interval = setInterval(() => setElapsedMs(performance.now() - start), 200);
 
     async function run() {
-      // Fired all at once — every enabled tab's route lambda gets a chance
-      // to cold-start concurrently, rather than queued one after another,
-      // and this is the FIRST real hit any of them have taken (the person
-      // creating the artist is looking at this very page right now), so
-      // there's nothing stale about the data these requests will read.
-      await Promise.all(
-        tabs.map(async (key) => {
-          setStatuses((prev) => ({ ...prev, [key]: "running" }));
-          const tab = TABS_BY_KEY[key];
-          const url = `${window.location.origin}/s/${slug}${tab.path ? `/${tab.path}` : ""}`;
-          try {
-            const res = await fetch(url, { cache: "no-store" });
-            if (cancelled) return;
-            setStatuses((prev) => ({ ...prev, [key]: res.ok ? "done" : "error" }));
-          } catch {
-            if (cancelled) return;
-            setStatuses((prev) => ({ ...prev, [key]: "error" }));
-          }
-        })
-      );
+      // One at a time, deliberately — each tab's page is only marked done
+      // once its own request has actually resolved, so the checklist always
+      // reflects a real, completed load of that exact page rather than a
+      // burst of requests that all happen to land around the same time.
+      for (const key of tabs) {
+        if (cancelled) return;
+        setStatuses((prev) => ({ ...prev, [key]: "running" }));
+        const tab = TABS_BY_KEY[key];
+        const url = `${window.location.origin}/s/${slug}${tab.path ? `/${tab.path}` : ""}`;
+        try {
+          const res = await fetch(url, { cache: "no-store" });
+          if (cancelled) return;
+          setStatuses((prev) => ({ ...prev, [key]: res.ok ? "done" : "error" }));
+        } catch {
+          if (cancelled) return;
+          setStatuses((prev) => ({ ...prev, [key]: "error" }));
+        }
+      }
       if (cancelled) return;
       clearInterval(interval);
       setDone(true);
