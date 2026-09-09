@@ -542,52 +542,68 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
     }
 
     startTransition(async () => {
-      const result = await queueUpsert(form);
-      if (!result.ok) {
-        setFormError(result.error);
-        newSiteTab?.close();
-        return;
-      }
-      setSavedArtistId(result.id);
+      // Everything below talks to a server action over the network — a
+      // dropped connection or a timeout throws rather than resolving to
+      // `{ ok: false }`, and without this try/catch that exception had
+      // nowhere to go: it became an unhandled rejection with no form error,
+      // no overlay, and the popup tab left stuck on "Preparing the
+      // dashboard…" forever, silently, even though the artist row itself
+      // may already have been written.
+      try {
+        const result = await queueUpsert(form);
+        if (!result.ok) {
+          setFormError(result.error);
+          newSiteTab?.close();
+          return;
+        }
+        setSavedArtistId(result.id);
 
-      // A brand-new artist doesn't have a row to attach an audience upload
-      // to until upsertArtist just created one — run that deferred step
-      // now, using the id it just returned.
-      if (isNew) {
-        if (audienceFile) {
-          const formData = new FormData();
-          formData.append("file", audienceFile);
-          const audienceResult = await uploadAudienceResearch(result.id, formData);
-          if (!audienceResult.ok) {
-            setFormError(
-              `Artist created, but importing the audience file failed: ${audienceResult.error}`
-            );
-            newSiteTab?.close();
-            return;
+        // A brand-new artist doesn't have a row to attach an audience upload
+        // to until upsertArtist just created one — run that deferred step
+        // now, using the id it just returned.
+        if (isNew) {
+          if (audienceFile) {
+            const formData = new FormData();
+            formData.append("file", audienceFile);
+            const audienceResult = await uploadAudienceResearch(result.id, formData);
+            if (!audienceResult.ok) {
+              setFormError(
+                `Artist created, but importing the audience file failed: ${audienceResult.error}`
+              );
+              newSiteTab?.close();
+              return;
+            }
           }
+
+          // Rather than dropping a visitor straight onto a live site that
+          // still has to lazily fetch every source (and previously required
+          // a manual "Refresh Everything" click to actually fill in), a
+          // brand-new artist's data gets fetched eagerly right now, with
+          // visible per-step progress — see ProvisioningOverlay.tsx.
+          provisioningCompleteRef.current = () => {
+            if (newSiteTab) newSiteTab.location.href = `/s/${form.slug}`;
+            router.push(`/builder/artists/${result.id}`);
+            setProvisioning(null);
+          };
+          setProvisioning({
+            artistId: result.id,
+            slug: form.slug,
+            artistName: form.name,
+            youtubeChannelId: form.youtube_channel_id,
+            enabledTabs: form.enabled_tabs,
+          });
+          return;
         }
 
-        // Rather than dropping a visitor straight onto a live site that
-        // still has to lazily fetch every source (and previously required
-        // a manual "Refresh Everything" click to actually fill in), a
-        // brand-new artist's data gets fetched eagerly right now, with
-        // visible per-step progress — see ProvisioningOverlay.tsx.
-        provisioningCompleteRef.current = () => {
-          if (newSiteTab) newSiteTab.location.href = `/s/${form.slug}`;
-          router.push(`/builder/artists/${result.id}`);
-          setProvisioning(null);
-        };
-        setProvisioning({
-          artistId: result.id,
-          slug: form.slug,
-          artistName: form.name,
-          youtubeChannelId: form.youtube_channel_id,
-          enabledTabs: form.enabled_tabs,
-        });
-        return;
+        router.push("/builder/artists");
+      } catch (err) {
+        setFormError(
+          `The artist was saved, but something went wrong right after: ${
+            err instanceof Error ? err.message : "an unexpected error occurred"
+          }. Refresh the artists list to check whether it's there, then try again.`
+        );
+        newSiteTab?.close();
       }
-
-      router.push("/builder/artists");
     });
   }
 
