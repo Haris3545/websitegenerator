@@ -155,12 +155,19 @@ export function ArtistsBoard({
   const [boardLoading, setBoardLoading] = useState(true);
 
   // The floating dragged thumbnail — null whenever nothing's being
-  // dragged. Position/rotation update on every pointermove; the id is
-  // what actually drives which real icon renders dimmed in its place.
+  // dragged. Only *which* artist is being dragged lives in React state
+  // (read below to dim the real icon in its place); position and rotation
+  // used to be state too, set from every single pointermove — on a large
+  // board that meant a full re-render of this whole component, using
+  // layout-triggering left/top, on every pixel of mouse movement with no
+  // throttling at all, which is what actually made dragging feel laggy.
+  // They're now written straight to the DOM (see dragThumbOuterRef/
+  // dragThumbInnerRef below), batched to one update per animation frame.
   const [draggedArtist, setDraggedArtist] = useState<ArtistLite | null>(null);
-  const [dragPos, setDragPos] = useState({ x: 0, y: 0 });
-  const [dragRotation, setDragRotation] = useState(0);
-  const [dragGrab, setDragGrab] = useState({ dx: 0, dy: 0 });
+  const dragThumbOuterRef = useRef<HTMLDivElement | null>(null);
+  const dragThumbInnerRef = useRef<HTMLDivElement | null>(null);
+  const pendingMoveRef = useRef<{ x: number; y: number; rotation: number } | null>(null);
+  const dragRafRef = useRef<number | null>(null);
 
   const dragRef = useRef<{
     artist: ArtistLite;
@@ -308,6 +315,37 @@ export function ArtistsBoard({
   // attributes) so it subscribes exactly once rather than on every
   // dropTarget/artists change during a drag.
   useEffect(() => {
+    // Applies the latest pending pointer position/rotation (and re-checks
+    // the drop zone underneath it) at most once per animation frame,
+    // however many raw pointermove events landed since the last one —
+    // some mice/trackpads fire well above 60Hz, and updating the DOM (or
+    // React state) at that rate bought nothing visually while costing a
+    // full layout+render each time.
+    function flushDragFrame() {
+      dragRafRef.current = null;
+      const ds = dragRef.current;
+      const pending = pendingMoveRef.current;
+      if (!ds || !pending) return;
+
+      if (dragThumbOuterRef.current) {
+        dragThumbOuterRef.current.style.transform = `translate3d(${pending.x - ds.grabDx}px, ${pending.y - ds.grabDy}px, 0)`;
+      }
+      if (dragThumbInnerRef.current) {
+        dragThumbInnerRef.current.style.transform = `rotate(${pending.rotation}deg) scale(1.08)`;
+      }
+
+      // elementFromPoint forces a synchronous layout — throttling it to
+      // once per frame (rather than once per raw event) is the other half
+      // of what made this laggy.
+      const el = document.elementFromPoint(pending.x, pending.y);
+      const zone = el?.closest<HTMLElement>("[data-drop-zone]")?.dataset.dropZone ?? null;
+      const resolved = zone && zone !== `artist:${ds.artist.id}` ? zone : null;
+      if (resolved !== dropTargetRef.current) {
+        dropTargetRef.current = resolved;
+        setDropTarget(resolved);
+      }
+    }
+
     function onMove(e: PointerEvent) {
       const ds = dragRef.current;
       if (!ds) return;
@@ -318,7 +356,6 @@ export function ArtistsBoard({
         if (Math.hypot(dx, dy) < DRAG_MOVE_THRESHOLD) return;
         ds.moved = true;
         setDraggedArtist(ds.artist);
-        setDragGrab({ dx: ds.grabDx, dy: ds.grabDy });
       }
 
       const now = performance.now();
@@ -328,19 +365,20 @@ export function ArtistsBoard({
       ds.lastT = now;
 
       const targetRotation = Math.max(-MAX_SWAY_DEG, Math.min(MAX_SWAY_DEG, vx * SWAY_SENSITIVITY));
-      setDragRotation(targetRotation);
-      setDragPos({ x: e.clientX, y: e.clientY });
-
-      const el = document.elementFromPoint(e.clientX, e.clientY);
-      const zone = el?.closest<HTMLElement>("[data-drop-zone]")?.dataset.dropZone ?? null;
-      const resolved = zone && zone !== `artist:${ds.artist.id}` ? zone : null;
-      dropTargetRef.current = resolved;
-      setDropTarget(resolved);
+      pendingMoveRef.current = { x: e.clientX, y: e.clientY, rotation: targetRotation };
+      if (dragRafRef.current === null) {
+        dragRafRef.current = requestAnimationFrame(flushDragFrame);
+      }
     }
 
     function onUp() {
       const ds = dragRef.current;
       dragRef.current = null;
+      if (dragRafRef.current !== null) {
+        cancelAnimationFrame(dragRafRef.current);
+        dragRafRef.current = null;
+      }
+      pendingMoveRef.current = null;
       if (!ds) return;
 
       if (!ds.moved) {
@@ -377,7 +415,6 @@ export function ArtistsBoard({
       }
 
       setDraggedArtist(null);
-      setDragRotation(0);
       setDropTarget(null);
       dropTargetRef.current = null;
     }
@@ -627,21 +664,36 @@ export function ArtistsBoard({
       </div>
 
       {draggedArtist && (
+        // Position (outer) and rotation (inner) are two separate elements
+        // on purpose: position is written every frame with no transition,
+        // so it tracks the pointer 1:1 with zero lag, while rotation eases
+        // toward its target over 150ms for the swinging-thumbnail feel —
+        // putting both transforms on one element would force the CSS
+        // transition to fight the instant position writes every frame.
         <div
-          className="pointer-events-none fixed z-50"
-          style={{
-            left: dragPos.x - dragGrab.dx,
-            top: dragPos.y - dragGrab.dy,
-            transform: `rotate(${dragRotation}deg) scale(1.08)`,
-            transition: "transform 150ms cubic-bezier(0.34, 1.2, 0.64, 1)",
+          ref={(el) => {
+            dragThumbOuterRef.current = el;
+            const ds = dragRef.current;
+            if (el && ds) {
+              el.style.transform = `translate3d(${ds.startX - ds.grabDx}px, ${ds.startY - ds.grabDy}px, 0)`;
+            }
           }}
+          className="pointer-events-none fixed left-0 top-0 z-50 will-change-transform"
         >
-          <SiteGlyph
-            color={draggedArtist.primary_color || "#eab308"}
-            imageUrl={draggedArtist.background_image_url ?? undefined}
-            themeOverrides={draggedArtist.theme_overrides}
-            className="h-14 w-24 shadow-2xl shadow-black/40"
-          />
+          <div
+            ref={dragThumbInnerRef}
+            style={{
+              transform: "rotate(0deg) scale(1.08)",
+              transition: "transform 150ms cubic-bezier(0.34, 1.2, 0.64, 1)",
+            }}
+          >
+            <SiteGlyph
+              color={draggedArtist.primary_color || "#eab308"}
+              imageUrl={draggedArtist.background_image_url ?? undefined}
+              themeOverrides={draggedArtist.theme_overrides}
+              className="h-14 w-24 shadow-2xl shadow-black/40"
+            />
+          </div>
         </div>
       )}
 
