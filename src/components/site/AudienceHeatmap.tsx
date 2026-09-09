@@ -7,6 +7,7 @@ import { classifyStatement, sortCategoryNames, OTHER_CATEGORY } from "@/lib/audi
 
 type Statement = Database["public"]["Tables"]["audience_statements"]["Row"];
 type Metric = "index_value" | "column_pct" | "row_pct" | "responses";
+type SortMode = "category" | "highest" | "lowest";
 
 const METRICS: { key: Metric; label: string }[] = [
   { key: "index_value", label: "Index" },
@@ -15,44 +16,107 @@ const METRICS: { key: Metric; label: string }[] = [
   { key: "responses", label: "Responses" },
 ];
 
+const SORT_MODES: { key: SortMode; label: string }[] = [
+  { key: "category", label: "Category" },
+  { key: "highest", label: "Highest first" },
+  { key: "lowest", label: "Lowest first" },
+];
+
 interface HeatmapRow {
   statement: string;
   category: string;
   bySegment: Map<string, Statement>;
 }
 
-/** Diverging scale centred on an index of 100 (the "no more or less likely
- * than the general population" baseline) — blue below it, orange above.
- * Lightness is capped at both ends so white cell text stays legible even at
- * the most extreme index values in a given upload. */
-function indexToBackground(index: number): string {
-  const t = Math.max(-1, Math.min(1, (index - 100) / 100));
-  const cold: [number, number, number] = [59, 130, 246];
-  const warm: [number, number, number] = [242, 102, 29];
-  const mid: [number, number, number] = [255, 255, 255];
-  const target = t < 0 ? cold : warm;
-  const k = 0.16 + Math.abs(t) * 0.5;
-  const rgb = target.map((v, i) => Math.round(mid[i] + (v - mid[i]) * k));
-  return `rgb(${rgb.join(",")})`;
+function formatValue(v: number, metric: Metric): string {
+  if (metric === "column_pct" || metric === "row_pct") return `${v}%`;
+  return String(v);
 }
 
 function formatMetric(row: Statement, metric: Metric): string {
-  if (metric === "column_pct" || metric === "row_pct") {
-    const v = row[metric];
-    return v == null ? "—" : `${v}%`;
-  }
   const v = row[metric];
-  return v == null ? "—" : String(v);
+  return v == null ? "—" : formatValue(v, metric);
+}
+
+/** Blue at the low end of whatever's currently being shown, red at the high
+ * end, blending through white in between — driven by the selected metric's
+ * own min/max in this upload (not a fixed reference point), so it reads
+ * correctly whichever of the four metrics is on screen. Lightness is capped
+ * at both ends so the black cell text stays legible even at the most
+ * extreme values. */
+function metricToBackground(value: number, min: number, max: number): string {
+  const range = max - min;
+  const t = range > 0 ? ((value - min) / range) * 2 - 1 : 0;
+  const clamped = Math.max(-1, Math.min(1, t));
+  const cold: [number, number, number] = [59, 130, 246];
+  const hot: [number, number, number] = [220, 38, 38];
+  const mid: [number, number, number] = [255, 255, 255];
+  const target = clamped < 0 ? cold : hot;
+  const k = 0.16 + Math.abs(clamped) * 0.5;
+  const rgb = target.map((v2, i) => Math.round(mid[i] + (v2 - mid[i]) * k));
+  return `rgb(${rgb.join(",")})`;
+}
+
+/** A statement is "hot" for a sort if any of its segments is — the highest
+ * single value across the row's cells, not an average that would wash out
+ * one segment strongly over/under-indexing while others sit near neutral. */
+function rowSortValue(row: HeatmapRow, metric: Metric): number {
+  let best: number | null = null;
+  for (const cell of row.bySegment.values()) {
+    const v = cell[metric];
+    if (v == null) continue;
+    if (best === null || v > best) best = v;
+  }
+  return best ?? -Infinity;
+}
+
+function categoryAnchorId(name: string): string {
+  return "audience-cat-" + name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 }
 
 export function AudienceHeatmap({ statements }: { statements: Statement[] }) {
   const [view, setView] = useState<"heatmap" | "table">("heatmap");
   const [metric, setMetric] = useState<Metric>("index_value");
+  const [sortMode, setSortMode] = useState<SortMode>("category");
   const [tooltip, setTooltip] = useState<{ x: number; y: number; row: Statement } | null>(null);
 
   const segments = useMemo(() => Array.from(new Set(statements.map((s) => s.segment))).sort(), [statements]);
 
-  const categories = useMemo(() => {
+  // Clipped to a percentile rather than the true min/max — GWI statements
+  // with a tiny base size can swing to an extreme index (a handful of
+  // respondents pushing it to 500+) that would otherwise squash every
+  // ordinary value into one end of the scale. Values past the clip still
+  // render at full-strength blue/red (metricToBackground clamps), they
+  // just stop stretching the scale further once they're clearly already
+  // an extreme.
+  //
+  // Index gets its own case: 100 is a real, meaningful reference point (as
+  // likely as the general population to agree with a statement), not just
+  // this dataset's midpoint, so it stays anchored at the centre of the
+  // scale — the spread on either side comes from the 95th percentile of
+  // how far values actually stray from it — rather than sliding wherever
+  // this particular upload's min/max happen to fall.
+  const metricRange = useMemo(() => {
+    const values = statements
+      .map((s) => s[metric])
+      .filter((v): v is number => v != null)
+      .sort((a, b) => a - b);
+    if (!values.length) return { min: 0, max: 1 };
+    const at = (sorted: number[], p: number) =>
+      sorted[Math.min(sorted.length - 1, Math.max(0, Math.round((sorted.length - 1) * p)))];
+
+    if (metric === "index_value") {
+      const deviations = values.map((v) => Math.abs(v - 100)).sort((a, b) => a - b);
+      const spread = at(deviations, 0.95) || 1;
+      return { min: 100 - spread, max: 100 + spread };
+    }
+
+    const min = at(values, 0.05);
+    const max = at(values, 0.95);
+    return min < max ? { min, max } : { min: values[0], max: values[values.length - 1] };
+  }, [statements, metric]);
+
+  const allRows = useMemo(() => {
     const rowsByKey = new Map<string, HeatmapRow>();
     for (const s of statements) {
       const category = classifyStatement(s.category, s.statement);
@@ -64,9 +128,12 @@ export function AudienceHeatmap({ statements }: { statements: Statement[] }) {
       }
       row.bySegment.set(s.segment, s);
     }
+    return [...rowsByKey.values()];
+  }, [statements]);
 
+  const categories = useMemo(() => {
     const byCategory = new Map<string, HeatmapRow[]>();
-    for (const row of rowsByKey.values()) {
+    for (const row of allRows) {
       const list = byCategory.get(row.category) ?? [];
       list.push(row);
       byCategory.set(row.category, list);
@@ -74,15 +141,81 @@ export function AudienceHeatmap({ statements }: { statements: Statement[] }) {
     for (const list of byCategory.values()) {
       list.sort((a, b) => a.statement.localeCompare(b.statement));
     }
-
     return sortCategoryNames([...byCategory.keys()]).map((name) => ({
       name,
       rows: byCategory.get(name)!,
     }));
-  }, [statements]);
+  }, [allRows]);
+
+  const rankedRows = useMemo(() => {
+    if (sortMode === "category") return null;
+    const list = [...allRows];
+    list.sort((a, b) => {
+      const av = rowSortValue(a, metric);
+      const bv = rowSortValue(b, metric);
+      return sortMode === "highest" ? bv - av : av - bv;
+    });
+    return list;
+  }, [allRows, sortMode, metric]);
 
   function showTooltip(e: React.MouseEvent, row: Statement) {
     setTooltip({ x: e.clientX, y: e.clientY, row });
+  }
+
+  function scrollToCategory(name: string) {
+    document.getElementById(categoryAnchorId(name))?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function renderRow(row: HeatmapRow, showCategory: boolean) {
+    return (
+      <tr key={`${row.category}-${row.statement}`}>
+        <td className="px-3 py-1.5 align-middle text-white/70">
+          {/* Wraps instead of truncating — a fixed max-width on the td
+              itself is enough to keep the column from ballooning around one
+              long statement, and a table cell in auto-layout respects
+              max-width fine for wrapping (unlike the ellipsis+nowrap
+              combination this used before, which needed the width on an
+              inner element instead — see git history). */}
+          <span className="block max-w-[320px] whitespace-normal break-words leading-snug">{row.statement}</span>
+          {showCategory && <span className="mt-0.5 block text-[10px] text-white/30">{row.category}</span>}
+        </td>
+        {segments.map((seg) => {
+          const cell = row.bySegment.get(seg);
+          if (!cell) {
+            return (
+              <td key={seg} className="px-1.5 py-1 text-center align-middle">
+                <span className="block rounded-lg bg-white/[0.03] py-2 text-xs text-white/20">—</span>
+              </td>
+            );
+          }
+          const rawValue = cell[metric];
+          return (
+            <td key={seg} className="px-1.5 py-1 text-center align-middle">
+              <span
+                role="button"
+                tabIndex={0}
+                onMouseEnter={(e) => showTooltip(e, cell)}
+                onMouseMove={(e) => showTooltip(e, cell)}
+                onMouseLeave={() => setTooltip(null)}
+                onFocus={(e) =>
+                  setTooltip({ x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().top, row: cell })
+                }
+                onBlur={() => setTooltip(null)}
+                className="block cursor-default rounded-lg py-2 font-mono text-xs font-semibold tabular-nums text-black/80 outline-none transition-shadow duration-150 ease-out focus-visible:ring-2 focus-visible:ring-white/60 [@media(hover:hover)]:hover:ring-2 [@media(hover:hover)]:hover:ring-white/50"
+                style={{
+                  backgroundColor:
+                    rawValue == null
+                      ? metricToBackground((metricRange.min + metricRange.max) / 2, metricRange.min, metricRange.max)
+                      : metricToBackground(rawValue, metricRange.min, metricRange.max),
+                }}
+              >
+                {formatMetric(cell, metric)}
+              </span>
+            </td>
+          );
+        })}
+      </tr>
+    );
   }
 
   if (view === "table") {
@@ -100,12 +233,12 @@ export function AudienceHeatmap({ statements }: { statements: Statement[] }) {
         <ViewToggle view={view} onChange={setView} />
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2 text-xs text-white/40">
-            <span>Under-index</span>
+            <span>{formatValue(metricRange.min, metric)}</span>
             <span
               className="h-2 w-24 rounded-full"
-              style={{ background: "linear-gradient(90deg, rgb(59,130,246), rgba(255,255,255,0.15) 50%, rgb(242,102,29))" }}
+              style={{ background: "linear-gradient(90deg, rgb(59,130,246), rgba(255,255,255,0.15) 50%, rgb(220,38,38))" }}
             />
-            <span>Over-index</span>
+            <span>{formatValue(metricRange.max, metric)}</span>
           </div>
           <div className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] p-1">
             {METRICS.map((m) => (
@@ -122,6 +255,42 @@ export function AudienceHeatmap({ statements }: { statements: Statement[] }) {
             ))}
           </div>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-1.5 text-xs text-white/40">
+          <span className="uppercase tracking-wide">Sort</span>
+          <div className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] p-1">
+            {SORT_MODES.map((s) => (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => setSortMode(s.key)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors duration-150 ${
+                  sortMode === s.key ? "bg-[var(--accent)] text-black" : "text-white/50 hover:text-white/80"
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {sortMode === "category" && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs uppercase tracking-wide text-white/40">Jump to</span>
+            {categories.map((cat) => (
+              <button
+                key={cat.name}
+                type="button"
+                onClick={() => scrollToCategory(cat.name)}
+                className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[11px] text-white/50 transition-colors duration-150 hover:border-white/20 hover:text-white/80"
+              >
+                {cat.name === OTHER_CATEGORY ? "Other" : cat.name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div
@@ -144,61 +313,21 @@ export function AudienceHeatmap({ statements }: { statements: Statement[] }) {
             </tr>
           </thead>
           <tbody>
-            {categories.map((cat, i) => (
-              <Fragment key={cat.name}>
-                <tr>
-                  <td
-                    colSpan={segments.length + 1}
-                    className={`px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--accent)] ${i === 0 ? "pt-1" : "pt-6"}`}
-                  >
-                    {cat.name === OTHER_CATEGORY ? "Other statements" : cat.name}
-                  </td>
-                </tr>
-                {cat.rows.map((row) => (
-                  <tr key={`${cat.name}-${row.statement}`}>
-                    <td className="px-3 py-1 align-middle text-white/70">
-                      {/* A fixed width (not max-width) on the inner span, rather than
-                          `truncate` on the td itself, since a td in an auto-layout table
-                          doesn't reliably enforce a max-width — the column just grows to
-                          fit the text instead, which was pushing every row after a long
-                          statement into the next category's header. */}
-                      <span className="block w-[260px] overflow-hidden text-ellipsis whitespace-nowrap" title={row.statement}>
-                        {row.statement}
-                      </span>
-                    </td>
-                    {segments.map((seg) => {
-                      const cell = row.bySegment.get(seg);
-                      if (!cell) {
-                        return (
-                          <td key={seg} className="px-1.5 py-1 text-center align-middle">
-                            <span className="block rounded-lg bg-white/[0.03] py-2 text-xs text-white/20">—</span>
-                          </td>
-                        );
-                      }
-                      return (
-                        <td key={seg} className="px-1.5 py-1 text-center align-middle">
-                          <span
-                            role="button"
-                            tabIndex={0}
-                            onMouseEnter={(e) => showTooltip(e, cell)}
-                            onMouseMove={(e) => showTooltip(e, cell)}
-                            onMouseLeave={() => setTooltip(null)}
-                            onFocus={(e) =>
-                              setTooltip({ x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().top, row: cell })
-                            }
-                            onBlur={() => setTooltip(null)}
-                            className="block cursor-default rounded-lg py-2 font-mono text-xs font-semibold tabular-nums text-black/80 outline-none transition-shadow duration-150 ease-out focus-visible:ring-2 focus-visible:ring-white/60 [@media(hover:hover)]:hover:ring-2 [@media(hover:hover)]:hover:ring-white/50"
-                            style={{ backgroundColor: indexToBackground(cell.index_value ?? 100) }}
-                          >
-                            {formatMetric(cell, metric)}
-                          </span>
-                        </td>
-                      );
-                    })}
-                  </tr>
+            {rankedRows
+              ? rankedRows.map((row) => renderRow(row, true))
+              : categories.map((cat, i) => (
+                  <Fragment key={cat.name}>
+                    <tr id={categoryAnchorId(cat.name)}>
+                      <td
+                        colSpan={segments.length + 1}
+                        className={`px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--accent)] ${i === 0 ? "pt-1" : "pt-6"}`}
+                      >
+                        {cat.name === OTHER_CATEGORY ? "Other statements" : cat.name}
+                      </td>
+                    </tr>
+                    {cat.rows.map((row) => renderRow(row, false))}
+                  </Fragment>
                 ))}
-              </Fragment>
-            ))}
           </tbody>
         </table>
       </div>
