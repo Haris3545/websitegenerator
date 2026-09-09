@@ -206,7 +206,7 @@ export function TourGlobe({
           ref={globeRef}
           width={width}
           height={height}
-          globeImageUrl="/globe/earth-vivid.jpg"
+          globeImageUrl="/globe/earth-osm.jpg"
           backgroundColor="rgba(0,0,0,0)"
           showAtmosphere
           atmosphereColor={atmosphereGlowColor}

@@ -95,6 +95,25 @@ function pinIcon(color: string, justAdded: boolean): L.DivIcon {
   });
 }
 
+// A teardrop pin (rather than the plain filled circle above) for tour/
+// concert dates — these come from artist_events, not something a visitor
+// placed, so they read as a distinct kind of marker at a glance rather than
+// looking like just another custom pin. Anchored at its point (bottom
+// centre), unlike the circle icon's centre anchor.
+function tourPinIcon(): L.DivIcon {
+  return L.divIcon({
+    className: "",
+    html:
+      '<svg viewBox="0 0 24 24" width="26" height="26" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5));">' +
+      '<path d="M12 22s-7.5-6.6-7.5-12.5A7.5 7.5 0 0 1 19.5 9.5C19.5 15.4 12 22 12 22Z" fill="var(--accent)" stroke="white" stroke-width="1.2"/>' +
+      '<circle cx="12" cy="9.5" r="2.6" fill="white"/>' +
+      "</svg>",
+    iconSize: [26, 26],
+    iconAnchor: [13, 24],
+    popupAnchor: [0, -22],
+  });
+}
+
 function ColorSwatchRow({ value, onChange }: { value: string; onChange: (c: string) => void }) {
   return (
     <div className="flex flex-wrap gap-2">
@@ -255,6 +274,7 @@ function LocationPinMapInner({
   const mapDivRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
+  const tourMarkersRef = useRef<L.Marker[]>([]);
   const placingRef = useRef(placing);
   useEffect(() => {
     placingRef.current = placing;
@@ -350,6 +370,34 @@ function LocationPinMapInner({
     }
     lastAddedIdRef.current = null;
   }, [pins, activeTagIds, slug, triggerPoof]);
+
+  // Tour/concert dates get their own marker layer on the flat map itself
+  // (not just the corner globe, which was the only place these ever showed
+  // before) — a distinct teardrop icon (see tourPinIcon) rather than the
+  // plain circle custom pins use, since these come from artist_events, not
+  // something a visitor placed, and aren't affected by the pin-tag filter
+  // above (tour dates aren't taggable).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    for (const marker of tourMarkersRef.current) marker.remove();
+    tourMarkersRef.current = tourPoints.map((point) => {
+      const marker = L.marker([point.lat, point.lng], { icon: tourPinIcon() });
+      // A plain element with textContent (not an HTML string passed to
+      // bindPopup) — point.label is built from an event's venue/city/
+      // country, which a manually-added event lets the builder type
+      // freely, so this can't be treated as trusted markup on a page every
+      // site visitor sees.
+      marker.bindPopup(() => {
+        const el = document.createElement("p");
+        el.style.cssText = "margin:0;font-weight:600;font-size:13px;";
+        el.textContent = point.label;
+        return el;
+      });
+      marker.addTo(map);
+      return marker;
+    });
+  }, [tourPoints]);
 
   function flyToCity(city: { lat: number; lng: number }) {
     mapRef.current?.flyTo([city.lat, city.lng], 11, { duration: 0.8 });

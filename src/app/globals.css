@@ -332,17 +332,20 @@ body {
 }
 
 /* This used to push CartoDB Voyager's fairly muted, pale palette toward the
-   3D globe's vivid blue-sea/green-land look with a heavy saturate/hue-
-   rotate/contrast filter. Now that the tile source is plain OpenStreetMap
-   (see LocationPinMap.tsx) — a already fairly saturated, differently-hued
-   palette to begin with (its own blues, greens, oranges) — that same filter
-   would overshoot badly (a 45deg hue-rotate lands its orange roads and blue
-   water somewhere else entirely) rather than gently nudge it. Left
-   unfiltered: OSM's default style is legible and reasonably colourful on
-   its own, and this project has no reliable way to preview real tile
-   pixels to re-tune a filter against (the OSM tile CDN isn't reachable from
-   this environment's own network policy) — better to ship the source's own
-   verified-fine default than an unverified, likely-distorted guess. */
+   3D globe's old vivid blue-sea/green-land look with a heavy saturate/hue-
+   rotate/contrast filter. The tile source is now plain OpenStreetMap (see
+   LocationPinMap.tsx) — already fairly saturated and differently-hued to
+   begin with (its own blues, greens, oranges) — so that same filter would
+   overshoot badly (a 45deg hue-rotate lands its orange roads and blue water
+   somewhere else entirely) rather than gently nudge it, and the globe's own
+   texture was recoloured to OSM's palette instead of the other way around
+   (see public/globe/earth-osm.jpg and TourGlobe.tsx) — the two now match
+   without either needing a runtime filter. Left unfiltered here: OSM's
+   default style is legible and reasonably colourful on its own, and this
+   project has no reliable way to preview real tile pixels to re-tune a
+   filter against (the OSM tile CDN isn't reachable from this environment's
+   own network policy) — better to ship the source's own verified-fine
+   default than an unverified, likely-distorted guess. */
 
 /* Leaflet's default zoom control renders flat white squares with a hairline
    grey border, which reads as a stock browser widget against the rest of
