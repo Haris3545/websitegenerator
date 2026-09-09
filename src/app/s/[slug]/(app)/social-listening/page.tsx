@@ -19,11 +19,24 @@ export default async function SocialListeningPage({
   const artist = await getSiteArtist(slug);
 
   const supabase = createServiceRoleClient();
-  let { data: row, error: rowError } = await supabase
-    .from("conversation_themes")
-    .select("themes, word_cloud, computed_at")
-    .eq("artist_id", artist.id)
-    .maybeSingle();
+  // Independent tables, so fetch both up front instead of one after the
+  // other — each one's own fallback/refresh logic still runs separately
+  // below since those genuinely do depend on what came back.
+  let [
+    { data: row, error: rowError },
+    { data: searchTrendsRow },
+  ] = await Promise.all([
+    supabase
+      .from("conversation_themes")
+      .select("themes, word_cloud, computed_at")
+      .eq("artist_id", artist.id)
+      .maybeSingle(),
+    supabase
+      .from("search_trends")
+      .select("points, computed_at")
+      .eq("artist_id", artist.id)
+      .maybeSingle(),
+  ]);
 
   if (!row?.computed_at && !rowError) {
     try {
@@ -39,12 +52,6 @@ export default async function SocialListeningPage({
   } else if (!rowError) {
     after(() => refreshConversationThemesIfStale(artist.id, artist.name));
   }
-
-  let { data: searchTrendsRow } = await supabase
-    .from("search_trends")
-    .select("points, computed_at")
-    .eq("artist_id", artist.id)
-    .maybeSingle();
 
   if (!searchTrendsRow?.computed_at) {
     try {

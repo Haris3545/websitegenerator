@@ -29,11 +29,21 @@ export default async function MediaPage({ params }: { params: Promise<{ slug: st
     after(() => refreshSentimentIfStale(artist.id, artist.name));
   }
 
-  let { data: articles } = await supabase
-    .from("media_articles")
-    .select("*")
-    .eq("artist_id", artist.id)
-    .order("published_at", { ascending: false });
+  // Run independently — neither query's outcome depends on the other, so
+  // there's no reason to pay for two sequential round trips when one
+  // concurrent pair does the same job.
+  let [{ data: articles }, { data: insightsRow }] = await Promise.all([
+    supabase
+      .from("media_articles")
+      .select("*")
+      .eq("artist_id", artist.id)
+      .order("published_at", { ascending: false }),
+    supabase
+      .from("artist_insights")
+      .select("insights, computed_at")
+      .eq("artist_id", artist.id)
+      .maybeSingle(),
+  ]);
 
   if (!articles?.length) {
     try {
@@ -47,12 +57,6 @@ export default async function MediaPage({ params }: { params: Promise<{ slug: st
       console.error(`Initial media fetch failed for ${slug}:`, err);
     }
   }
-
-  let { data: insightsRow } = await supabase
-    .from("artist_insights")
-    .select("insights, computed_at")
-    .eq("artist_id", artist.id)
-    .maybeSingle();
 
   if (!insightsRow?.computed_at) {
     try {

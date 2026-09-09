@@ -13,12 +13,27 @@ export default async function LocationsPage({ params }: { params: Promise<{ slug
   const artist = await getSiteArtist(slug);
 
   const supabase = createServiceRoleClient();
-  let { data: events } = await supabase
-    .from("artist_events")
-    .select("*")
-    .eq("artist_id", artist.id)
-    .gte("event_date", new Date().toISOString())
-    .order("event_date", { ascending: true });
+  // Three independent reads — pins/pinTags don't depend on events at all —
+  // fetched together instead of events first, then the pair after.
+  const [eventsResult, { data: pins }, { data: pinTags }] = await Promise.all([
+    supabase
+      .from("artist_events")
+      .select("*")
+      .eq("artist_id", artist.id)
+      .gte("event_date", new Date().toISOString())
+      .order("event_date", { ascending: true }),
+    supabase
+      .from("location_pins")
+      .select("*")
+      .eq("artist_id", artist.id)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("location_pin_tags")
+      .select("*")
+      .eq("artist_id", artist.id)
+      .order("created_at", { ascending: true }),
+  ]);
+  let { data: events } = eventsResult;
 
   if (!events?.length) {
     try {
@@ -43,19 +58,6 @@ export default async function LocationsPage({ params }: { params: Promise<{ slug
       lng: e.longitude as number,
       label: `${e.venue} — ${[e.city, e.country].filter(Boolean).join(", ")}`,
     }));
-
-  const [{ data: pins }, { data: pinTags }] = await Promise.all([
-    supabase
-      .from("location_pins")
-      .select("*")
-      .eq("artist_id", artist.id)
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("location_pin_tags")
-      .select("*")
-      .eq("artist_id", artist.id)
-      .order("created_at", { ascending: true }),
-  ]);
 
   return (
     <div>

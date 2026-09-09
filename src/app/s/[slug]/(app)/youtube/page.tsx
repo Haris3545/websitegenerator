@@ -17,11 +17,21 @@ export default async function YoutubePage({ params }: { params: Promise<{ slug: 
   const artist = await getSiteArtist(slug);
 
   const supabase = createServiceRoleClient();
-  let { data: stats } = await supabase
-    .from("youtube_stats")
-    .select("*")
-    .eq("artist_id", artist.id)
-    .maybeSingle();
+  // Three independent reads — trends comes from a separate metrics-snapshot
+  // table and tolerates stats being absent (returns {}), and the comment
+  // map is its own table entirely — so fetch all three concurrently instead
+  // of paying for three sequential round trips.
+  const [statsResult, mapResult, trends] = await Promise.all([
+    supabase.from("youtube_stats").select("*").eq("artist_id", artist.id).maybeSingle(),
+    supabase
+      .from("social_comment_map")
+      .select("categories, comment_count, last_error, computed_at")
+      .eq("artist_id", artist.id)
+      .maybeSingle(),
+    getRecentTrends(artist.id),
+  ]);
+  let { data: stats } = statsResult;
+  let { data: map, error: mapError } = mapResult;
 
   if (!stats && artist.youtube_channel_id) {
     try {
@@ -39,13 +49,6 @@ export default async function YoutubePage({ params }: { params: Promise<{ slug: 
   }
 
   const videos = stats?.recent_videos ?? [];
-  const trends = stats ? await getRecentTrends(artist.id) : {};
-
-  let { data: map, error: mapError } = await supabase
-    .from("social_comment_map")
-    .select("categories, comment_count, last_error, computed_at")
-    .eq("artist_id", artist.id)
-    .maybeSingle();
 
   if (!map?.computed_at && !mapError) {
     try {

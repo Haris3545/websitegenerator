@@ -16,11 +16,20 @@ export default async function MusicPage({ params }: { params: Promise<{ slug: st
   const artist = await getSiteArtist(slug);
 
   const supabase = createServiceRoleClient();
-  let { data: stats } = await supabase
-    .from("music_stats")
-    .select("*")
-    .eq("artist_id", artist.id)
-    .maybeSingle();
+  // These three don't depend on each other — trends comes from a separate
+  // metrics-snapshot table and tolerates stats being absent (returns {}) —
+  // so run them concurrently instead of as three sequential round trips.
+  const [statsResult, geniusResult, trends] = await Promise.all([
+    supabase.from("music_stats").select("*").eq("artist_id", artist.id).maybeSingle(),
+    supabase
+      .from("genius_annotations")
+      .select("annotations, computed_at")
+      .eq("artist_id", artist.id)
+      .maybeSingle(),
+    getRecentTrends(artist.id),
+  ]);
+  let { data: stats } = statsResult;
+  let { data: geniusRow } = geniusResult;
 
   let fetchError: string | null = null;
   if (!stats) {
@@ -39,12 +48,6 @@ export default async function MusicPage({ params }: { params: Promise<{ slug: st
     after(() => refreshMusicIfStale(artist.id, artist.name));
   }
 
-  let { data: geniusRow } = await supabase
-    .from("genius_annotations")
-    .select("annotations, computed_at")
-    .eq("artist_id", artist.id)
-    .maybeSingle();
-
   if (!geniusRow?.computed_at) {
     try {
       const annotations = await refreshGeniusAnnotations(artist.id, artist.name);
@@ -55,8 +58,6 @@ export default async function MusicPage({ params }: { params: Promise<{ slug: st
   } else {
     after(() => refreshGeniusAnnotationsIfStale(artist.id, artist.name));
   }
-
-  const trends = stats ? await getRecentTrends(artist.id) : {};
 
   return (
     <div>

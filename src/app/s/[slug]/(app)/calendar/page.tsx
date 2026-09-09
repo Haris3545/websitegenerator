@@ -13,12 +13,34 @@ export default async function CalendarPage({ params }: { params: Promise<{ slug:
   const artist = await getSiteArtist(slug);
 
   const supabase = createServiceRoleClient();
-  let { data: events } = await supabase
-    .from("artist_events")
-    .select("*")
-    .eq("artist_id", artist.id)
-    .gte("event_date", new Date().toISOString())
-    .order("event_date", { ascending: true });
+  // Three independent reads (tbcIdeas/campaignBlocks don't depend on
+  // events at all) — fetch together, then only events' own conditional
+  // refresh-and-reread below needs a second round trip.
+  const [eventsResult, { data: tbcIdeas }, { data: campaignBlocks }] = await Promise.all([
+    supabase
+      .from("artist_events")
+      .select("*")
+      .eq("artist_id", artist.id)
+      .gte("event_date", new Date().toISOString())
+      .order("event_date", { ascending: true }),
+    supabase
+      .from("board_items")
+      .select("*")
+      .eq("artist_id", artist.id)
+      .eq("board_key", "ideas")
+      .eq("calendar_status", "tbc")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("board_items")
+      .select("*")
+      .eq("artist_id", artist.id)
+      .eq("board_key", "tactics")
+      .is("deleted_at", null)
+      .not("pillar", "is", null)
+      .not("campaign_start_date", "is", null)
+      .not("campaign_end_date", "is", null),
+  ]);
+  let { data: events } = eventsResult;
 
   if (!events?.length) {
     try {
@@ -35,24 +57,6 @@ export default async function CalendarPage({ params }: { params: Promise<{ slug:
   } else {
     after(() => refreshEventsIfStale(artist.id, artist.name));
   }
-
-  const { data: tbcIdeas } = await supabase
-    .from("board_items")
-    .select("*")
-    .eq("artist_id", artist.id)
-    .eq("board_key", "ideas")
-    .eq("calendar_status", "tbc")
-    .order("created_at", { ascending: false });
-
-  const { data: campaignBlocks } = await supabase
-    .from("board_items")
-    .select("*")
-    .eq("artist_id", artist.id)
-    .eq("board_key", "tactics")
-    .is("deleted_at", null)
-    .not("pillar", "is", null)
-    .not("campaign_start_date", "is", null)
-    .not("campaign_end_date", "is", null);
 
   return (
     <div>

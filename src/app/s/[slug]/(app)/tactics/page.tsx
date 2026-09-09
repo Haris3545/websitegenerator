@@ -15,22 +15,25 @@ export default async function TacticsPage({ params }: { params: Promise<{ slug: 
   const subtitle = "Channel-level tactics with role, audience, format, notes, and campaign dates";
 
   const supabase = createServiceRoleClient();
-  const { data: items } = await supabase
-    .from("board_items")
-    .select("*")
-    .eq("artist_id", artist.id)
-    .eq("board_key", "tactics")
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false });
-
-  const { data: deletedItems } = await supabase
-    .from("board_items")
-    .select("*")
-    .eq("artist_id", artist.id)
-    .eq("board_key", "tactics")
-    .not("deleted_at", "is", null)
-    .order("deleted_at", { ascending: false })
-    .limit(20);
+  // Independent reads of the same table, split only by deleted_at — no
+  // reason to run them one after the other.
+  const [{ data: items }, { data: deletedItems }] = await Promise.all([
+    supabase
+      .from("board_items")
+      .select("*")
+      .eq("artist_id", artist.id)
+      .eq("board_key", "tactics")
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("board_items")
+      .select("*")
+      .eq("artist_id", artist.id)
+      .eq("board_key", "tactics")
+      .not("deleted_at", "is", null)
+      .order("deleted_at", { ascending: false })
+      .limit(20),
+  ]);
 
   return (
     <div>
