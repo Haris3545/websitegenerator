@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
+import { hierarchy, pack } from "d3-hierarchy";
 import type { Database } from "@/lib/database.types";
 import { AudienceTable } from "@/components/site/AudienceTable";
 import { classifyStatement, sortCategoryNames, OTHER_CATEGORY } from "@/lib/audienceCategories";
@@ -8,6 +9,16 @@ import { classifyStatement, sortCategoryNames, OTHER_CATEGORY } from "@/lib/audi
 type Statement = Database["public"]["Tables"]["audience_statements"]["Row"];
 type Metric = "index_value" | "column_pct" | "row_pct" | "responses";
 type SortMode = "category" | "highest" | "lowest";
+type View = "heatmap" | "bubbles" | "table";
+
+const VIEWS: View[] = ["heatmap", "bubbles", "table"];
+
+// A categorical palette for the bubble view (segments, not values) —
+// distinct from the heatmap's blue/red value scale. Cycles if an upload
+// somehow has more segments than colours here, which in practice never
+// happens (GWI crosstabs run a handful of audiences at most).
+const BUBBLE_COLORS = ["#eab308", "#38bdf8", "#fb7185", "#34d399", "#a78bfa", "#fb923c", "#2dd4bf", "#f472b6"];
+const BUBBLE_SIZE = 320;
 
 const METRICS: { key: Metric; label: string }[] = [
   { key: "index_value", label: "Index" },
@@ -74,10 +85,34 @@ function categoryAnchorId(name: string): string {
   return "audience-cat-" + name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 }
 
+function segmentColor(index: number): string {
+  return BUBBLE_COLORS[index % BUBBLE_COLORS.length];
+}
+
+/** Shrinks the label to fit the bubble's width rather than letting a long
+ * segment name spill past the circle and overlap its neighbours — GWI
+ * segment names ("WMG - Rap 2025", etc.) regularly run longer than a
+ * mid-size bubble is wide. ~0.58 is a rough average glyph-width-to-font-size
+ * ratio for the bold sans this renders in; good enough for a fit estimate,
+ * not for typesetting precision. */
+function fitFontSize(text: string, radius: number, maxFontSize: number, minFontSize = 8): number {
+  const available = radius * 1.7;
+  const estimated = available / (text.length * 0.58);
+  return Math.max(minFontSize, Math.min(maxFontSize, estimated));
+}
+
+interface BubbleNode {
+  value?: number;
+  segment?: string;
+  cell?: Statement;
+  children?: BubbleNode[];
+}
+
 export function AudienceHeatmap({ statements }: { statements: Statement[] }) {
-  const [view, setView] = useState<"heatmap" | "table">("heatmap");
+  const [view, setView] = useState<View>("heatmap");
   const [metric, setMetric] = useState<Metric>("index_value");
   const [sortMode, setSortMode] = useState<SortMode>("category");
+  const [bubbleStatement, setBubbleStatement] = useState<string | null>(null);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; row: Statement } | null>(null);
 
   const segments = useMemo(() => Array.from(new Set(statements.map((s) => s.segment))).sort(), [statements]);
@@ -158,6 +193,31 @@ export function AudienceHeatmap({ statements }: { statements: Statement[] }) {
     return list;
   }, [allRows, sortMode, metric]);
 
+  // Defaults to the first statement rather than picking it at state-init
+  // time — allRows isn't computed yet at the point bubbleStatement's
+  // useState call would run, so falling back here instead avoids depending
+  // on hook declaration order.
+  const activeBubbleRow = allRows.find((r) => r.statement === bubbleStatement) ?? allRows[0] ?? null;
+
+  const bubbleLeaves = useMemo(() => {
+    if (!activeBubbleRow) return [];
+    const rawLeaves = segments.map((seg): BubbleNode | null => {
+      const cell = activeBubbleRow.bySegment.get(seg);
+      const raw = cell ? cell[metric] : null;
+      if (!cell || raw == null) return null;
+      // A near-zero floor, not zero itself — d3's pack layout can't size
+      // a truly zero-value leaf at all, and a statement/segment pair
+      // that's genuinely at 0 responses is still worth showing as a
+      // barely-there bubble rather than silently vanishing.
+      return { value: Math.max(raw, 0.1), segment: seg, cell };
+    });
+    const leaves = rawLeaves.filter((x): x is BubbleNode => x !== null);
+    if (!leaves.length) return [];
+    const root = hierarchy<BubbleNode>({ children: leaves }).sum((d) => d.value ?? 0);
+    const packed = pack<BubbleNode>().size([BUBBLE_SIZE, BUBBLE_SIZE]).padding(8)(root);
+    return packed.leaves();
+  }, [activeBubbleRow, segments, metric]);
+
   function showTooltip(e: React.MouseEvent, row: Statement) {
     setTooltip({ x: e.clientX, y: e.clientY, row });
   }
@@ -223,6 +283,125 @@ export function AudienceHeatmap({ statements }: { statements: Statement[] }) {
       <div className="flex flex-col gap-3">
         <ViewToggle view={view} onChange={setView} />
         <AudienceTable statements={statements} />
+      </div>
+    );
+  }
+
+  if (view === "bubbles") {
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <ViewToggle view={view} onChange={setView} />
+          <div className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] p-1">
+            {METRICS.map((m) => (
+              <button
+                key={m.key}
+                type="button"
+                onClick={() => setMetric(m.key)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors duration-150 ${
+                  metric === m.key ? "bg-[var(--accent)] text-black" : "text-white/50 hover:text-white/80"
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <select
+          value={activeBubbleRow?.statement ?? ""}
+          onChange={(e) => setBubbleStatement(e.target.value)}
+          className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white focus:border-[var(--accent)] focus:outline-none"
+        >
+          {categories.map((cat) => (
+            <optgroup key={cat.name} label={cat.name === OTHER_CATEGORY ? "Other" : cat.name}>
+              {cat.rows.map((row) => (
+                <option key={row.statement} value={row.statement}>
+                  {row.statement}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+
+        <div
+          className="flex flex-col gap-4 p-5 shadow-lg shadow-black/30 backdrop-blur-md sm:flex-row"
+          style={{
+            borderRadius: "var(--card-radius, 12px)",
+            backgroundColor: "rgba(0,0,0,var(--card-bg-opacity, 0.4))",
+            border: "1px solid rgba(255,255,255,var(--card-border-opacity, 0.15))",
+          }}
+        >
+          {bubbleLeaves.length ? (
+            <>
+              <svg viewBox={`0 0 ${BUBBLE_SIZE} ${BUBBLE_SIZE}`} className="mx-auto w-full max-w-[360px]">
+                {bubbleLeaves.map((leaf, i) => {
+                  const cell = leaf.data.cell!;
+                  const colorIdx = segments.indexOf(leaf.data.segment!);
+                  const segment = leaf.data.segment!;
+                  const valueLabel = formatMetric(cell, metric);
+                  const clipId = `bubble-clip-${i}`;
+                  return (
+                    <g
+                      key={segment}
+                      transform={`translate(${leaf.x},${leaf.y})`}
+                      onMouseEnter={(e) => showTooltip(e, cell)}
+                      onMouseMove={(e) => showTooltip(e, cell)}
+                      onMouseLeave={() => setTooltip(null)}
+                    >
+                      <circle r={leaf.r} fill={segmentColor(colorIdx)} fillOpacity={0.88} stroke="rgba(255,255,255,0.25)" strokeWidth={1} />
+                      {/* Clips the labels to the circle itself — the fitFontSize
+                          estimate below is close enough for typical segment
+                          names, but this is the guarantee that a longer one
+                          never bleeds into a neighbouring bubble. */}
+                      <clipPath id={clipId}>
+                        <circle r={leaf.r} />
+                      </clipPath>
+                      <g clipPath={`url(#${clipId})`}>
+                        {leaf.r > 28 && (
+                          <text textAnchor="middle" y={-4} fontSize={fitFontSize(segment, leaf.r, 15)} fontWeight={700} fill="#141311">
+                            {segment}
+                          </text>
+                        )}
+                        {leaf.r > 18 && (
+                          <text
+                            textAnchor="middle"
+                            y={leaf.r > 28 ? 14 : 4}
+                            fontSize={fitFontSize(valueLabel, leaf.r, 13)}
+                            fontWeight={600}
+                            fill="#141311"
+                            fontFamily="ui-monospace, monospace"
+                          >
+                            {valueLabel}
+                          </text>
+                        )}
+                      </g>
+                    </g>
+                  );
+                })}
+              </svg>
+
+              <div className="flex flex-col gap-1.5 sm:w-48 sm:shrink-0">
+                {[...bubbleLeaves]
+                  .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
+                  .map((leaf) => (
+                    <div key={leaf.data.segment} className="flex items-center gap-2 text-xs text-white/70">
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                        style={{ backgroundColor: segmentColor(segments.indexOf(leaf.data.segment!)) }}
+                      />
+                      <span className="min-w-0 flex-1 truncate">{leaf.data.segment}</span>
+                      <span className="shrink-0 font-mono tabular-nums text-white">{formatMetric(leaf.data.cell!, metric)}</span>
+                    </div>
+                  ))}
+              </div>
+            </>
+          ) : (
+            <p className="w-full py-8 text-center text-sm text-white/40">No data for this statement.</p>
+          )}
+        </div>
+
+        <TooltipCard tooltip={tooltip} />
       </div>
     );
   }
@@ -332,34 +511,39 @@ export function AudienceHeatmap({ statements }: { statements: Statement[] }) {
         </table>
       </div>
 
-      {tooltip && (
-        <div
-          className="pointer-events-none fixed z-50 max-w-[240px] rounded-lg border border-white/15 bg-neutral-900 px-3 py-2 text-xs leading-relaxed text-white/70 shadow-xl shadow-black/40"
-          style={{ left: Math.min(tooltip.x + 14, window.innerWidth - 260), top: Math.min(tooltip.y + 14, window.innerHeight - 160) }}
-        >
-          <p className="mb-1 font-semibold text-white">{tooltip.row.segment}</p>
-          <dl className="grid grid-cols-2 gap-x-3 gap-y-0.5 font-mono tabular-nums">
-            <dt className="font-sans text-white/40">Index</dt>
-            <dd className="text-right">{tooltip.row.index_value ?? "—"}</dd>
-            <dt className="font-sans text-white/40">Column %</dt>
-            <dd className="text-right">{tooltip.row.column_pct != null ? `${tooltip.row.column_pct}%` : "—"}</dd>
-            <dt className="font-sans text-white/40">Row %</dt>
-            <dd className="text-right">{tooltip.row.row_pct != null ? `${tooltip.row.row_pct}%` : "—"}</dd>
-            <dt className="font-sans text-white/40">Responses</dt>
-            <dd className="text-right">{tooltip.row.responses ?? "—"}</dd>
-            <dt className="font-sans text-white/40">Universe</dt>
-            <dd className="text-right">{tooltip.row.universe ?? "—"}</dd>
-          </dl>
-        </div>
-      )}
+      <TooltipCard tooltip={tooltip} />
     </div>
   );
 }
 
-function ViewToggle({ view, onChange }: { view: "heatmap" | "table"; onChange: (v: "heatmap" | "table") => void }) {
+function TooltipCard({ tooltip }: { tooltip: { x: number; y: number; row: Statement } | null }) {
+  if (!tooltip) return null;
+  return (
+    <div
+      className="pointer-events-none fixed z-50 max-w-[240px] rounded-lg border border-white/15 bg-neutral-900 px-3 py-2 text-xs leading-relaxed text-white/70 shadow-xl shadow-black/40"
+      style={{ left: Math.min(tooltip.x + 14, window.innerWidth - 260), top: Math.min(tooltip.y + 14, window.innerHeight - 160) }}
+    >
+      <p className="mb-1 font-semibold text-white">{tooltip.row.segment}</p>
+      <dl className="grid grid-cols-2 gap-x-3 gap-y-0.5 font-mono tabular-nums">
+        <dt className="font-sans text-white/40">Index</dt>
+        <dd className="text-right">{tooltip.row.index_value ?? "—"}</dd>
+        <dt className="font-sans text-white/40">Column %</dt>
+        <dd className="text-right">{tooltip.row.column_pct != null ? `${tooltip.row.column_pct}%` : "—"}</dd>
+        <dt className="font-sans text-white/40">Row %</dt>
+        <dd className="text-right">{tooltip.row.row_pct != null ? `${tooltip.row.row_pct}%` : "—"}</dd>
+        <dt className="font-sans text-white/40">Responses</dt>
+        <dd className="text-right">{tooltip.row.responses ?? "—"}</dd>
+        <dt className="font-sans text-white/40">Universe</dt>
+        <dd className="text-right">{tooltip.row.universe ?? "—"}</dd>
+      </dl>
+    </div>
+  );
+}
+
+function ViewToggle({ view, onChange }: { view: View; onChange: (v: View) => void }) {
   return (
     <div className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] p-1 text-xs font-medium">
-      {(["heatmap", "table"] as const).map((v) => (
+      {VIEWS.map((v) => (
         <button
           key={v}
           type="button"

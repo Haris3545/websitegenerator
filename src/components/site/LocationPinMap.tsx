@@ -278,15 +278,16 @@ function LocationPinMapInner({
   useEffect(() => {
     if (!mapDivRef.current || mapRef.current) return;
     const map = L.map(mapDivRef.current, { center: UK_CENTER, zoom: 6, scrollWheelZoom: true });
-    // CartoDB Voyager — free, keyless, and far less cluttered than raw OSM
-    // (fewer POI icons/labels), with blue water and light land closer to
-    // the 3D globe's vivid blue-sea/green-land palette than a plain grey
-    // basemap; the saturate/contrast boost below pushes it further toward
-    // that same vividness.
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-      attribution: '&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; OpenStreetMap contributors',
+    // Plain OpenStreetMap standard tiles — genuinely free and keyless, no
+    // account required, ever. This used to point at CartoDB's Voyager
+    // basemap CDN (also nominally free/keyless), which has been tightening
+    // access to its previously fully-open tile endpoint over time and
+    // started failing outright — OSM's own tile server has no such
+    // account/key layer to run out in the first place.
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       maxZoom: 19,
-      subdomains: "abcd",
+      subdomains: "abc",
     }).addTo(map);
     map.on("click", (e: L.LeafletMouseEvent) => {
       if (!placingRef.current) return;
