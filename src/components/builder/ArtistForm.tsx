@@ -427,7 +427,7 @@ export function ArtistForm({ artist }: { artist?: Artist }) {
       // picker, not a video picker.
       const seen = new Set<string>();
       const deduped: YoutubeVideoSearchResult[] = [];
-      for (const r of result.data) {
+      for (const r of result.data.videos) {
         const key = r.channelTitle.trim().toLowerCase();
         if (!key || seen.has(key)) continue;
         seen.add(key);

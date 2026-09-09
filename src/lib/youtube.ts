@@ -20,6 +20,7 @@ type YoutubeSearchResponse = {
       thumbnails?: { medium?: { url?: string }; default?: { url?: string } };
     };
   }[];
+  nextPageToken?: string;
 };
 
 export type YoutubeVideoSearchResult = {
@@ -28,6 +29,11 @@ export type YoutubeVideoSearchResult = {
   channelTitle: string;
   thumbnail: string;
   publishedAt: string;
+};
+
+export type YoutubeVideoSearchPage = {
+  videos: YoutubeVideoSearchResult[];
+  nextPageToken: string | null;
 };
 
 export type YoutubeChannelLookup =
@@ -239,20 +245,23 @@ export async function refreshYoutubeIfStale(artistId: string, channelId: string 
 /** Free-text video search for the builder's "Search YouTube" picker (see
  * YoutubeSearchModal.tsx) — separate from resolveYoutubeChannel above, which
  * finds a *channel* from a link/handle rather than searching for videos by
- * keyword. */
-export async function searchYoutubeVideos(query: string): Promise<YoutubeVideoSearchResult[]> {
+ * keyword. Pass the previous call's nextPageToken to fetch the next page of
+ * results (YouTube's search endpoint is cursor-paginated, not offset-based)
+ * for the modal's "More" button; omit it for the first page. */
+export async function searchYoutubeVideos(query: string, pageToken?: string): Promise<YoutubeVideoSearchPage> {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) {
     throw new Error("YOUTUBE_API_KEY isn't set — ask whoever manages this app's Vercel project to add it.");
   }
 
+  const pageParam = pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : "";
   const res = await fetch(
-    `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=24&q=${encodeURIComponent(query)}&key=${apiKey}`
+    `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=24&q=${encodeURIComponent(query)}${pageParam}&key=${apiKey}`
   );
   if (!res.ok) throw new Error(`YouTube search API returned ${res.status}`);
   const data: YoutubeSearchResponse = await res.json();
 
-  return (data.items ?? [])
+  const videos = (data.items ?? [])
     .filter((item) => item.id?.videoId)
     .map((item) => ({
       videoId: item.id!.videoId as string,
@@ -261,4 +270,6 @@ export async function searchYoutubeVideos(query: string): Promise<YoutubeVideoSe
       thumbnail: item.snippet?.thumbnails?.medium?.url ?? item.snippet?.thumbnails?.default?.url ?? "",
       publishedAt: item.snippet?.publishedAt ?? "",
     }));
+
+  return { videos, nextPageToken: data.nextPageToken ?? null };
 }

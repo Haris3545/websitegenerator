@@ -25,15 +25,19 @@ export function YoutubeSearchModal({
   const { closing, requestClose } = useClosableOverlay(onClose);
   const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<YoutubeVideoSearchResult[]>([]);
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
   const requestIdRef = useRef(0);
+  const activeQueryRef = useRef("");
 
   async function runSearch() {
     const trimmed = query.trim();
     if (!trimmed || loading) return;
     const requestId = ++requestIdRef.current;
+    activeQueryRef.current = trimmed;
     setLoading(true);
     setError(null);
     const result = await searchYoutubeVideosAction(trimmed);
@@ -41,10 +45,28 @@ export function YoutubeSearchModal({
     setLoading(false);
     setSearched(true);
     if (result.ok) {
-      setResults(result.data);
-      if (result.data.length === 0) setError("No results — try a different search.");
+      setResults(result.data.videos);
+      setNextPageToken(result.data.nextPageToken);
+      if (result.data.videos.length === 0) setError("No results — try a different search.");
     } else {
       setResults([]);
+      setNextPageToken(null);
+      setError(result.error);
+    }
+  }
+
+  async function loadMore() {
+    if (!nextPageToken || loadingMore) return;
+    const requestId = ++requestIdRef.current;
+    setLoadingMore(true);
+    setError(null);
+    const result = await searchYoutubeVideosAction(activeQueryRef.current, nextPageToken);
+    if (requestId !== requestIdRef.current) return;
+    setLoadingMore(false);
+    if (result.ok) {
+      setResults((prev) => [...prev, ...result.data.videos]);
+      setNextPageToken(result.data.nextPageToken);
+    } else {
       setError(result.error);
     }
   }
@@ -103,28 +125,46 @@ export function YoutubeSearchModal({
               Search for a video — pick one to trim it down for the background.
             </p>
           )}
-          <div className="flex flex-col gap-2">
-            {results.map((r) => (
-              <button
-                key={r.videoId}
-                type="button"
-                onClick={() => onSelect(r)}
-                className="flex items-center gap-3 rounded-lg border border-neutral-200 p-2 text-left transition-colors hover:bg-neutral-50 dark:border-white/10 dark:hover:bg-white/5"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={r.thumbnail}
-                  alt=""
-                  loading="lazy"
-                  className="h-14 w-24 shrink-0 rounded-md object-cover"
-                />
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-neutral-900 dark:text-white">{r.title}</p>
-                  <p className="truncate text-xs text-neutral-400 dark:text-white/40">{r.channelTitle}</p>
-                </div>
-              </button>
-            ))}
-          </div>
+          {loading && (
+            <div className="flex flex-col items-center justify-center gap-3 py-16">
+              <span className="block h-6 w-6 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-600 dark:border-white/20 dark:border-t-white/80" />
+              <p className="text-sm text-neutral-400 dark:text-white/40">Searching…</p>
+            </div>
+          )}
+          {!loading && (
+            <div className="flex flex-col gap-2">
+              {results.map((r) => (
+                <button
+                  key={r.videoId}
+                  type="button"
+                  onClick={() => onSelect(r)}
+                  className="flex items-center gap-3 rounded-lg border border-neutral-200 p-2 text-left transition-colors hover:bg-neutral-50 dark:border-white/10 dark:hover:bg-white/5"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={r.thumbnail}
+                    alt=""
+                    loading="lazy"
+                    className="h-14 w-24 shrink-0 rounded-md object-cover"
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-neutral-900 dark:text-white">{r.title}</p>
+                    <p className="truncate text-xs text-neutral-400 dark:text-white/40">{r.channelTitle}</p>
+                  </div>
+                </button>
+              ))}
+              {nextPageToken && (
+                <button
+                  type="button"
+                  onClick={() => void loadMore()}
+                  disabled={loadingMore}
+                  className="mt-1 self-center rounded-lg border border-neutral-200 px-4 py-2 text-sm font-medium text-neutral-700 transition-colors hover:bg-neutral-100 disabled:opacity-50 dark:border-white/10 dark:text-white/80 dark:hover:bg-white/5"
+                >
+                  {loadingMore ? "Loading…" : "More"}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

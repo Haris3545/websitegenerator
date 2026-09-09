@@ -120,7 +120,14 @@ export async function middleware(request: NextRequest) {
     if (!isSiteGate && !hasArtistAccess) {
       const redirectUrl = request.nextUrl.clone();
       redirectUrl.pathname = `/s/${slug}/gate`;
-      redirectUrl.searchParams.set("next", path);
+      // The full path *and* query — not just the path — so a flag like
+      // ?warming=1 (see SiteWarmupOverlay) survives the detour through the
+      // gate instead of silently vanishing. Every brand-new artist's very
+      // first visit goes through here, since nobody's entered the password
+      // in this browser yet, so dropping the query on this specific
+      // redirect was quietly breaking the warm-up screen for exactly the
+      // one case it matters most: right after creating the site.
+      redirectUrl.searchParams.set("next", path + request.nextUrl.search);
       return NextResponse.redirect(redirectUrl);
     }
 

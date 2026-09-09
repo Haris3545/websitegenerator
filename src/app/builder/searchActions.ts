@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { searchGoogleImages, type ImageSearchResult } from "@/lib/googleImageSearch";
-import { searchYoutubeVideos, type YoutubeVideoSearchResult } from "@/lib/youtube";
+import { searchYoutubeVideos, type YoutubeVideoSearchPage } from "@/lib/youtube";
 import { downloadYoutubeClip } from "@/lib/youtubeDownload";
 
 export type SearchResult<T> = { ok: true; data: T } | { ok: false; error: string };
@@ -18,12 +18,13 @@ export async function searchImagesAction(query: string): Promise<SearchResult<Im
 }
 
 export async function searchYoutubeVideosAction(
-  query: string
-): Promise<SearchResult<YoutubeVideoSearchResult[]>> {
+  query: string,
+  pageToken?: string
+): Promise<SearchResult<YoutubeVideoSearchPage>> {
   const trimmed = query.trim();
-  if (!trimmed) return { ok: true, data: [] };
+  if (!trimmed) return { ok: true, data: { videos: [], nextPageToken: null } };
   try {
-    return { ok: true, data: await searchYoutubeVideos(trimmed) };
+    return { ok: true, data: await searchYoutubeVideos(trimmed, pageToken) };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "YouTube search failed." };
   }

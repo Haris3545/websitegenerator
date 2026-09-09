@@ -2,8 +2,15 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { GateForm } from "@/components/site/GateForm";
 import { withThemeDefaults } from "@/lib/theme";
 
-export default async function GatePage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function GatePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ next?: string }>;
+}) {
   const { slug } = await params;
+  const { next } = await searchParams;
   const supabase = createServiceRoleClient();
   const { data: artist } = await supabase
     .from("artists")
@@ -18,6 +25,7 @@ export default async function GatePage({ params }: { params: Promise<{ slug: str
   return (
     <GateForm
       slug={slug}
+      nextPath={next}
       backgroundUrl={artist?.gate_background_url ?? null}
       accentColor={artist?.accent_color ?? "#eab308"}
       projectTitle={artist?.project_title ?? "The Recording Studio"}

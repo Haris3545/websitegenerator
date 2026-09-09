@@ -46,6 +46,7 @@ function EyeOffIcon() {
 
 export function GateForm({
   slug,
+  nextPath,
   backgroundUrl,
   accentColor,
   projectTitle,
@@ -59,6 +60,14 @@ export function GateForm({
   bgZoom = 1,
 }: {
   slug: string;
+  /** Where the middleware bounced the visitor here from (e.g.
+   * `/s/slug?warming=1`) — used as the post-password redirect instead of
+   * always landing on the bare dashboard URL, so a flag like `warming=1`
+   * survives the detour through here. Only ever trusted when it actually
+   * points back at this same artist's site; anything else (a manually
+   * edited URL) falls back to the plain dashboard link rather than
+   * redirecting somewhere arbitrary. */
+  nextPath?: string;
   backgroundUrl: string | null;
   accentColor: string;
   projectTitle: string;
@@ -94,7 +103,9 @@ export function GateForm({
       // render does real data-fetching that can take a few seconds, and a
       // hard navigation shows the browser's own loading state for that
       // instead of leaving this button stuck on "Checking…" the whole time.
-      window.location.href = `/s/${slug}`;
+      const prefix = `/s/${slug}`;
+      const isOwnSite = nextPath === prefix || nextPath?.startsWith(`${prefix}?`) || nextPath?.startsWith(`${prefix}/`);
+      window.location.href = isOwnSite ? nextPath! : prefix;
     });
   }
 
