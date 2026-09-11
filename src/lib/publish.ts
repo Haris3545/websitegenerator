@@ -2,8 +2,27 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 
 const GITHUB_API = "https://api.github.com";
 const VERCEL_API = "https://api.vercel.com";
-const TEMPLATE_OWNER = "Haris3545";
-const TEMPLATE_REPO = "websitegenerator";
+
+// Whoever's GitHub account owns the template repo new artist repos get
+// generated from (and created under) — deliberately read from the
+// environment rather than hardcoded, so forking or handing off this whole
+// app to a different GitHub account/org is a config change, not a code
+// change. Set to wherever you've pushed (or forked) this repo, with
+// "Template repository" checked in its GitHub Settings > General.
+function templateConfig(): { ok: true; owner: string; repo: string } | { ok: false; error: string } {
+  const owner = process.env.GITHUB_TEMPLATE_OWNER;
+  const repo = process.env.GITHUB_TEMPLATE_REPO;
+  if (!owner || !repo) {
+    return {
+      ok: false,
+      error:
+        "GITHUB_TEMPLATE_OWNER and GITHUB_TEMPLATE_REPO aren't both set in this deployment's environment " +
+        "variables — they should point at whichever GitHub account/org and repo this app itself lives in " +
+        "(with \"Template repository\" checked in that repo's Settings > General).",
+    };
+  }
+  return { ok: true, owner, repo };
+}
 
 // Copied straight from this deployment's own environment onto the new
 // project, so the standalone site talks to the same Supabase project
@@ -43,6 +62,9 @@ export async function publishArtistSite(artistId: string): Promise<PublishResult
   if (!vercelToken) {
     return { ok: false, error: "VERCEL_API_TOKEN isn't set in this deployment's environment variables." };
   }
+  const template = templateConfig();
+  if (!template.ok) return template;
+  const { owner: TEMPLATE_OWNER, repo: TEMPLATE_REPO } = template;
 
   const supabase = createServiceRoleClient();
   const { data: artist, error: fetchError } = await supabase
@@ -297,6 +319,9 @@ export async function unpublishArtistSite(artistId: string): Promise<UnpublishRe
   if (!vercelToken) {
     return { ok: false, error: "VERCEL_API_TOKEN isn't set in this deployment's environment variables." };
   }
+  const template = templateConfig();
+  if (!template.ok) return template;
+  const { owner: TEMPLATE_OWNER } = template;
 
   const supabase = createServiceRoleClient();
   const { data: artist, error: fetchError } = await supabase

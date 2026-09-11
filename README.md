@@ -1,45 +1,45 @@
 # Website Generator — artist cultural-intelligence dashboards
 
-Phase 1: an internal builder (`/builder`) for configuring per-artist dashboard
-sites, and the generated sites themselves (`/s/<slug>`) with a live Dashboard
-and Media (Google News) tab. Remaining tabs are structural placeholders,
-built out in later phases.
+An internal builder (`/builder`) for configuring per-artist cultural-
+intelligence dashboards, and the generated sites themselves (`/s/<slug>`) —
+Dashboard, Media, Music, Social listening, Audience, YouTube, Locations,
+Calendar, and board-style Strategy/Tactics/Ideas/Research tabs, all backed
+by a shared Supabase project. Nothing in this codebase is tied to any one
+person's account — every external integration goes through an environment
+variable (see `.env.example`), so standing up your own copy is entirely a
+matter of your own Supabase project + your own API keys, not anyone else's.
 
 ## Setup
 
 1. **Create a Supabase project** at [supabase.com](https://supabase.com).
-2. Run `migrations/001_init.sql` in the Supabase SQL editor.
-3. In Storage, create a public bucket named `artist-media` (background images
-   and landing videos upload here).
-4. Run `migrations/002_storage_and_defaults.sql` in the SQL editor (storage
-   upload policy + the default tagline — must run after the bucket exists).
-5. Copy `.env.example` to `.env.local` and fill in:
-   - `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` — from your Supabase project's API settings
-   - `GEMINI_API_KEY` — used to parse the aesthetic-tailoring textbox into CSS params (free key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey), no billing required)
-   - `ARTIST_SECRETS_ENCRYPTION_KEY` — generate with `openssl rand -hex 32`
-   - `GOOGLE_FONTS_API_KEY` — optional, unlocks the full Google Fonts catalog instead of the bundled curated list
-6. Create your own account (Supabase Auth → Users → Add user, or sign up
-   through the app once a sign-up flow exists), then bootstrap yourself as a
-   builder admin:
+2. Run every file in `migrations/`, in order, in the Supabase SQL editor.
+3. In Storage, create a public bucket named `artist-media` (background
+   images, landing videos, and uploaded pictures/GIFs live here).
+4. Copy `.env.example` to `.env.local` and fill in at least the required
+   Supabase + Gemini values — see that file for what every other variable
+   does and which features are optional without it.
+5. Create your own account (Supabase Auth → Users → Add user), then
+   bootstrap yourself as a builder admin:
    ```sql
    insert into builder_admins (user_id) values ('<your-auth-user-uuid>');
    ```
-7. `npm install && npm run dev`, then visit `/builder`.
+6. `npm install && npm run dev`, then visit `/builder`.
+
+If you're picking this codebase up from someone else rather than starting
+fresh, see `HANDOFF.md` first — it covers what needs to move to your own
+accounts versus what can be reused as-is.
 
 ## Structure
 
 - `/builder` — internal admin: create/edit artist configs, upload media,
-  manage API keys (encrypted at rest).
-- `/s/<slug>` — the generated per-artist site. Access requires a Supabase Auth
-  account; RLS on the `artists` table (see the migration) is what actually
-  authorizes viewing a specific artist — builder admins see everything,
-  everyone else needs a row in `artist_members`.
-
-## Phases
-
-- **Phase 1 (this)**: builder shell, Supabase schema, generated-site shell
-  (header/ticker/nav/footer), Dashboard + Media tabs live.
-- **Phase 2**: Social listening (YouTube/Reddit), Music (Last.fm/kworb),
-  Audience (GWI upload + parsing).
-- **Phase 3**: Strategy, Tactics, Locations, Ideas, Calendar, Research.
-- **Phase 4**: real per-artist Vercel deployment automation.
+  set per-feature API keys, publish/unpublish a standalone site per artist.
+- `/s/<slug>` — the generated per-artist site. A first-time visitor enters a
+  per-artist password (set in the builder) to get in; RLS on the `artists`
+  table (see the migrations) is the actual authorization boundary — builder
+  admins see everything, everyone else needs a row in `artist_members`.
+- **Publishing** (optional, see `.env.example`): the builder's "Publish"
+  button generates a standalone GitHub repo + Vercel project per artist from
+  this same codebase as a template, pinned to that one artist
+  (`PINNED_ARTIST_SLUG`) with editing disabled. Requires this repo to be
+  marked as a GitHub template and `GITHUB_TEMPLATE_OWNER`/`GITHUB_TEMPLATE_REPO`
+  to point at wherever you've put it.
